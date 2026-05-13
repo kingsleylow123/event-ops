@@ -1,0 +1,296 @@
+'use client'
+import { useEffect, useState } from 'react'
+import type { Event, Attendee, TicketType, PaymentMethod, PaymentStatus } from '@/lib/supabase'
+import { TICKET_LABELS, TICKET_PRICES, toWhatsApp } from '@/lib/supabase'
+
+const STATUS_COLORS: Record<PaymentStatus, string> = {
+  paid: 'bg-green-900/40 text-green-400 border border-green-800',
+  pending: 'bg-yellow-900/40 text-yellow-400 border border-yellow-800',
+  free: 'bg-blue-900/40 text-blue-400 border border-blue-800',
+}
+
+const METHOD_LABELS: Record<PaymentMethod, string> = {
+  stripe: 'Stripe',
+  bank_transfer: 'Bank Transfer',
+  free: 'Free',
+}
+
+export default function AttendeesPage() {
+  const [event, setEvent] = useState<Event | null>(null)
+  const [attendees, setAttendees] = useState<Attendee[]>([])
+  const [loading, setLoading] = useState(true)
+  const [syncing, setSyncing] = useState(false)
+  const [syncMsg, setSyncMsg] = useState('')
+  const [showModal, setShowModal] = useState(false)
+  const [filterStatus, setFilterStatus] = useState<string>('all')
+  const [filterTicket, setFilterTicket] = useState<string>('all')
+  const [filterAttendance, setFilterAttendance] = useState<string>('all')
+
+  const [form, setForm] = useState({
+    name: '', phone: '', email: '',
+    ticket_type: 'standard_general' as TicketType,
+    payment_method: 'bank_transfer' as PaymentMethod,
+    payment_amount: 159,
+    payment_status: 'pending' as PaymentStatus,
+    notes: '',
+  })
+
+  async function loadData() {
+    const evRes = await fetch('/api/events')
+    const events: Event[] = await evRes.json()
+    const active = events.find(e => e.is_active) ?? null
+    setEvent(active)
+    if (active) {
+      const res = await fetch(`/api/attendees?event_id=${active.id}`)
+      setAttendees(await res.json())
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => { loadData() }, [])
+
+  async function syncStripe() {
+    if (!event) return
+    setSyncing(true)
+    setSyncMsg('')
+    const res = await fetch('/api/stripe/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event_id: event.id }),
+    })
+    const data = await res.json()
+    if (data.error) {
+      setSyncMsg(`Error: ${data.error}`)
+    } else {
+      setSyncMsg(`Synced: ${data.added} added, ${data.skipped} skipped`)
+      await loadData()
+    }
+    setSyncing(false)
+  }
+
+  async function togglePaid(a: Attendee) {
+    const newStatus: PaymentStatus = a.payment_status === 'paid' ? 'pending' : 'paid'
+    await fetch('/api/attendees', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: a.id, payment_status: newStatus }),
+    })
+    setAttendees(prev => prev.map(x => x.id === a.id ? { ...x, payment_status: newStatus } : x))
+  }
+
+  async function toggleAttendance(a: Attendee) {
+    const confirmed = !a.attendance_confirmed
+    await fetch('/api/attendees', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: a.id, attendance_confirmed: confirmed }),
+    })
+    setAttendees(prev => prev.map(x => x.id === a.id ? { ...x, attendance_confirmed: confirmed } : x))
+  }
+
+  async function deleteAttendee(id: string) {
+    if (!confirm('Delete this attendee?')) return
+    await fetch(`/api/attendees?id=${id}`, { method: 'DELETE' })
+    setAttendees(prev => prev.filter(a => a.id !== id))
+  }
+
+  async function addAttendee(e: React.FormEvent) {
+    e.preventDefault()
+    if (!event) return
+    const isFreeTier = form.ticket_type === 'free_general' || form.ticket_type === 'free_vip'
+    const payload = {
+      ...form,
+      event_id: event.id,
+      payment_method: isFreeTier ? 'free' : form.payment_method,
+      payment_status: isFreeTier ? 'free' : form.payment_status,
+      payment_amount: isFreeTier ? 0 : form.payment_amount,
+    }
+    const res = await fetch('/api/attendees', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    const newAtt = await res.json()
+    setAttendees(prev => [newAtt, ...prev])
+    setShowModal(false)
+    setForm({ name: '', phone: '', email: '', ticket_type: 'standard_general', payment_method: 'bank_transfer', payment_amount: 159, payment_status: 'pending', notes: '' })
+  }
+
+  const filtered = attendees.filter(a => {
+    if (filterStatus !== 'all' && a.payment_status !== filterStatus) return false
+    if (filterTicket !== 'all' && a.ticket_type !== filterTicket) return false
+    if (filterAttendance === 'yes' && !a.attendance_confirmed) return false
+    if (filterAttendance === 'no' && a.attendance_confirmed) return false
+    return true
+  })
+
+  if (loading) return <div className="text-zinc-500 mt-20 text-center">Loading...</div>
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-xl font-bold">Attendees</h1>
+          {event && <p className="text-sm text-zinc-400">{event.name}</p>}
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          {syncMsg && <span className="text-xs text-zinc-400 self-center">{syncMsg}</span>}
+          <button onClick={syncStripe} disabled={syncing || !event}
+            className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg">
+            {syncing ? 'Syncing...' : '⚡ Sync Stripe'}
+          </button>
+          <button onClick={() => setShowModal(true)} disabled={!event}
+            className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-semibold text-sm px-4 py-2 rounded-lg">
+            + Add Attendee
+          </button>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="flex gap-2 flex-wrap text-sm">
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+          className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-white">
+          <option value="all">All Status</option>
+          <option value="paid">Paid</option>
+          <option value="pending">Pending</option>
+          <option value="free">Free</option>
+        </select>
+        <select value={filterTicket} onChange={e => setFilterTicket(e.target.value)}
+          className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-white">
+          <option value="all">All Tickets</option>
+          {Object.entries(TICKET_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+        <select value={filterAttendance} onChange={e => setFilterAttendance(e.target.value)}
+          className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-white">
+          <option value="all">All Attendance</option>
+          <option value="yes">Attended</option>
+          <option value="no">Not Attended</option>
+        </select>
+        <span className="self-center text-zinc-500 text-xs">{filtered.length} of {attendees.length}</span>
+      </div>
+
+      {/* Table */}
+      <div className="bg-[#111] border border-zinc-800 rounded-xl overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-zinc-500 border-b border-zinc-800">
+              <th className="px-4 py-3">Name</th>
+              <th className="px-4 py-3">Phone</th>
+              <th className="px-4 py-3">Ticket</th>
+              <th className="px-4 py-3 text-right">Amount</th>
+              <th className="px-4 py-3">Method</th>
+              <th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3 text-center">Attended</th>
+              <th className="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 && (
+              <tr><td colSpan={8} className="text-center text-zinc-500 py-10">No attendees found</td></tr>
+            )}
+            {filtered.map(a => {
+              const waUrl = toWhatsApp(a.phone)
+              return (
+                <tr key={a.id} className="border-b border-zinc-900 hover:bg-zinc-900/30">
+                  <td className="px-4 py-3 font-medium">
+                    {a.name}
+                    {a.email && <div className="text-xs text-zinc-500">{a.email}</div>}
+                  </td>
+                  <td className="px-4 py-3 text-zinc-300">{a.phone ?? '—'}</td>
+                  <td className="px-4 py-3 text-zinc-300">{TICKET_LABELS[a.ticket_type] ?? a.ticket_type}</td>
+                  <td className="px-4 py-3 text-right font-mono">
+                    {a.payment_amount > 0 ? `RM ${a.payment_amount}` : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-zinc-400">{METHOD_LABELS[a.payment_method]}</td>
+                  <td className="px-4 py-3">
+                    <button
+                      onClick={() => a.payment_method === 'bank_transfer' ? togglePaid(a) : undefined}
+                      className={`text-xs px-2 py-1 rounded-full font-medium ${STATUS_COLORS[a.payment_status]} ${a.payment_method === 'bank_transfer' ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
+                    >
+                      {a.payment_status}
+                    </button>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <input type="checkbox" checked={a.attendance_confirmed}
+                      onChange={() => toggleAttendance(a)}
+                      className="w-4 h-4 accent-amber-500 cursor-pointer" />
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-2 items-center">
+                      {waUrl && (
+                        <a href={waUrl} target="_blank" rel="noopener noreferrer"
+                          className="text-green-400 hover:text-green-300 text-lg" title="WhatsApp">
+                          💬
+                        </a>
+                      )}
+                      <button onClick={() => deleteAttendee(a.id)}
+                        className="text-zinc-600 hover:text-red-400 text-xs">✕</button>
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Add Attendee Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#111] border border-zinc-800 rounded-xl p-6 w-full max-w-md">
+            <h2 className="text-lg font-bold mb-4">Add Attendee</h2>
+            <form onSubmit={addAttendee} className="space-y-3">
+              <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="Full Name *" className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm" />
+              <input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+                placeholder="Phone (e.g. 0123456789)" className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm" />
+              <input value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                placeholder="Email" type="email" className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm" />
+              <select value={form.ticket_type}
+                onChange={e => {
+                  const tt = e.target.value as TicketType
+                  const isF = tt === 'free_general' || tt === 'free_vip'
+                  setForm(f => ({
+                    ...f, ticket_type: tt,
+                    payment_amount: TICKET_PRICES[tt],
+                    payment_method: isF ? 'free' : 'bank_transfer',
+                    payment_status: isF ? 'free' : 'pending',
+                  }))
+                }}
+                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm">
+                {Object.entries(TICKET_LABELS).map(([k, v]) => <option key={k} value={k}>{v} {TICKET_PRICES[k as TicketType] > 0 ? `(RM${TICKET_PRICES[k as TicketType]})` : '(Free)'}</option>)}
+              </select>
+              {form.ticket_type !== 'free_general' && form.ticket_type !== 'free_vip' && (
+                <>
+                  <select value={form.payment_method}
+                    onChange={e => setForm(f => ({ ...f, payment_method: e.target.value as PaymentMethod }))}
+                    className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm">
+                    <option value="bank_transfer">Bank Transfer</option>
+                    <option value="stripe">Stripe</option>
+                  </select>
+                  <div className="flex gap-2">
+                    <input type="number" value={form.payment_amount}
+                      onChange={e => setForm(f => ({ ...f, payment_amount: Number(e.target.value) }))}
+                      className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm" placeholder="Amount (RM)" />
+                    <select value={form.payment_status}
+                      onChange={e => setForm(f => ({ ...f, payment_status: e.target.value as PaymentStatus }))}
+                      className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm">
+                      <option value="pending">Pending</option>
+                      <option value="paid">Paid</option>
+                    </select>
+                  </div>
+                </>
+              )}
+              <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                placeholder="Notes (optional)" rows={2} className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm resize-none" />
+              <div className="flex gap-2 pt-2">
+                <button type="submit" className="flex-1 bg-amber-500 hover:bg-amber-400 text-black font-semibold py-2 rounded-lg text-sm">Add Attendee</button>
+                <button type="button" onClick={() => setShowModal(false)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white py-2 rounded-lg text-sm">Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

@@ -1,0 +1,110 @@
+'use client'
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import type { Event, Attendee } from '@/lib/supabase'
+import { TICKET_LABELS } from '@/lib/supabase'
+
+export default function Dashboard() {
+  const [event, setEvent] = useState<Event | null>(null)
+  const [attendees, setAttendees] = useState<Attendee[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      const evRes = await fetch('/api/events')
+      const events: Event[] = await evRes.json()
+      const active = events.find(e => e.is_active) ?? null
+      setEvent(active)
+      if (active) {
+        const attRes = await fetch(`/api/attendees?event_id=${active.id}`)
+        setAttendees(await attRes.json())
+      }
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  const paid = attendees.filter(a => a.payment_status === 'paid')
+  const pending = attendees.filter(a => a.payment_status === 'pending')
+  const free = attendees.filter(a => a.payment_status === 'free')
+  const revenue = paid.reduce((sum, a) => sum + (a.payment_amount ?? 0), 0)
+  const attended = attendees.filter(a => a.attendance_confirmed)
+
+  const byTicket = Object.entries(
+    attendees.reduce<Record<string, number>>((acc, a) => {
+      acc[a.ticket_type] = (acc[a.ticket_type] ?? 0) + 1
+      return acc
+    }, {})
+  )
+
+  if (loading) return <div className="text-zinc-500 mt-20 text-center">Loading...</div>
+
+  return (
+    <div className="space-y-6">
+      {event ? (
+        <div className="bg-[#111] border border-zinc-800 rounded-xl p-5 flex items-start justify-between">
+          <div>
+            <p className="text-xs text-amber-400 font-semibold uppercase tracking-widest mb-1">Active Event</p>
+            <h1 className="text-2xl font-bold">{event.name}</h1>
+            <div className="flex gap-4 mt-2 text-sm text-zinc-400">
+              {event.date && <span>📅 {new Date(event.date).toLocaleDateString('en-MY', { dateStyle: 'medium' })}</span>}
+              {event.venue && <span>📍 {event.venue}</span>}
+              {event.capacity && <span>👥 Capacity: {event.capacity}</span>}
+            </div>
+          </div>
+          <Link href="/events" className="text-xs text-zinc-500 hover:text-white border border-zinc-700 rounded px-3 py-1.5">Manage Events</Link>
+        </div>
+      ) : (
+        <div className="bg-[#111] border border-zinc-800 rounded-xl p-5 text-center">
+          <p className="text-zinc-400 mb-3">No active event. Create one to get started.</p>
+          <Link href="/events" className="bg-amber-500 hover:bg-amber-400 text-black font-semibold px-4 py-2 rounded-lg text-sm">Create Event</Link>
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        {[
+          { label: 'Total', value: attendees.length, color: 'text-white' },
+          { label: 'Paid', value: paid.length, color: 'text-green-400' },
+          { label: 'Pending', value: pending.length, color: 'text-yellow-400' },
+          { label: 'Free', value: free.length, color: 'text-blue-400' },
+          { label: 'Attended', value: attended.length, color: 'text-purple-400' },
+          { label: 'Revenue', value: `RM ${revenue.toLocaleString()}`, color: 'text-amber-400' },
+        ].map(s => (
+          <div key={s.label} className="bg-[#111] border border-zinc-800 rounded-xl p-4">
+            <p className="text-xs text-zinc-500 mb-1">{s.label}</p>
+            <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {byTicket.length > 0 && (
+        <div className="bg-[#111] border border-zinc-800 rounded-xl p-5">
+          <h2 className="text-sm font-semibold text-zinc-400 mb-4">Ticket Breakdown</h2>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-zinc-500 border-b border-zinc-800">
+                <th className="pb-2">Ticket Type</th>
+                <th className="pb-2 text-right">Count</th>
+                <th className="pb-2 text-right">% of Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {byTicket.map(([type, count]) => (
+                <tr key={type} className="border-b border-zinc-900">
+                  <td className="py-2">{TICKET_LABELS[type as keyof typeof TICKET_LABELS] ?? type}</td>
+                  <td className="py-2 text-right font-mono">{count}</td>
+                  <td className="py-2 text-right text-zinc-400">{Math.round((count / attendees.length) * 100)}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <div className="flex gap-3 flex-wrap">
+        <Link href="/attendees" className="bg-amber-500 hover:bg-amber-400 text-black font-semibold px-4 py-2 rounded-lg text-sm">View Attendees</Link>
+        <Link href="/checklist" className="bg-zinc-800 hover:bg-zinc-700 text-white font-semibold px-4 py-2 rounded-lg text-sm">View Checklist</Link>
+      </div>
+    </div>
+  )
+}
