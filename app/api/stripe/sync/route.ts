@@ -17,7 +17,14 @@ export async function POST(req: NextRequest) {
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
 
   try {
-    const sessions = await stripe.checkout.sessions.list({ limit: 100, status: 'complete' })
+    // May 12, 2026 00:00 MYT = May 11 16:00 UTC
+    const FROM_TIMESTAMP = 1778515200
+
+    const sessions = await stripe.checkout.sessions.list({
+      limit: 100,
+      status: 'complete',
+      created: { gte: FROM_TIMESTAMP },
+    })
 
     let added = 0
     let skipped = 0

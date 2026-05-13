@@ -130,6 +130,11 @@ export default function AttendeesPage() {
     return true
   })
 
+  const totalPaid = attendees.filter(a => a.payment_status === 'paid').length
+  const totalPending = attendees.filter(a => a.payment_status === 'pending').length
+  const totalFree = attendees.filter(a => a.payment_status === 'free').length
+  const totalRevenue = attendees.filter(a => a.payment_status === 'paid').reduce((s, a) => s + (a.payment_amount ?? 0), 0)
+
   if (loading) return <div className="text-zinc-500 mt-20 text-center">Loading...</div>
 
   return (
@@ -152,6 +157,22 @@ export default function AttendeesPage() {
         </div>
       </div>
 
+      {/* Totals bar */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        {[
+          { label: 'Total Participants', value: attendees.length, color: 'text-white', border: 'border-amber-500/50' },
+          { label: 'Paid', value: totalPaid, color: 'text-green-400', border: 'border-zinc-800' },
+          { label: 'Pending', value: totalPending, color: 'text-yellow-400', border: 'border-zinc-800' },
+          { label: 'Free', value: totalFree, color: 'text-blue-400', border: 'border-zinc-800' },
+          { label: 'Revenue', value: `RM ${totalRevenue.toLocaleString()}`, color: 'text-amber-400', border: 'border-zinc-800' },
+        ].map(s => (
+          <div key={s.label} className={`bg-[#111] border ${s.border} rounded-xl px-4 py-3`}>
+            <p className="text-xs text-zinc-500 mb-0.5">{s.label}</p>
+            <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
       {/* Filters */}
       <div className="flex gap-2 flex-wrap text-sm">
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
@@ -172,7 +193,7 @@ export default function AttendeesPage() {
           <option value="yes">Attended</option>
           <option value="no">Not Attended</option>
         </select>
-        <span className="self-center text-zinc-500 text-xs">{filtered.length} of {attendees.length}</span>
+        <span className="self-center text-zinc-500 text-xs">{filtered.length} of {attendees.length} shown</span>
       </div>
 
       {/* Table */}
