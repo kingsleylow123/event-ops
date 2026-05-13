@@ -36,15 +36,21 @@ export default function AttendeesPage() {
   })
 
   async function loadData() {
-    const evRes = await fetch('/api/events')
-    const events: Event[] = await evRes.json()
-    const active = events.find(e => e.is_active) ?? null
-    setEvent(active)
-    if (active) {
-      const res = await fetch(`/api/attendees?event_id=${active.id}`)
-      setAttendees(await res.json())
+    try {
+      const evRes = await fetch('/api/events')
+      if (!evRes.ok) throw new Error()
+      const events: Event[] = await evRes.json()
+      const active = events.find(e => e.is_active) ?? null
+      setEvent(active)
+      if (active) {
+        const res = await fetch(`/api/attendees?event_id=${active.id}`)
+        if (res.ok) setAttendees(await res.json())
+      }
+    } catch {
+      // db not configured yet
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   useEffect(() => { loadData() }, [])

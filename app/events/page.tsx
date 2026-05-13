@@ -9,9 +9,14 @@ export default function EventsPage() {
   const [form, setForm] = useState({ name: '', date: '', venue: '', capacity: '' })
 
   async function loadEvents() {
-    const res = await fetch('/api/events')
-    setEvents(await res.json())
-    setLoading(false)
+    try {
+      const res = await fetch('/api/events')
+      if (res.ok) setEvents(await res.json())
+    } catch {
+      // db not configured yet
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { loadEvents() }, [])

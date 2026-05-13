@@ -11,15 +11,21 @@ export default function Dashboard() {
 
   useEffect(() => {
     async function load() {
-      const evRes = await fetch('/api/events')
-      const events: Event[] = await evRes.json()
-      const active = events.find(e => e.is_active) ?? null
-      setEvent(active)
-      if (active) {
-        const attRes = await fetch(`/api/attendees?event_id=${active.id}`)
-        setAttendees(await attRes.json())
+      try {
+        const evRes = await fetch('/api/events')
+        if (!evRes.ok) throw new Error('API error')
+        const events: Event[] = await evRes.json()
+        const active = events.find(e => e.is_active) ?? null
+        setEvent(active)
+        if (active) {
+          const attRes = await fetch(`/api/attendees?event_id=${active.id}`)
+          if (attRes.ok) setAttendees(await attRes.json())
+        }
+      } catch {
+        // env vars not set yet or DB unreachable — show empty state
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
     load()
   }, [])
