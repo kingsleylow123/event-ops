@@ -4,21 +4,26 @@ import { supabase } from '@/lib/supabase'
 import type { TicketType } from '@/lib/supabase'
 
 function guessTicketType(amountRm: number): TicketType {
+  // May 16 event prices
   if (amountRm === 97) return 'early_bird_general'
-  if (amountRm === 297) return 'early_bird_vip'
   if (amountRm === 159) return 'standard_general'
+  if (amountRm === 297) return 'early_bird_vip'
   if (amountRm === 397) return 'standard_vip'
+  // June 1 event prices
+  if (amountRm === 249) return 'early_bird_general'
+  if (amountRm === 497) return 'standard_general'
+  if (amountRm === 597) return 'standard_vip'
   if (amountRm === 0) return 'free_general'
   return 'standard_general'
 }
 
 export async function POST(req: NextRequest) {
-  const { event_id } = await req.json()
+  const { event_id, from_timestamp } = await req.json()
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400 })
 
   try {
-    // May 12, 2026 00:00 MYT = May 11 16:00 UTC
-    const FROM_TIMESTAMP = 1778515200
+    // Default: May 20, 2026 00:00 MYT = May 19 16:00 UTC
+    const FROM_TIMESTAMP = from_timestamp ?? 1779206400
 
     const sessions = await stripe.checkout.sessions.list({
       limit: 100,
