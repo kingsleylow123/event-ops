@@ -4,17 +4,19 @@ import { supabase } from '@/lib/supabase'
 import type { TicketType } from '@/lib/supabase'
 
 function guessTicketType(amountRm: number): TicketType {
-  // May 16 event prices
+  // June 1 event — Table 2 pricing
+  if (amountRm === 247 || amountRm === 249) return 'super_early_bird_general'
+  if (amountRm === 497) return 'super_early_bird_vip'
+  if (amountRm === 300) return 'early_bird_general'
+  if (amountRm === 597) return 'early_bird_vip'
+  if (amountRm === 297 || amountRm === 347) return 'public_general'
+  if (amountRm === 697) return 'public_vip'
+  // May 16 event — legacy prices
   if (amountRm === 97) return 'early_bird_general'
   if (amountRm === 159) return 'standard_general'
-  if (amountRm === 297) return 'early_bird_vip'
   if (amountRm === 397) return 'standard_vip'
-  // June 1 event prices
-  if (amountRm === 249) return 'early_bird_general'
-  if (amountRm === 497) return 'standard_general'
-  if (amountRm === 597) return 'standard_vip'
   if (amountRm === 0) return 'free_general'
-  return 'standard_general'
+  return 'public_general'
 }
 
 export async function POST(req: NextRequest) {

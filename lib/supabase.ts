@@ -5,27 +5,50 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? 'placeholde
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-export type TicketType = 'free_general' | 'free_vip' | 'early_bird_general' | 'early_bird_vip' | 'standard_general' | 'standard_vip'
+export type TicketType =
+  // June 1 event — Table 2 pricing
+  | 'super_early_bird_general'
+  | 'super_early_bird_vip'
+  | 'early_bird_general'
+  | 'early_bird_vip'
+  | 'public_general'
+  | 'public_vip'
+  // May 16 event — legacy
+  | 'standard_general'
+  | 'standard_vip'
+  | 'free_general'
+  | 'free_vip'
+
 export type PaymentMethod = 'stripe' | 'bank_transfer' | 'free'
 export type PaymentStatus = 'paid' | 'pending' | 'free'
 export type ChecklistStatus = 'pending' | 'in_progress' | 'done'
 
 export const TICKET_LABELS: Record<TicketType, string> = {
-  free_general: 'Free General',
-  free_vip: 'Free VIP',
+  super_early_bird_general: 'Super Early Bird General',
+  super_early_bird_vip: 'Super Early Bird VIP',
   early_bird_general: 'Early Bird General',
   early_bird_vip: 'Early Bird VIP',
+  public_general: 'Public General',
+  public_vip: 'Public VIP',
   standard_general: 'Standard General',
   standard_vip: 'Standard VIP',
+  free_general: 'Free General',
+  free_vip: 'Free VIP',
 }
 
 export const TICKET_PRICES: Record<TicketType, number> = {
-  free_general: 0,
-  free_vip: 0,
-  early_bird_general: 97,
-  early_bird_vip: 297,
+  // June 1 Table 2 prices
+  super_early_bird_general: 247,
+  super_early_bird_vip: 497,
+  early_bird_general: 300,
+  early_bird_vip: 597,
+  public_general: 347,
+  public_vip: 697,
+  // May 16 legacy prices
   standard_general: 159,
   standard_vip: 397,
+  free_general: 0,
+  free_vip: 0,
 }
 
 export const CHECKLIST_CATEGORIES = ['Venue', 'Facilitator', 'Media / UGC Creator', 'AV/Video', 'Logistics']
