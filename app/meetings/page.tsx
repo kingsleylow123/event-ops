@@ -518,15 +518,16 @@ export default function MeetingsPage() {
 
                   {addingParticipant && (
                     <div className="mb-3 pb-3 border-b border-zinc-800">
-                      <p className="text-[10px] text-zinc-500 mb-1">Add anyone — any role can join.</p>
+                      <p className="text-[10px] text-zinc-500 mb-2">Tap anyone to add — any role can join.</p>
                       {eligibleToAdd.length === 0 ? (
                         <p className="text-xs text-zinc-600 italic">Everyone is already in the challenge.</p>
                       ) : (
-                        <div className="flex flex-wrap gap-1">
+                        <div className="max-h-48 overflow-y-auto bg-zinc-950/60 border border-zinc-800 rounded-lg divide-y divide-zinc-900">
                           {eligibleToAdd.map(p => (
                             <button key={p.name} type="button" onClick={() => addParticipant(p.name)}
-                              className="text-xs bg-zinc-900 hover:bg-purple-500/20 border border-zinc-700 hover:border-purple-500/50 rounded-full px-2 py-0.5">
-                              + {p.name}
+                              className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-purple-500/10 transition-colors">
+                              <span className="text-sm text-white">{p.name}</span>
+                              <span className="text-[10px] text-zinc-500 uppercase">{(p.role || 'other').replace('_', ' ')}</span>
                             </button>
                           ))}
                         </div>
