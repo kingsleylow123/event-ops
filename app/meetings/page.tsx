@@ -387,7 +387,7 @@ export default function MeetingsPage() {
           { role: 'videographer', label: 'Videographer', color: 'text-sky-400', bg: 'border-sky-500/30' },
         ]
         return (
-          <div className="flex flex-wrap justify-center gap-3">
+          <div className="flex flex-wrap justify-center items-start gap-3">
             {TOP_ROLES.map(r => {
               const inRole = personStats.filter(p => (p.role || '') === r.role)
               if (inRole.length === 0) return null  // No people in this role → hide
@@ -522,7 +522,7 @@ export default function MeetingsPage() {
                       {eligibleToAdd.length === 0 ? (
                         <p className="text-xs text-zinc-600 italic">Everyone is already in the challenge.</p>
                       ) : (
-                        <div className="max-h-48 overflow-y-auto bg-zinc-950/60 border border-zinc-800 rounded-lg divide-y divide-zinc-900">
+                        <div className="max-h-64 overflow-y-auto bg-zinc-950/60 border border-zinc-800 rounded-lg divide-y divide-zinc-900">
                           {eligibleToAdd.map(p => (
                             <button key={p.name} type="button" onClick={() => addParticipant(p.name)}
                               className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-purple-500/10 transition-colors">
@@ -531,6 +531,7 @@ export default function MeetingsPage() {
                             </button>
                           ))}
                         </div>
+                        <p className="text-[10px] text-zinc-600 mt-1">Scroll inside the list ↑↓</p>
                       )}
                     </div>
                   )}
