@@ -504,9 +504,9 @@ export default function MeetingsPage() {
               }
 
               return (
-                <div className="bg-[#111] border border-purple-500/30 rounded-xl p-4 flex-1 min-w-[280px] max-w-[420px]">
+                <div className="bg-[#111] border border-purple-500/30 rounded-xl p-5 flex-1 min-w-[320px] max-w-[520px]">
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-xs uppercase tracking-wider font-semibold text-purple-400">
+                    <p className="text-sm uppercase tracking-wider font-semibold text-purple-400">
                       🏆 Top 3 · 30-Day Post Challenge
                     </p>
                     <button type="button"
@@ -522,16 +522,16 @@ export default function MeetingsPage() {
                       {eligibleToAdd.length === 0 ? (
                         <p className="text-xs text-zinc-600 italic">Everyone is already in the challenge.</p>
                       ) : (
-                        <div className="max-h-64 overflow-y-auto bg-zinc-950/60 border border-zinc-800 rounded-lg divide-y divide-zinc-900">
+                        <div className="h-96 overflow-y-auto bg-zinc-950/60 border border-zinc-800 rounded-lg divide-y divide-zinc-900" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgb(168 85 247 / 0.5) transparent' }}>
                           {eligibleToAdd.map(p => (
                             <button key={p.name} type="button" onClick={() => addParticipant(p.name)}
-                              className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-purple-500/10 transition-colors">
-                              <span className="text-sm text-white">{p.name}</span>
-                              <span className="text-[10px] text-zinc-500 uppercase">{(p.role || 'other').replace('_', ' ')}</span>
+                              className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left hover:bg-purple-500/15 transition-colors">
+                              <span className="text-sm text-white font-medium">{p.name}</span>
+                              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{(p.role || 'other').replace('_', ' ')}</span>
                             </button>
                           ))}
                         </div>
-                        <p className="text-[10px] text-zinc-600 mt-1">Scroll inside the list ↑↓</p>
+                        <p className="text-[10px] text-zinc-600 mt-1 text-center">↕ Scroll inside the list to see more</p>
                       )}
                     </div>
                   )}
