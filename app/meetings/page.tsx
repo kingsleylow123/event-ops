@@ -24,6 +24,16 @@ interface PersonOption {
   eventName: string
 }
 
+type DraftAttendee = MeetingAttendee & { role?: string }
+
+// Order: Huda first (admin) → facilitators → content creators → videographers → speakers → other.
+const ROLE_PRIORITY: Record<string, number> = {
+  facilitator: 1,
+  content_creator: 2,
+  videographer: 3,
+  speaker: 4,
+}
+
 function uniquePeople(events: Event[]): PersonOption[] {
   const seen = new Set<string>()
   const out: PersonOption[] = []
@@ -36,7 +46,19 @@ function uniquePeople(events: Event[]): PersonOption[] {
       }
     }
   }
-  return out.sort((a, b) => a.name.localeCompare(b.name))
+  return out.sort((a, b) => {
+    // Huda pinned first
+    const aHuda = a.name.trim().toLowerCase() === 'huda'
+    const bHuda = b.name.trim().toLowerCase() === 'huda'
+    if (aHuda && !bHuda) return -1
+    if (bHuda && !aHuda) return 1
+    // Then by role priority
+    const aRolePri = ROLE_PRIORITY[a.role] ?? 99
+    const bRolePri = ROLE_PRIORITY[b.role] ?? 99
+    if (aRolePri !== bRolePri) return aRolePri - bRolePri
+    // Then alphabetical within the same role
+    return a.name.localeCompare(b.name)
+  })
 }
 
 const EMPTY_FORM = {
@@ -53,7 +75,7 @@ export default function MeetingsPage() {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
-  const [draftAttendance, setDraftAttendance] = useState<MeetingAttendee[]>([])
+  const [draftAttendance, setDraftAttendance] = useState<DraftAttendee[]>([])
   const [search, setSearch] = useState('')
   const [saving, setSaving] = useState(false)
   const [expandedNoteIdx, setExpandedNoteIdx] = useState<number | null>(null)
@@ -77,7 +99,7 @@ export default function MeetingsPage() {
   function openCreate() {
     setEditingId(null)
     setForm({ ...EMPTY_FORM, meeting_date: toDatetimeLocalValue(new Date().toISOString()) })
-    setDraftAttendance(people.map(p => ({ name: p.name, attended: false, notes: null })))
+    setDraftAttendance(people.map(p => ({ name: p.name, attended: false, notes: null, role: p.role })))
     setShowForm(true)
   }
 
@@ -91,13 +113,15 @@ export default function MeetingsPage() {
     })
     // Seed attendance with existing + any new team members added since
     const existingByName = new Map((m.attendance ?? []).map(a => [a.name.toLowerCase(), a]))
-    const merged: MeetingAttendee[] = people.map(p => {
+    const merged: DraftAttendee[] = people.map(p => {
       const existing = existingByName.get(p.name.toLowerCase())
-      return existing ?? { name: p.name, attended: false, notes: null }
+      return existing
+        ? { ...existing, role: p.role }
+        : { name: p.name, attended: false, notes: null, role: p.role }
     })
     // Also include people in attendance who aren't in current team
     for (const a of m.attendance ?? []) {
-      if (!people.find(p => p.name.toLowerCase() === a.name.toLowerCase())) merged.push(a)
+      if (!people.find(p => p.name.toLowerCase() === a.name.toLowerCase())) merged.push({ ...a, role: 'other' })
     }
     setDraftAttendance(merged)
     setShowForm(true)
@@ -377,16 +401,23 @@ export default function MeetingsPage() {
               {draftAttendance.length === 0 ? (
                 <p className="text-xs text-zinc-600 italic">No team members yet. Add some on the Claude Intern page first.</p>
               ) : (
-                <div className="space-y-1">
+                <div className="divide-y divide-zinc-900">
                   {draftAttendance.map((a, idx) => {
                     const hasNote = (a.notes ?? '').length > 0
                     const expanded = expandedNoteIdx === idx
+                    const prev = idx > 0 ? draftAttendance[idx - 1] : null
+                    const showRoleHeader = !prev || prev.role !== a.role
                     return (
-                      <div key={idx} className="space-y-1">
-                        <div className="flex items-center gap-3 py-1">
+                      <div key={idx}>
+                        {showRoleHeader && (
+                          <p className="text-[10px] text-zinc-600 uppercase tracking-wider pt-2 pb-1">
+                            {(a.role || 'other').replace('_', ' ')}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-3 py-0.5">
                           <input type="checkbox" checked={a.attended} onChange={() => toggleAttended(idx)}
                             className="w-4 h-4 accent-amber-500 flex-shrink-0" />
-                          <span className={`text-sm flex-1 ${a.attended ? 'text-white' : 'text-zinc-500'}`}>{a.name}</span>
+                          <span className={`text-sm flex-1 ${a.attended ? 'text-white' : 'text-zinc-400'}`}>{a.name}</span>
                           {hasNote && !expanded && (
                             <button type="button" onClick={() => setExpandedNoteIdx(idx)}
                               className="text-xs text-zinc-400 hover:text-amber-400 italic truncate max-w-[200px]"
@@ -396,13 +427,13 @@ export default function MeetingsPage() {
                           )}
                           {!hasNote && !expanded && (
                             <button type="button" onClick={() => setExpandedNoteIdx(idx)}
-                              className="text-xs text-zinc-600 hover:text-amber-400">
+                              className="text-[11px] text-zinc-600 hover:text-amber-400">
                               + note
                             </button>
                           )}
                         </div>
                         {expanded && (
-                          <div className="flex gap-2 pl-7">
+                          <div className="flex gap-2 pl-7 pb-1">
                             <input autoFocus value={a.notes ?? ''}
                               onChange={e => setPersonNotes(idx, e.target.value)}
                               onBlur={() => setExpandedNoteIdx(null)}
