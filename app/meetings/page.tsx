@@ -367,12 +367,12 @@ export default function MeetingsPage() {
         return (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {TOP_ROLES.map(r => {
-              const top5 = personStats.filter(p => (p.role || '') === r.role).slice(0, 5)
+              const top5 = personStats.filter(p => (p.role || '') === r.role).slice(0, 3)
               const hasData = top5.some(p => p.total > 0)
               return (
                 <div key={r.role} className={`bg-[#111] border ${r.bg} rounded-xl p-4`}>
                   <p className={`text-xs uppercase tracking-wider font-semibold ${r.color} mb-3`}>
-                    🏆 Top 5 {r.label}
+                    🏆 Top 3 {r.label}
                   </p>
                   {!hasData ? (
                     <p className="text-xs text-zinc-600 italic">No meeting data yet for this category.</p>
