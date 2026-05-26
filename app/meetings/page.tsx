@@ -438,24 +438,24 @@ export default function MeetingsPage() {
                             {(a.role || 'other').replace('_', ' ')}
                           </p>
                         )}
-                        <div className="flex items-center gap-3 py-0.5">
+                        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto_auto_auto] items-center gap-x-4 gap-y-0 py-1">
                           <input type="checkbox" checked={a.attended} onChange={() => toggleAttended(idx)}
-                            className="w-4 h-4 accent-amber-500 flex-shrink-0" />
-                          <span className={`text-sm w-40 flex-shrink-0 ${a.attended ? 'text-white' : 'text-zinc-400'}`}>{a.name}</span>
+                            className="w-5 h-5 accent-amber-500" />
+                          <span className={`text-sm ${a.attended ? 'text-white font-medium' : 'text-zinc-400'}`}>{a.name}</span>
 
-                          {/* Recent attendance dots — last 5 meetings */}
+                          {/* Recent attendance dots — last 10 meetings (bigger, fills more space) */}
                           {(() => {
                             const stats = historyByName[a.name.toLowerCase()]
-                            const last5 = stats ? stats.history.slice(-5) : []
+                            const last10 = stats ? stats.history.slice(-10) : []
                             return (
-                              <div className="flex items-center gap-0.5 flex-shrink-0" title="Last 5 meetings · left = older">
-                                {Array.from({ length: 5 - last5.length }).map((_, i) => (
-                                  <span key={`pad-${i}`} className="w-2 h-2 rounded-full bg-zinc-900 border border-zinc-800" />
+                              <div className="flex items-center gap-1" title="Last 10 meetings · left = older">
+                                {Array.from({ length: 10 - last10.length }).map((_, i) => (
+                                  <span key={`pad-${i}`} className="w-3 h-3 rounded-full bg-zinc-900 border border-zinc-800" />
                                 ))}
-                                {last5.map((h, i) => (
+                                {last10.map((h, i) => (
                                   <span key={i}
                                     title={`${h.title} · ${fmtDateTime(h.date)} · ${h.attended ? 'Attended' : 'Missed'}`}
-                                    className={`w-2 h-2 rounded-full ${h.attended ? 'bg-emerald-500' : 'bg-red-500/70'}`} />
+                                    className={`w-3 h-3 rounded-full ${h.attended ? 'bg-emerald-500' : 'bg-red-500/70'}`} />
                                 ))}
                               </div>
                             )
@@ -466,8 +466,8 @@ export default function MeetingsPage() {
                             const stats = historyByName[a.name.toLowerCase()]
                             const streak = stats?.streak ?? 0
                             return (
-                              <span className={`text-[11px] w-10 text-right flex-shrink-0 ${streak > 0 ? 'text-amber-400' : 'text-zinc-600'}`}>
-                                {streak > 0 ? `🔥 ${streak}` : '—'}
+                              <span className={`text-xs w-12 text-right ${streak > 0 ? 'text-amber-400 font-semibold' : 'text-zinc-700'}`}>
+                                {streak > 0 ? `🔥 ${streak}` : ''}
                               </span>
                             )
                           })()}
@@ -475,29 +475,26 @@ export default function MeetingsPage() {
                           {/* Last seen */}
                           {(() => {
                             const stats = historyByName[a.name.toLowerCase()]
+                            const ls = stats?.lastAttended
                             return (
-                              <span className="text-[11px] text-zinc-500 w-16 text-right flex-shrink-0">
-                                {daysAgo(stats?.lastAttended ?? null)}
+                              <span className={`text-xs w-20 text-right ${ls ? 'text-zinc-400' : 'text-zinc-700'}`}>
+                                {daysAgo(ls ?? null)}
                               </span>
                             )
                           })()}
 
-                          {/* Spacer */}
-                          <div className="flex-1" />
-
-                          {hasNote && !expanded && (
+                          {hasNote && !expanded ? (
                             <button type="button" onClick={() => setExpandedNoteIdx(idx)}
-                              className="text-xs text-zinc-400 hover:text-amber-400 italic truncate max-w-[200px]"
+                              className="text-xs text-amber-400 hover:text-amber-300 italic truncate max-w-[200px] text-right"
                               title="Click to edit note">
                               💬 {a.notes}
                             </button>
-                          )}
-                          {!hasNote && !expanded && (
+                          ) : !expanded ? (
                             <button type="button" onClick={() => setExpandedNoteIdx(idx)}
-                              className="text-[11px] text-zinc-600 hover:text-amber-400 flex-shrink-0">
+                              className="text-xs text-zinc-600 hover:text-amber-400 text-right">
                               + note
                             </button>
-                          )}
+                          ) : <span />}
                         </div>
                         {expanded && (
                           <div className="flex gap-2 pl-7 pb-1">
