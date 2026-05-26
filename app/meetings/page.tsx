@@ -541,11 +541,16 @@ export default function MeetingsPage() {
                     ranked.length === 0 ? (
                       <p className="text-xs text-zinc-600 italic">No participants yet — click + Add.</p>
                     ) : (
-                      <ul className="space-y-1">
+                      <ul className="overflow-y-scroll"
+                          style={{
+                            height: '108px',  // 3 rows × 36px — anything beyond scrolls.
+                            scrollbarWidth: 'thin',
+                            scrollbarColor: 'rgb(168 85 247 / 0.5) transparent',
+                          }}>
                         {ranked.map((p, i) => {
                           const inTop3 = i < 3 && p.count > 0
                           return (
-                            <li key={p.name} className={`flex items-center gap-2 py-1 px-1 rounded ${inTop3 ? 'bg-purple-500/5' : ''}`}>
+                            <li key={p.name} className={`flex items-center gap-2 h-9 px-1 rounded ${inTop3 ? 'bg-purple-500/5' : ''}`}>
                               <span className={`text-xs w-5 flex-shrink-0 text-right ${inTop3 ? 'text-purple-400 font-bold' : 'text-zinc-600'}`}>
                                 {inTop3 ? `${i + 1}.` : ''}
                               </span>
