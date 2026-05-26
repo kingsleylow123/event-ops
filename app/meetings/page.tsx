@@ -271,12 +271,17 @@ export default function MeetingsPage() {
     }
 
     return Object.values(stats)
-      .filter(s => s.total > 0)
       .map(s => ({
         ...s,
         rate: s.total > 0 ? Math.round((s.attended / s.total) * 100) : 0,
       }))
-      .sort((a, b) => b.rate - a.rate || b.attended - a.attended)
+      .sort((a, b) => {
+        // People with data first, sorted best to worst. People with no data at bottom alphabetically.
+        if (a.total === 0 && b.total === 0) return a.name.localeCompare(b.name)
+        if (a.total === 0) return 1
+        if (b.total === 0) return -1
+        return b.rate - a.rate || b.attended - a.attended
+      })
   }, [meetings, people])
 
   function statusFor(rate: number, total: number): { label: string; color: string } {
