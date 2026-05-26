@@ -387,7 +387,7 @@ export default function MeetingsPage() {
           { role: 'videographer', label: 'Videographer', color: 'text-sky-400', bg: 'border-sky-500/30' },
         ]
         return (
-          <div className="flex flex-wrap justify-center items-start gap-3">
+          <div className="flex flex-wrap justify-center items-stretch gap-3">
             {TOP_ROLES.map(r => {
               const inRole = personStats.filter(p => (p.role || '') === r.role)
               if (inRole.length === 0) return null  // No people in this role → hide
