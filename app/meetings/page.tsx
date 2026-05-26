@@ -521,9 +521,9 @@ export default function MeetingsPage() {
                     eligibleToAdd.length === 0 ? (
                       <p className="text-xs text-zinc-600 italic">Everyone is already in the challenge.</p>
                     ) : (
-                      <div className="overflow-y-auto divide-y divide-zinc-900"
+                      <div className="overflow-y-scroll"
                            style={{
-                             height: `${Math.min(eligibleToAdd.length, 3) * 36}px`,
+                             height: '108px',  // STRICTLY 3 × 36px rows. Anything beyond scrolls.
                              scrollbarWidth: 'thin',
                              scrollbarColor: 'rgb(168 85 247 / 0.5) transparent',
                            }}>
