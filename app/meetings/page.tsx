@@ -56,6 +56,7 @@ export default function MeetingsPage() {
   const [draftAttendance, setDraftAttendance] = useState<MeetingAttendee[]>([])
   const [search, setSearch] = useState('')
   const [saving, setSaving] = useState(false)
+  const [expandedNoteIdx, setExpandedNoteIdx] = useState<number | null>(null)
 
   async function loadAll() {
     try {
@@ -362,26 +363,59 @@ export default function MeetingsPage() {
               className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm" />
 
             <div className="pt-2 border-t border-zinc-800">
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
                 <p className="text-xs text-zinc-500 uppercase tracking-wider">Attendance</p>
-                <button type="button"
-                  onClick={() => setDraftAttendance(d => d.map(a => ({ ...a, attended: true })))}
-                  className="text-xs text-amber-400 hover:text-amber-300">Mark all attended</button>
+                <div className="flex gap-3">
+                  <button type="button"
+                    onClick={() => setDraftAttendance(d => d.map(a => ({ ...a, attended: true })))}
+                    className="text-xs text-amber-400 hover:text-amber-300">✓ Mark all attended</button>
+                  <button type="button"
+                    onClick={() => setDraftAttendance(d => d.map(a => ({ ...a, attended: false })))}
+                    className="text-xs text-zinc-500 hover:text-zinc-300">Clear all</button>
+                </div>
               </div>
               {draftAttendance.length === 0 ? (
                 <p className="text-xs text-zinc-600 italic">No team members yet. Add some on the Claude Intern page first.</p>
               ) : (
                 <div className="space-y-1">
-                  {draftAttendance.map((a, idx) => (
-                    <div key={idx} className="grid grid-cols-[auto_1fr_2fr] gap-2 items-center">
-                      <input type="checkbox" checked={a.attended} onChange={() => toggleAttended(idx)}
-                        className="w-4 h-4 accent-amber-500" />
-                      <span className={`text-sm ${a.attended ? 'text-white' : 'text-zinc-500'}`}>{a.name}</span>
-                      <input value={a.notes ?? ''} onChange={e => setPersonNotes(idx, e.target.value)}
-                        placeholder="Contribution / notes (e.g. delivered reel)"
-                        className="bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-white text-xs" />
-                    </div>
-                  ))}
+                  {draftAttendance.map((a, idx) => {
+                    const hasNote = (a.notes ?? '').length > 0
+                    const expanded = expandedNoteIdx === idx
+                    return (
+                      <div key={idx} className="space-y-1">
+                        <div className="flex items-center gap-3 py-1">
+                          <input type="checkbox" checked={a.attended} onChange={() => toggleAttended(idx)}
+                            className="w-4 h-4 accent-amber-500 flex-shrink-0" />
+                          <span className={`text-sm flex-1 ${a.attended ? 'text-white' : 'text-zinc-500'}`}>{a.name}</span>
+                          {hasNote && !expanded && (
+                            <button type="button" onClick={() => setExpandedNoteIdx(idx)}
+                              className="text-xs text-zinc-400 hover:text-amber-400 italic truncate max-w-[200px]"
+                              title="Click to edit note">
+                              💬 {a.notes}
+                            </button>
+                          )}
+                          {!hasNote && !expanded && (
+                            <button type="button" onClick={() => setExpandedNoteIdx(idx)}
+                              className="text-xs text-zinc-600 hover:text-amber-400">
+                              + note
+                            </button>
+                          )}
+                        </div>
+                        {expanded && (
+                          <div className="flex gap-2 pl-7">
+                            <input autoFocus value={a.notes ?? ''}
+                              onChange={e => setPersonNotes(idx, e.target.value)}
+                              onBlur={() => setExpandedNoteIdx(null)}
+                              onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); setExpandedNoteIdx(null) } }}
+                              placeholder="e.g. delivered reel, late, no show, etc."
+                              className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-white text-xs" />
+                            <button type="button" onClick={() => { setPersonNotes(idx, ''); setExpandedNoteIdx(null) }}
+                              className="text-xs text-zinc-500 hover:text-red-400">✕</button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               )}
             </div>
