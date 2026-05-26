@@ -166,7 +166,7 @@ event-ops/
 
 ## Live URLs
 
-- **Dashboard (production):** https://event-ops.vercel.app
+- **Dashboard (production):** https://event-ops-six.vercel.app
 - **GitHub repo:** https://github.com/kingsleylow123/event-ops
 - **Supabase DB:** https://supabase.com/dashboard/project/hxqpcicdrjgdjabkwlfu
 - **Stripe dashboard:** https://dashboard.stripe.com
