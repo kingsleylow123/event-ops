@@ -173,31 +173,80 @@ export default function MeetingsPage() {
     })
   }, [meetings, search, events])
 
-  // Per-person stats for the summary card
+  // Per-person stats — chronological history + streaks
   const personStats = useMemo(() => {
-    const stats: Record<string, { attended: number; total: number; role: string }> = {}
+    // Meetings sorted ascending in time so dot grid reads left=old → right=new
+    const meetingsAsc = [...meetings].sort((a, b) => new Date(a.meeting_date).getTime() - new Date(b.meeting_date).getTime())
+
+    const stats: Record<string, {
+      name: string
+      role: string
+      attended: number
+      total: number
+      history: { attended: boolean; meetingDate: string; title: string }[]
+      lastAttendedDate: string | null
+      currentStreak: number
+    }> = {}
+
     for (const p of people) {
-      stats[p.name.toLowerCase()] = { attended: 0, total: 0, role: p.role }
-    }
-    for (const m of meetings) {
-      for (const a of m.attendance ?? []) {
-        const key = a.name.toLowerCase()
-        if (!stats[key]) stats[key] = { attended: 0, total: 0, role: '' }
-        stats[key].total += 1
-        if (a.attended) stats[key].attended += 1
+      stats[p.name.toLowerCase()] = {
+        name: p.name, role: p.role, attended: 0, total: 0,
+        history: [], lastAttendedDate: null, currentStreak: 0,
       }
     }
-    return Object.entries(stats)
-      .filter(([, s]) => s.total > 0)
-      .map(([key, s]) => ({
-        name: people.find(p => p.name.toLowerCase() === key)?.name ?? key,
-        role: s.role,
-        attended: s.attended,
-        total: s.total,
+
+    for (const m of meetingsAsc) {
+      for (const a of m.attendance ?? []) {
+        const key = a.name.toLowerCase()
+        if (!stats[key]) {
+          stats[key] = { name: a.name, role: '', attended: 0, total: 0, history: [], lastAttendedDate: null, currentStreak: 0 }
+        }
+        stats[key].total += 1
+        stats[key].history.push({ attended: a.attended, meetingDate: m.meeting_date, title: m.title })
+        if (a.attended) {
+          stats[key].attended += 1
+          stats[key].lastAttendedDate = m.meeting_date
+        }
+      }
+    }
+
+    // Current streak = consecutive attended from most recent backwards
+    for (const key of Object.keys(stats)) {
+      const hist = stats[key].history
+      let streak = 0
+      for (let i = hist.length - 1; i >= 0; i--) {
+        if (hist[i].attended) streak++
+        else break
+      }
+      stats[key].currentStreak = streak
+    }
+
+    return Object.values(stats)
+      .filter(s => s.total > 0)
+      .map(s => ({
+        ...s,
         rate: s.total > 0 ? Math.round((s.attended / s.total) * 100) : 0,
       }))
-      .sort((a, b) => b.rate - a.rate)
+      .sort((a, b) => b.rate - a.rate || b.attended - a.attended)
   }, [meetings, people])
+
+  function statusFor(rate: number, total: number): { label: string; color: string } {
+    if (total === 0) return { label: 'No data', color: 'bg-zinc-800 text-zinc-400 border border-zinc-700' }
+    if (rate >= 80) return { label: 'Consistent', color: 'bg-emerald-900/40 text-emerald-400 border border-emerald-800' }
+    if (rate >= 50) return { label: 'Inconsistent', color: 'bg-yellow-900/40 text-yellow-400 border border-yellow-800' }
+    return { label: 'Disengaged', color: 'bg-red-900/40 text-red-400 border border-red-800' }
+  }
+
+  function daysAgo(iso: string | null): string {
+    if (!iso) return 'never'
+    const diff = Date.now() - new Date(iso).getTime()
+    const days = Math.floor(diff / 86_400_000)
+    if (days === 0) return 'today'
+    if (days === 1) return 'yesterday'
+    if (days < 7) return `${days}d ago`
+    if (days < 30) return `${Math.floor(days / 7)}w ago`
+    return `${Math.floor(days / 30)}mo ago`
+  }
 
   if (loading) return <div className="text-zinc-500 mt-20 text-center">Loading…</div>
 
@@ -220,25 +269,71 @@ export default function MeetingsPage() {
         </div>
       </div>
 
-      {/* Per-person attendance summary */}
+      {/* Per-person attendance summary — visual + scannable */}
       {personStats.length > 0 && (
         <section className="bg-[#111] border border-zinc-800 rounded-xl p-5">
-          <p className="text-xs text-zinc-500 uppercase tracking-wider mb-3">Attendance per person</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-            {personStats.map(p => (
-              <div key={p.name} className="flex items-center justify-between gap-2 bg-zinc-950/60 border border-zinc-800 rounded-lg px-3 py-2">
-                <div className="min-w-0">
-                  <p className="text-sm text-white font-medium truncate">{p.name}</p>
-                  {p.role && <p className="text-[10px] text-zinc-500 uppercase">{p.role.replace('_', ' ')}</p>}
+          <div className="flex items-baseline justify-between mb-4">
+            <p className="text-xs text-zinc-500 uppercase tracking-wider">Consistency · sorted best to worst</p>
+            <p className="text-xs text-zinc-600">{meetings.length} meeting{meetings.length === 1 ? '' : 's'} tracked</p>
+          </div>
+          <div className="space-y-2">
+            {personStats.map(p => {
+              const status = statusFor(p.rate, p.total)
+              const last10 = p.history.slice(-10)
+              return (
+                <div key={p.name} className="bg-zinc-950/60 border border-zinc-800 rounded-lg p-3">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    {/* Name + role + status */}
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-white font-medium">{p.name}</p>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${status.color}`}>{status.label}</span>
+                        </div>
+                        {p.role && <p className="text-[10px] text-zinc-500 uppercase mt-0.5">{p.role.replace('_', ' ')}</p>}
+                      </div>
+                    </div>
+
+                    {/* Dot grid — last 10 meetings */}
+                    <div className="flex items-center gap-1 flex-shrink-0" title="Left = older · Right = most recent">
+                      {Array.from({ length: 10 - last10.length }).map((_, i) => (
+                        <span key={`pad-${i}`} className="w-3 h-3 rounded-full bg-zinc-900 border border-zinc-800" />
+                      ))}
+                      {last10.map((h, i) => (
+                        <span key={i}
+                          title={`${h.title} · ${fmtDateTime(h.meetingDate)} · ${h.attended ? 'Attended' : 'Missed'}`}
+                          className={`w-3 h-3 rounded-full ${h.attended ? 'bg-emerald-500' : 'bg-red-500/70'}`} />
+                      ))}
+                    </div>
+
+                    {/* Numbers */}
+                    <div className="flex items-center gap-4 flex-shrink-0">
+                      <div className="text-right">
+                        <p className={`text-lg font-bold ${p.rate >= 80 ? 'text-emerald-400' : p.rate >= 50 ? 'text-amber-400' : 'text-red-400'}`}>
+                          {p.rate}%
+                        </p>
+                        <p className="text-[10px] text-zinc-500">{p.attended}/{p.total}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm text-white">🔥 {p.currentStreak}</p>
+                        <p className="text-[10px] text-zinc-500">streak</p>
+                      </div>
+                      <div className="text-right hidden sm:block">
+                        <p className="text-xs text-zinc-400">{daysAgo(p.lastAttendedDate)}</p>
+                        <p className="text-[10px] text-zinc-500">last seen</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-right flex-shrink-0">
-                  <p className={`text-sm font-semibold ${p.rate >= 80 ? 'text-emerald-400' : p.rate >= 50 ? 'text-amber-400' : 'text-red-400'}`}>
-                    {p.attended}/{p.total}
-                  </p>
-                  <p className="text-[10px] text-zinc-500">{p.rate}%</p>
-                </div>
-              </div>
-            ))}
+              )
+            })}
+          </div>
+          <div className="flex items-center gap-4 mt-3 text-[10px] text-zinc-600 flex-wrap">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> attended</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500/70" /> missed</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-zinc-900 border border-zinc-800" /> no meeting yet</span>
+            <span>·</span>
+            <span><span className="text-emerald-400">Consistent</span> ≥ 80% · <span className="text-amber-400">Inconsistent</span> 50-79% · <span className="text-red-400">Disengaged</span> &lt; 50%</span>
           </div>
         </section>
       )}
