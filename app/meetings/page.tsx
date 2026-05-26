@@ -521,11 +521,15 @@ export default function MeetingsPage() {
                     eligibleToAdd.length === 0 ? (
                       <p className="text-xs text-zinc-600 italic">Everyone is already in the challenge.</p>
                     ) : (
-                      <div className="max-h-[110px] overflow-y-auto divide-y divide-zinc-900"
-                           style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgb(168 85 247 / 0.5) transparent' }}>
+                      <div className="overflow-y-auto divide-y divide-zinc-900"
+                           style={{
+                             height: `${Math.min(eligibleToAdd.length, 3) * 36}px`,
+                             scrollbarWidth: 'thin',
+                             scrollbarColor: 'rgb(168 85 247 / 0.5) transparent',
+                           }}>
                         {eligibleToAdd.map(p => (
                           <button key={p.name} type="button" onClick={() => addParticipant(p.name)}
-                            className="w-full flex items-center justify-between gap-2 px-1 py-1 text-left hover:bg-purple-500/15 transition-colors rounded">
+                            className="w-full h-9 flex items-center justify-between gap-2 px-1 text-left hover:bg-purple-500/15 transition-colors rounded">
                             <span className="text-sm text-white">{p.name}</span>
                             <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{(p.role || 'other').replace('_', ' ')}</span>
                           </button>
