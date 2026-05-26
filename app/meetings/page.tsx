@@ -418,28 +418,34 @@ export default function MeetingsPage() {
               )
             })}
 
-            {/* Top 3 Post Content — last 30 days */}
+            {/* 30-Day Post Challenge — always-visible roster with +1 / undo per person */}
             {(() => {
               const thirtyDaysAgo = new Date()
               thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
               const cutoff = thirtyDaysAgo.toISOString().slice(0, 10)
               const recent = posts.filter(p => p.post_date >= cutoff)
-              const countByName: Record<string, { name: string; count: number }> = {}
+              const countByName: Record<string, number> = {}
+              const latestByName: Record<string, ContentPost> = {}
               for (const p of recent) {
                 const key = p.person_name.toLowerCase()
-                if (!countByName[key]) countByName[key] = { name: p.person_name, count: 0 }
-                countByName[key].count += 1
+                countByName[key] = (countByName[key] || 0) + 1
+                if (!latestByName[key] || p.created_at > latestByName[key].created_at) latestByName[key] = p
               }
-              // Only content creators count as candidates (others can post but they're not in this category)
-              const contentCreatorNames = new Set(personStats.filter(p => p.role === 'content_creator').map(p => p.name.toLowerCase()))
-              const ranked = Object.values(countByName)
-                .filter(r => contentCreatorNames.has(r.name.toLowerCase()))
-                .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
-                .slice(0, 3)
 
               const ccPeople = personStats.filter(p => p.role === 'content_creator')
+              const ranked = ccPeople
+                .map(p => ({
+                  name: p.name,
+                  count: countByName[p.name.toLowerCase()] || 0,
+                  latest: latestByName[p.name.toLowerCase()] || null,
+                }))
+                .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
 
               async function logPost(name: string) {
+                // Optimistic update
+                const tmpId = `tmp-${Date.now()}`
+                const today = new Date().toISOString().slice(0, 10)
+                setPosts(prev => [{ id: tmpId, person_name: name, post_date: today, notes: null, created_at: new Date().toISOString() } as ContentPost, ...prev])
                 const res = await fetch('/api/posts', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -447,51 +453,51 @@ export default function MeetingsPage() {
                 })
                 if (res.ok) {
                   const created: ContentPost = await res.json()
-                  setPosts(prev => [created, ...prev])
+                  setPosts(prev => prev.map(p => p.id === tmpId ? created : p))
                 }
-                setLogPostFor(null)
+              }
+
+              async function undoLastPost(id: string) {
+                setPosts(prev => prev.filter(p => p.id !== id))
+                await fetch(`/api/posts?id=${id}`, { method: 'DELETE' })
               }
 
               return (
                 <div className="bg-[#111] border border-purple-500/30 rounded-xl p-4 flex-1 min-w-[280px] max-w-[420px]">
-                  <div className="flex items-center justify-between mb-3">
-                    <p className="text-xs uppercase tracking-wider font-semibold text-purple-400">
-                      🏆 Top 3 · 30-Day Post Challenge
-                    </p>
-                    <button onClick={() => setLogPostFor(logPostFor ? null : '__open')}
-                      className="text-[10px] text-purple-400 hover:text-purple-300 border border-purple-500/40 rounded px-2 py-0.5">
-                      {logPostFor ? 'Close' : '+ Log post'}
-                    </button>
-                  </div>
-
-                  {logPostFor && (
-                    <div className="mb-3 pb-3 border-b border-zinc-800">
-                      <p className="text-[10px] text-zinc-500 mb-1">Who posted today?</p>
-                      <div className="flex flex-wrap gap-1">
-                        {ccPeople.map(p => (
-                          <button key={p.name} type="button" onClick={() => logPost(p.name)}
-                            className="text-xs bg-zinc-900 hover:bg-purple-500/20 border border-zinc-700 hover:border-purple-500/50 rounded-full px-2 py-0.5">
-                            +1 {p.name}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {ranked.length === 0 ? (
-                    <p className="text-xs text-zinc-600 italic">No posts logged in the last 30 days.</p>
+                  <p className="text-xs uppercase tracking-wider font-semibold text-purple-400 mb-3">
+                    🏆 Top 3 · 30-Day Post Challenge
+                  </p>
+                  {ccPeople.length === 0 ? (
+                    <p className="text-xs text-zinc-600 italic">Add content creators on the Claude Intern page first.</p>
                   ) : (
-                    <ol className="space-y-1">
-                      {ranked.map((p, i) => (
-                        <li key={p.name} className="flex items-center justify-between gap-2 text-sm">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className="text-xs text-zinc-500 w-4 flex-shrink-0">{i + 1}.</span>
-                            <span className="text-white truncate">{p.name}</span>
-                          </div>
-                          <span className="text-purple-400 font-semibold text-xs">{p.count} {p.count === 1 ? 'post' : 'posts'}</span>
-                        </li>
-                      ))}
-                    </ol>
+                    <ul className="space-y-1">
+                      {ranked.map((p, i) => {
+                        const inTop3 = i < 3 && p.count > 0
+                        return (
+                          <li key={p.name} className={`flex items-center gap-2 py-1 px-1 rounded ${inTop3 ? 'bg-purple-500/5' : ''}`}>
+                            <span className={`text-xs w-5 flex-shrink-0 text-right ${inTop3 ? 'text-purple-400 font-bold' : 'text-zinc-600'}`}>
+                              {inTop3 ? `${i + 1}.` : ''}
+                            </span>
+                            <span className={`text-sm flex-1 min-w-0 truncate ${p.count > 0 ? 'text-white' : 'text-zinc-500'}`}>
+                              {p.name}
+                            </span>
+                            <span className={`text-xs w-14 text-right ${p.count > 0 ? 'text-purple-400 font-semibold' : 'text-zinc-700'}`}>
+                              {p.count} {p.count === 1 ? 'post' : 'posts'}
+                            </span>
+                            <button type="button" onClick={() => logPost(p.name)}
+                              className="bg-purple-500 hover:bg-purple-400 text-white text-xs font-bold px-2 py-1 rounded flex-shrink-0"
+                              aria-label={`Add a post for ${p.name} today`}>
+                              +1
+                            </button>
+                            {p.latest && (
+                              <button type="button" onClick={() => undoLastPost(p.latest!.id)}
+                                className="text-zinc-600 hover:text-red-400 text-xs px-1 flex-shrink-0"
+                                title="Undo most recent post">↺</button>
+                            )}
+                          </li>
+                        )
+                      })}
+                    </ul>
                   )}
                 </div>
               )
