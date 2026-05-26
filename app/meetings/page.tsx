@@ -456,7 +456,7 @@ export default function MeetingsPage() {
                 <div className="bg-[#111] border border-purple-500/30 rounded-xl p-4 flex-1 min-w-[280px] max-w-[420px]">
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-xs uppercase tracking-wider font-semibold text-purple-400">
-                      🏆 Top 3 Post Content (30d)
+                      🏆 Top 3 · 30-Day Post Challenge
                     </p>
                     <button onClick={() => setLogPostFor(logPostFor ? null : '__open')}
                       className="text-[10px] text-purple-400 hover:text-purple-300 border border-purple-500/40 rounded px-2 py-0.5">
