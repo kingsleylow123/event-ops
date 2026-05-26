@@ -36,6 +36,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <Link href="/checklist" className="text-sm text-zinc-400 hover:text-white transition-colors">Checklist</Link>
               <Link href="/events" className="text-sm text-zinc-400 hover:text-white transition-colors">Events</Link>
               <Link href="/revenue" className="text-sm text-zinc-400 hover:text-white transition-colors">Revenue</Link>
+              <Link href="/meetings" className="text-sm text-zinc-400 hover:text-white transition-colors">Meetings</Link>
               <Link href="/team" className="text-sm text-zinc-400 hover:text-white transition-colors">Claude Intern</Link>
               {admin && (
                 <Link href="/admin" className="text-sm text-zinc-400 hover:text-white transition-colors flex items-center gap-1">

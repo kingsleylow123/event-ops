@@ -65,6 +65,22 @@ export interface Expense {
   created_at: string
 }
 
+export interface MeetingAttendee {
+  name: string
+  attended: boolean
+  notes: string | null
+}
+
+export interface Meeting {
+  id: string
+  title: string
+  meeting_date: string
+  event_id: string | null
+  notes: string | null
+  attendance: MeetingAttendee[]
+  created_at: string
+}
+
 export type TeamRole = 'speaker' | 'facilitator' | 'content_creator' | 'videographer'
 
 export interface TeamMember {
