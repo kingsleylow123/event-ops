@@ -19,10 +19,10 @@ const WEEKS_TO_SHOW = 12
 const ROLE_ORDER: (TeamRole | string)[] = ['facilitator', 'content_creator', 'videographer', 'speaker', 'other']
 
 const ROLE_COLORS: Record<string, string> = {
-  facilitator: 'border-emerald-500/30 bg-emerald-500/5',
-  content_creator: 'border-pink-500/30 bg-pink-500/5',
-  videographer: 'border-sky-500/30 bg-sky-500/5',
-  speaker: 'border-amber-500/30 bg-amber-500/5',
+  facilitator: 'border-emerald-500/30',
+  content_creator: 'border-pink-500/30',
+  videographer: 'border-sky-500/30',
+  speaker: 'border-amber-500/30',
   other: 'border-zinc-700',
 }
 
@@ -37,8 +37,8 @@ const ROLE_LABEL_COLORS: Record<string, string> = {
 function mondayOf(date: Date): Date {
   const d = new Date(date)
   d.setHours(0, 0, 0, 0)
-  const day = d.getDay() // 0 = Sun, 1 = Mon, ...
-  const offset = (day + 6) % 7 // Days since Monday
+  const day = d.getDay()
+  const offset = (day + 6) % 7
   d.setDate(d.getDate() - offset)
   return d
 }
@@ -67,15 +67,11 @@ function uniquePeople(events: Event[]): PersonRow[] {
       }
     }
   }
-  // Sort: Huda first, then by role, then alphabetical
   return out.sort((a, b) => {
     const aHuda = a.name.toLowerCase() === 'huda'
     const bHuda = b.name.toLowerCase() === 'huda'
     if (aHuda && !bHuda) return -1
     if (bHuda && !aHuda) return 1
-    const aRole = ROLE_ORDER.indexOf(a.role)
-    const bRole = ROLE_ORDER.indexOf(b.role)
-    if (aRole !== bRole) return (aRole === -1 ? 99 : aRole) - (bRole === -1 ? 99 : bRole)
     return a.name.localeCompare(b.name)
   })
 }
@@ -84,7 +80,7 @@ export default function ActivityPage() {
   const [events, setEvents] = useState<Event[]>([])
   const [activity, setActivity] = useState<WeeklyActivity[]>([])
   const [loading, setLoading] = useState(true)
-  const [offset, setOffset] = useState(0) // weeks back from current week (0 = current)
+  const [offset, setOffset] = useState(0)
 
   async function loadAll() {
     try {
@@ -102,7 +98,6 @@ export default function ActivityPage() {
 
   const people = useMemo(() => uniquePeople(events), [events])
 
-  // Week dates to display, oldest → newest
   const weeks = useMemo(() => {
     const current = mondayOf(new Date())
     const arr: { date: Date; ymd: string }[] = []
@@ -114,7 +109,6 @@ export default function ActivityPage() {
     return arr
   }, [offset])
 
-  // Lookup: key `name|week_ymd` → true if active
   const activeSet = useMemo(() => {
     const s = new Set<string>()
     for (const a of activity) {
@@ -129,7 +123,6 @@ export default function ActivityPage() {
 
   async function toggle(name: string, ymd: string) {
     const currentlyActive = isActive(name, ymd)
-    // Optimistic update
     if (currentlyActive) {
       setActivity(prev => prev.filter(a => !(a.person_name.toLowerCase() === name.toLowerCase() && a.week_start.slice(0, 10) === ymd)))
     } else {
@@ -142,12 +135,9 @@ export default function ActivityPage() {
     })
   }
 
-  // Per-person stats across ALL activity (not just visible window)
   function personStats(name: string) {
-    // Build all weeks since the person's first record
     const personRecords = activity.filter(a => a.person_name.toLowerCase() === name.toLowerCase() && a.active)
     const total = personRecords.length
-    // Current streak: consecutive weeks back from current week
     const current = mondayOf(new Date())
     let streak = 0
     for (let i = 0; i < 52; i++) {
@@ -160,7 +150,6 @@ export default function ActivityPage() {
     return { total, streak }
   }
 
-  // Group people by role
   const groupedPeople = useMemo(() => {
     const groups: Record<string, PersonRow[]> = {}
     for (const p of people) {
@@ -196,84 +185,88 @@ export default function ActivityPage() {
         </div>
       </div>
 
-      <div className="bg-[#111] border border-zinc-800 rounded-xl overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-zinc-800">
-              <th className="text-left px-4 py-3 text-xs uppercase tracking-wider text-zinc-500 sticky left-0 bg-[#111] z-10">Name</th>
-              {weeks.map(w => {
-                const f = fmtWeek(w.date)
-                const isThisWeek = offset === 0 && w === weeks[weeks.length - 1]
-                return (
-                  <th key={w.ymd} className={`px-2 py-2 text-center font-normal ${isThisWeek ? 'bg-amber-500/10' : ''}`}>
-                    <div className="text-[10px] text-zinc-500 uppercase">{f.month}</div>
-                    <div className={`text-xs ${isThisWeek ? 'text-amber-400 font-bold' : 'text-zinc-300'}`}>{f.day}</div>
-                  </th>
-                )
-              })}
-              <th className="px-3 py-2 text-center text-xs uppercase tracking-wider text-zinc-500">Total</th>
-              <th className="px-3 py-2 text-center text-xs uppercase tracking-wider text-zinc-500">🔥</th>
-            </tr>
-          </thead>
-          <tbody>
-            {groupedPeople.map(group => (
-              <>
-                <tr key={`grp-${group.role}`} className={`${ROLE_COLORS[group.role]}`}>
-                  <td colSpan={weeks.length + 3}
-                    className={`px-4 py-2 text-xs uppercase tracking-wider font-semibold ${ROLE_LABEL_COLORS[group.role]} sticky left-0 z-10`}>
-                    {group.role.toString().replace('_', ' ')} ({group.people.length})
-                  </td>
-                </tr>
-                {group.people.map(p => {
-                  const stats = personStats(p.name)
-                  return (
-                    <tr key={p.name} className="border-t border-zinc-900 hover:bg-zinc-900/30">
-                      <td className="px-4 py-2 text-sm text-white sticky left-0 bg-[#111] z-10">{p.name}</td>
-                      {weeks.map(w => {
-                        const active = isActive(p.name, w.ymd)
-                        return (
-                          <td key={w.ymd} className="px-2 py-2 text-center">
-                            <button
-                              type="button"
-                              onClick={() => toggle(p.name, w.ymd)}
-                              className={`w-7 h-7 rounded-md border transition-all ${
-                                active
-                                  ? 'bg-emerald-500 border-emerald-500 hover:bg-emerald-400 text-black font-bold'
-                                  : 'border-zinc-700 hover:border-amber-500/50 hover:bg-amber-500/10'
-                              }`}
-                              aria-label={`${active ? 'Unmark' : 'Mark'} ${p.name} as active week of ${w.ymd}`}
-                            >
-                              {active ? '✓' : ''}
-                            </button>
-                          </td>
-                        )
-                      })}
-                      <td className="px-3 py-2 text-center text-sm font-mono text-white">{stats.total}</td>
-                      <td className="px-3 py-2 text-center">
-                        {stats.streak > 0 ? (
-                          <span className="text-sm text-amber-400 font-semibold">🔥{stats.streak}</span>
-                        ) : (
-                          <span className="text-xs text-zinc-700">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </>
-            ))}
-            {groupedPeople.length === 0 && (
-              <tr>
-                <td colSpan={weeks.length + 3} className="text-center text-zinc-500 py-10">
-                  No team members yet. Add some on the Claude Intern page first.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+      <div className="space-y-4">
+        {groupedPeople.length === 0 && (
+          <div className="text-center text-zinc-500 py-20 border border-zinc-800 rounded-xl">
+            No team members yet. Add some on the Claude Intern page first.
+          </div>
+        )}
+        {groupedPeople.map(group => (
+          <div key={group.role} className={`bg-[#111] border ${ROLE_COLORS[group.role]} rounded-xl p-4`}>
+            <div className="flex items-center justify-between mb-3 pb-3 border-b border-zinc-800">
+              <p className={`text-sm uppercase tracking-wider font-semibold ${ROLE_LABEL_COLORS[group.role]}`}>
+                {group.role.toString().replace('_', ' ')} ({group.people.length})
+              </p>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr>
+                    <th className="text-left pb-2 text-xs uppercase tracking-wider text-zinc-500 font-normal sticky left-0 bg-[#111] z-10 pr-4">
+                      Name
+                    </th>
+                    {weeks.map(w => {
+                      const f = fmtWeek(w.date)
+                      const isThisWeek = offset === 0 && w === weeks[weeks.length - 1]
+                      return (
+                        <th key={w.ymd} className={`px-1 pb-2 text-center font-normal ${isThisWeek ? 'bg-amber-500/10 rounded' : ''}`}>
+                          <div className="text-[9px] text-zinc-500 uppercase">{f.month}</div>
+                          <div className={`text-[11px] ${isThisWeek ? 'text-amber-400 font-bold' : 'text-zinc-400'}`}>{f.day}</div>
+                        </th>
+                      )
+                    })}
+                    <th className="px-2 pb-2 text-center text-[10px] uppercase tracking-wider text-zinc-500 font-normal">Total</th>
+                    <th className="px-2 pb-2 text-center text-[10px] uppercase tracking-wider text-zinc-500 font-normal">🔥</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {group.people.map(p => {
+                    const stats = personStats(p.name)
+                    return (
+                      <tr key={p.name} className="border-t border-zinc-900">
+                        <td className="py-1.5 pr-4 text-sm text-white sticky left-0 bg-[#111] z-10 whitespace-nowrap">
+                          {p.name}
+                        </td>
+                        {weeks.map(w => {
+                          const active = isActive(p.name, w.ymd)
+                          return (
+                            <td key={w.ymd} className="px-1 py-1.5 text-center">
+                              <button
+                                type="button"
+                                onClick={() => toggle(p.name, w.ymd)}
+                                className={`w-6 h-6 rounded border transition-all ${
+                                  active
+                                    ? 'bg-emerald-500 border-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs'
+                                    : 'border-zinc-700 hover:border-amber-500/50 hover:bg-amber-500/10'
+                                }`}
+                                aria-label={`${active ? 'Unmark' : 'Mark'} ${p.name} week of ${w.ymd}`}
+                              >
+                                {active ? '✓' : ''}
+                              </button>
+                            </td>
+                          )
+                        })}
+                        <td className="px-2 py-1.5 text-center text-sm font-mono text-white">{stats.total}</td>
+                        <td className="px-2 py-1.5 text-center">
+                          {stats.streak > 0 ? (
+                            <span className="text-xs text-amber-400 font-semibold whitespace-nowrap">🔥{stats.streak}</span>
+                          ) : (
+                            <span className="text-xs text-zinc-700">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))}
       </div>
 
-      <p className="text-xs text-zinc-600 text-center">
-        Each column = one week (starting Monday). Click a box to tick/untick. Streak = consecutive recent weeks ticked.
+      <p className="text-xs text-zinc-600 text-center pt-2">
+        Each column = one week (Monday start). Click a box to tick/untick. Streak = consecutive recent weeks ticked from today backwards.
       </p>
     </div>
   )
