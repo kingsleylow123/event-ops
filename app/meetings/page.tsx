@@ -82,6 +82,12 @@ const CATEGORY_FOR_ROLE: Record<string, MeetingCategory> = {
   videographer: 'videographer',
 }
 
+// Pin specific people at the top of their role's leaderboard / consistency list.
+const LEAD_BY_ROLE: Record<string, string> = {
+  facilitator: 'huda',
+  content_creator: 'chloe',
+}
+
 export default function MeetingsPage() {
   const [meetings, setMeetings] = useState<Meeting[]>([])
   const [events, setEvents] = useState<Event[]>([])
@@ -310,6 +316,11 @@ export default function MeetingsPage() {
         rate: s.total > 0 ? Math.round((s.attended / s.total) * 100) : 0,
       }))
       .sort((a, b) => {
+        // Lead person pinned at the top within their role
+        const aLead = LEAD_BY_ROLE[a.role || ''] && a.name.toLowerCase() === LEAD_BY_ROLE[a.role || '']
+        const bLead = LEAD_BY_ROLE[b.role || ''] && b.name.toLowerCase() === LEAD_BY_ROLE[b.role || '']
+        if (aLead && !bLead) return -1
+        if (bLead && !aLead) return 1
         // People with data first, sorted best to worst. People with no data at bottom alphabetically.
         if (a.total === 0 && b.total === 0) return a.name.localeCompare(b.name)
         if (a.total === 0) return 1
