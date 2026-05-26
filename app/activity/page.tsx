@@ -150,6 +150,29 @@ export default function ActivityPage() {
     return { total, streak }
   }
 
+  // Team-level stats per role group: a week "counts" for the team if AT LEAST one
+  // person from that role was active that week. Team streak = consecutive recent
+  // weeks (back from this week) where that was true.
+  function teamStats(roleGroupPeople: PersonRow[]) {
+    const names = roleGroupPeople.map(p => p.name)
+    const current = mondayOf(new Date())
+    let streak = 0
+    let weeksMet = 0
+    for (let i = 0; i < 52; i++) {
+      const d = new Date(current)
+      d.setDate(current.getDate() - i * 7)
+      const ymd = toYMD(d)
+      const anyActive = names.some(n => isActive(n, ymd))
+      if (anyActive) {
+        weeksMet++
+        if (i === streak) streak++
+      } else if (i === streak) {
+        // streak broken at this week — stop counting consecutive
+      }
+    }
+    return { streak, weeksMet }
+  }
+
   const groupedPeople = useMemo(() => {
     const groups: Record<string, PersonRow[]> = {}
     for (const p of people) {
@@ -191,12 +214,23 @@ export default function ActivityPage() {
             No team members yet. Add some on the Claude Intern page first.
           </div>
         )}
-        {groupedPeople.map(group => (
+        {groupedPeople.map(group => {
+          const team = teamStats(group.people)
+          return (
           <div key={group.role} className={`bg-[#111] border ${ROLE_COLORS[group.role]} rounded-xl p-4`}>
-            <div className="flex items-center justify-between mb-3 pb-3 border-b border-zinc-800">
+            <div className="flex items-center justify-between mb-3 pb-3 border-b border-zinc-800 flex-wrap gap-2">
               <p className={`text-sm uppercase tracking-wider font-semibold ${ROLE_LABEL_COLORS[group.role]}`}>
                 {group.role.toString().replace('_', ' ')} ({group.people.length})
               </p>
+              <div className="flex items-center gap-3 text-xs">
+                {team.streak > 0 ? (
+                  <span className="text-amber-400 font-semibold">🔥 {team.streak} week team streak</span>
+                ) : (
+                  <span className="text-zinc-600">No active streak</span>
+                )}
+                <span className="text-zinc-500">·</span>
+                <span className="text-zinc-400">{team.weeksMet} week{team.weeksMet === 1 ? '' : 's'} met</span>
+              </div>
             </div>
 
             <div className="overflow-x-auto">
@@ -262,7 +296,8 @@ export default function ActivityPage() {
               </table>
             </div>
           </div>
-        ))}
+          )
+        })}
       </div>
 
       <p className="text-xs text-zinc-600 text-center pt-2">
