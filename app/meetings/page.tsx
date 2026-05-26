@@ -424,95 +424,108 @@ export default function MeetingsPage() {
               </div>
               {draftAttendance.length === 0 ? (
                 <p className="text-xs text-zinc-600 italic">No team members yet. Add some on the Claude Intern page first.</p>
-              ) : (
-                <div className="divide-y divide-zinc-900">
-                  {draftAttendance.map((a, idx) => {
-                    const hasNote = (a.notes ?? '').length > 0
-                    const expanded = expandedNoteIdx === idx
-                    const prev = idx > 0 ? draftAttendance[idx - 1] : null
-                    const showRoleHeader = !prev || prev.role !== a.role
-                    return (
-                      <div key={idx}>
-                        {showRoleHeader && (
-                          <p className="text-[10px] text-zinc-600 uppercase tracking-wider pt-2 pb-1">
-                            {(a.role || 'other').replace('_', ' ')}
-                          </p>
-                        )}
-                        <div className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto_auto_auto] items-center gap-x-4 gap-y-0 py-1">
-                          <input type="checkbox" checked={a.attended} onChange={() => toggleAttended(idx)}
-                            className="w-5 h-5 accent-amber-500" />
-                          <span className={`text-sm ${a.attended ? 'text-white font-medium' : 'text-zinc-400'}`}>{a.name}</span>
+              ) : (() => {
+                // Group draft attendance by role to render one box per group
+                const groups: Record<string, { indices: number[] }> = {}
+                draftAttendance.forEach((a, idx) => {
+                  const r = a.role || 'other'
+                  if (!groups[r]) groups[r] = { indices: [] }
+                  groups[r].indices.push(idx)
+                })
+                const roleOrder = ['facilitator', 'content_creator', 'videographer', 'speaker', 'other']
+                const orderedRoles = roleOrder.filter(r => groups[r])
 
-                          {/* Recent attendance dots — last 10 meetings (bigger, fills more space) */}
-                          {(() => {
-                            const stats = historyByName[a.name.toLowerCase()]
-                            const last10 = stats ? stats.history.slice(-10) : []
-                            return (
-                              <div className="flex items-center gap-1" title="Last 10 meetings · left = older">
-                                {Array.from({ length: 10 - last10.length }).map((_, i) => (
-                                  <span key={`pad-${i}`} className="w-3 h-3 rounded-full bg-zinc-900 border border-zinc-800" />
-                                ))}
-                                {last10.map((h, i) => (
-                                  <span key={i}
-                                    title={`${h.title} · ${fmtDateTime(h.date)} · ${h.attended ? 'Attended' : 'Missed'}`}
-                                    className={`w-3 h-3 rounded-full ${h.attended ? 'bg-emerald-500' : 'bg-red-500/70'}`} />
-                                ))}
-                              </div>
-                            )
-                          })()}
+                const ROLE_COLORS: Record<string, string> = {
+                  facilitator: 'border-emerald-500/30',
+                  content_creator: 'border-pink-500/30',
+                  videographer: 'border-sky-500/30',
+                  speaker: 'border-amber-500/30',
+                  other: 'border-zinc-700',
+                }
+                const ROLE_LABEL_COLORS: Record<string, string> = {
+                  facilitator: 'text-emerald-400',
+                  content_creator: 'text-pink-400',
+                  videographer: 'text-sky-400',
+                  speaker: 'text-amber-400',
+                  other: 'text-zinc-400',
+                }
 
-                          {/* Streak */}
-                          {(() => {
-                            const stats = historyByName[a.name.toLowerCase()]
-                            const streak = stats?.streak ?? 0
-                            return (
-                              <span className={`text-xs w-12 text-right ${streak > 0 ? 'text-amber-400 font-semibold' : 'text-zinc-700'}`}>
-                                {streak > 0 ? `🔥 ${streak}` : ''}
-                              </span>
-                            )
-                          })()}
-
-                          {/* Last seen */}
-                          {(() => {
-                            const stats = historyByName[a.name.toLowerCase()]
-                            const ls = stats?.lastAttended
-                            return (
-                              <span className={`text-xs w-20 text-right ${ls ? 'text-zinc-400' : 'text-zinc-700'}`}>
-                                {daysAgo(ls ?? null)}
-                              </span>
-                            )
-                          })()}
-
-                          {hasNote && !expanded ? (
-                            <button type="button" onClick={() => setExpandedNoteIdx(idx)}
-                              className="text-xs text-amber-400 hover:text-amber-300 italic truncate max-w-[200px] text-right"
-                              title="Click to edit note">
-                              💬 {a.notes}
-                            </button>
-                          ) : !expanded ? (
-                            <button type="button" onClick={() => setExpandedNoteIdx(idx)}
-                              className="text-xs text-zinc-600 hover:text-amber-400 text-right">
-                              + note
-                            </button>
-                          ) : <span />}
-                        </div>
-                        {expanded && (
-                          <div className="flex gap-2 pl-7 pb-1">
-                            <input autoFocus value={a.notes ?? ''}
-                              onChange={e => setPersonNotes(idx, e.target.value)}
-                              onBlur={() => setExpandedNoteIdx(null)}
-                              onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); setExpandedNoteIdx(null) } }}
-                              placeholder="e.g. delivered reel, late, no show, etc."
-                              className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-white text-xs" />
-                            <button type="button" onClick={() => { setPersonNotes(idx, ''); setExpandedNoteIdx(null) }}
-                              className="text-xs text-zinc-500 hover:text-red-400">✕</button>
+                return (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {orderedRoles.map(role => {
+                      const indices = groups[role].indices
+                      const attendedCount = indices.filter(i => draftAttendance[i].attended).length
+                      return (
+                        <div key={role} className={`bg-zinc-950/60 border ${ROLE_COLORS[role]} rounded-lg p-3`}>
+                          <div className="flex items-center justify-between mb-2 pb-2 border-b border-zinc-800">
+                            <p className={`text-xs uppercase tracking-wider font-semibold ${ROLE_LABEL_COLORS[role]}`}>
+                              {role.replace('_', ' ')} ({indices.length})
+                            </p>
+                            <span className="text-[10px] text-zinc-500">{attendedCount}/{indices.length} ✓</span>
                           </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
+                          <div className="space-y-0.5">
+                            {indices.map(idx => {
+                              const a = draftAttendance[idx]
+                              const hasNote = (a.notes ?? '').length > 0
+                              const expanded = expandedNoteIdx === idx
+                              const stats = historyByName[a.name.toLowerCase()]
+                              const streak = stats?.streak ?? 0
+                              const ls = stats?.lastAttended ?? null
+                              const last5 = stats ? stats.history.slice(-5) : []
+                              return (
+                                <div key={idx}>
+                                  <div className="flex items-center gap-2 py-1">
+                                    <input type="checkbox" checked={a.attended} onChange={() => toggleAttended(idx)}
+                                      className="w-4 h-4 accent-amber-500 flex-shrink-0" />
+                                    <span className={`text-sm flex-1 min-w-0 truncate ${a.attended ? 'text-white font-medium' : 'text-zinc-400'}`}>
+                                      {a.name}
+                                    </span>
+                                    {/* Recent dots — only shown if there's any history */}
+                                    {last5.length > 0 && (
+                                      <div className="flex items-center gap-0.5 flex-shrink-0" title="Last 5 meetings">
+                                        {last5.map((h, i) => (
+                                          <span key={i} title={`${h.title} · ${fmtDateTime(h.date)}`}
+                                            className={`w-1.5 h-1.5 rounded-full ${h.attended ? 'bg-emerald-500' : 'bg-red-500/70'}`} />
+                                        ))}
+                                      </div>
+                                    )}
+                                    {streak > 0 && (
+                                      <span className="text-[10px] text-amber-400 font-semibold flex-shrink-0">🔥{streak}</span>
+                                    )}
+                                    {ls && (
+                                      <span className="text-[10px] text-zinc-500 flex-shrink-0">{daysAgo(ls)}</span>
+                                    )}
+                                    {hasNote && !expanded ? (
+                                      <button type="button" onClick={() => setExpandedNoteIdx(idx)}
+                                        className="text-[10px] text-amber-400 hover:text-amber-300 flex-shrink-0"
+                                        title={a.notes ?? ''}>💬</button>
+                                    ) : !expanded ? (
+                                      <button type="button" onClick={() => setExpandedNoteIdx(idx)}
+                                        className="text-[10px] text-zinc-600 hover:text-amber-400 flex-shrink-0">+</button>
+                                    ) : null}
+                                  </div>
+                                  {expanded && (
+                                    <div className="flex gap-1 pl-6 pb-1">
+                                      <input autoFocus value={a.notes ?? ''}
+                                        onChange={e => setPersonNotes(idx, e.target.value)}
+                                        onBlur={() => setExpandedNoteIdx(null)}
+                                        onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') { e.preventDefault(); setExpandedNoteIdx(null) } }}
+                                        placeholder="note (e.g. delivered reel)"
+                                        className="flex-1 bg-zinc-900 border border-zinc-700 rounded px-2 py-0.5 text-white text-xs" />
+                                      <button type="button" onClick={() => { setPersonNotes(idx, ''); setExpandedNoteIdx(null) }}
+                                        className="text-xs text-zinc-500 hover:text-red-400">✕</button>
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
             </div>
 
             <div className="flex gap-2 pt-2">
