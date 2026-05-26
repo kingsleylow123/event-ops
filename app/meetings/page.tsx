@@ -504,72 +504,71 @@ export default function MeetingsPage() {
               }
 
               return (
-                <div className="bg-[#111] border border-purple-500/30 rounded-xl p-5 flex-1 min-w-[320px] max-w-[520px]">
+                <div className="bg-[#111] border border-purple-500/30 rounded-xl p-4 flex-1 min-w-[280px] max-w-[420px]">
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-sm uppercase tracking-wider font-semibold text-purple-400">
+                    <p className="text-xs uppercase tracking-wider font-semibold text-purple-400">
                       🏆 Top 3 · 30-Day Post Challenge
                     </p>
                     <button type="button"
                       onClick={() => setAddingParticipant(v => !v)}
                       className="text-[10px] text-purple-400 hover:text-purple-300 border border-purple-500/40 rounded px-2 py-0.5">
-                      {addingParticipant ? 'Close' : '+ Add'}
+                      {addingParticipant ? 'Back' : '+ Add'}
                     </button>
                   </div>
 
-                  {addingParticipant && (
-                    <div className="mb-3 pb-3 border-b border-zinc-800">
-                      <p className="text-[10px] text-zinc-500 mb-2">Tap anyone to add — any role can join.</p>
-                      {eligibleToAdd.length === 0 ? (
-                        <p className="text-xs text-zinc-600 italic">Everyone is already in the challenge.</p>
-                      ) : (
-                        <div className="h-96 overflow-y-auto bg-zinc-950/60 border border-zinc-800 rounded-lg divide-y divide-zinc-900" style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgb(168 85 247 / 0.5) transparent' }}>
-                          {eligibleToAdd.map(p => (
-                            <button key={p.name} type="button" onClick={() => addParticipant(p.name)}
-                              className="w-full flex items-center justify-between gap-2 px-4 py-3 text-left hover:bg-purple-500/15 transition-colors">
-                              <span className="text-sm text-white font-medium">{p.name}</span>
-                              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{(p.role || 'other').replace('_', ' ')}</span>
-                            </button>
-                          ))}
-                        </div>
-                        <p className="text-[10px] text-zinc-600 mt-1 text-center">↕ Scroll inside the list to see more</p>
-                      )}
-                    </div>
-                  )}
-
-                  {ranked.length === 0 ? (
-                    <p className="text-xs text-zinc-600 italic">No participants yet — click + Add.</p>
+                  {addingParticipant ? (
+                    // ADD mode — uses the same space as the participants list (no box growth)
+                    eligibleToAdd.length === 0 ? (
+                      <p className="text-xs text-zinc-600 italic">Everyone is already in the challenge.</p>
+                    ) : (
+                      <div className="max-h-[280px] overflow-y-auto divide-y divide-zinc-900 -mx-1"
+                           style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgb(168 85 247 / 0.5) transparent' }}>
+                        {eligibleToAdd.map(p => (
+                          <button key={p.name} type="button" onClick={() => addParticipant(p.name)}
+                            className="w-full flex items-center justify-between gap-2 px-2 py-2 text-left hover:bg-purple-500/15 transition-colors rounded">
+                            <span className="text-sm text-white">{p.name}</span>
+                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{(p.role || 'other').replace('_', ' ')}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )
                   ) : (
-                    <ul className="space-y-1">
-                      {ranked.map((p, i) => {
-                        const inTop3 = i < 3 && p.count > 0
-                        return (
-                          <li key={p.name} className={`flex items-center gap-2 py-1 px-1 rounded ${inTop3 ? 'bg-purple-500/5' : ''}`}>
-                            <span className={`text-xs w-5 flex-shrink-0 text-right ${inTop3 ? 'text-purple-400 font-bold' : 'text-zinc-600'}`}>
-                              {inTop3 ? `${i + 1}.` : ''}
-                            </span>
-                            <span className={`text-sm flex-1 min-w-0 truncate ${p.count > 0 ? 'text-white' : 'text-zinc-500'}`}>
-                              {p.name}
-                            </span>
-                            <span className={`text-xs w-14 text-right ${p.count > 0 ? 'text-purple-400 font-semibold' : 'text-zinc-700'}`}>
-                              {p.count} {p.count === 1 ? 'post' : 'posts'}
-                            </span>
-                            <button type="button" onClick={() => logPost(p.name)}
-                              className="bg-purple-500 hover:bg-purple-400 text-white text-xs font-bold px-2 py-1 rounded flex-shrink-0"
-                              aria-label={`Add a post for ${p.name} today`}>
-                              +1
-                            </button>
-                            {p.latest && (
-                              <button type="button" onClick={() => undoLastPost(p.latest!.id)}
-                                className="text-zinc-600 hover:text-red-400 text-xs px-1 flex-shrink-0"
-                                title="Undo most recent post">↺</button>
-                            )}
-                            <button type="button" onClick={() => removeParticipant(p.name)}
-                              className="text-zinc-700 hover:text-red-400 text-xs px-1 flex-shrink-0"
-                              title="Remove from challenge">✕</button>
-                          </li>
-                        )
-                      })}
-                    </ul>
+                    // PARTICIPANTS mode — current challenge members
+                    ranked.length === 0 ? (
+                      <p className="text-xs text-zinc-600 italic">No participants yet — click + Add.</p>
+                    ) : (
+                      <ul className="space-y-1">
+                        {ranked.map((p, i) => {
+                          const inTop3 = i < 3 && p.count > 0
+                          return (
+                            <li key={p.name} className={`flex items-center gap-2 py-1 px-1 rounded ${inTop3 ? 'bg-purple-500/5' : ''}`}>
+                              <span className={`text-xs w-5 flex-shrink-0 text-right ${inTop3 ? 'text-purple-400 font-bold' : 'text-zinc-600'}`}>
+                                {inTop3 ? `${i + 1}.` : ''}
+                              </span>
+                              <span className={`text-sm flex-1 min-w-0 truncate ${p.count > 0 ? 'text-white' : 'text-zinc-500'}`}>
+                                {p.name}
+                              </span>
+                              <span className={`text-xs w-14 text-right ${p.count > 0 ? 'text-purple-400 font-semibold' : 'text-zinc-700'}`}>
+                                {p.count} {p.count === 1 ? 'post' : 'posts'}
+                              </span>
+                              <button type="button" onClick={() => logPost(p.name)}
+                                className="bg-purple-500 hover:bg-purple-400 text-white text-xs font-bold px-2 py-1 rounded flex-shrink-0"
+                                aria-label={`Add a post for ${p.name} today`}>
+                                +1
+                              </button>
+                              {p.latest && (
+                                <button type="button" onClick={() => undoLastPost(p.latest!.id)}
+                                  className="text-zinc-600 hover:text-red-400 text-xs px-1 flex-shrink-0"
+                                  title="Undo most recent post">↺</button>
+                              )}
+                              <button type="button" onClick={() => removeParticipant(p.name)}
+                                className="text-zinc-700 hover:text-red-400 text-xs px-1 flex-shrink-0"
+                                title="Remove from challenge">✕</button>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    )
                   )}
                 </div>
               )
