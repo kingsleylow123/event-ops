@@ -394,7 +394,7 @@ export default function MeetingsPage() {
               const top5 = inRole.slice(0, 3)
               const hasData = top5.some(p => p.total > 0)
               return (
-                <div key={r.role} className={`bg-[#111] border ${r.bg} rounded-xl p-4 flex-1 min-w-[280px] max-w-[420px]`}>
+                <div key={r.role} className={`bg-[#111] border ${r.bg} rounded-xl p-4 w-full sm:w-[380px] shrink-0`}>
                   <p className={`text-xs uppercase tracking-wider font-semibold ${r.color} mb-3`}>
                     🏆 Top 3 {r.label}
                   </p>
@@ -504,7 +504,7 @@ export default function MeetingsPage() {
               }
 
               return (
-                <div className="bg-[#111] border border-purple-500/30 rounded-xl p-4 flex-1 min-w-[280px] max-w-[420px]">
+                <div className="bg-[#111] border border-purple-500/30 rounded-xl p-4 w-full sm:w-[380px] shrink-0">
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-xs uppercase tracking-wider font-semibold text-purple-400">
                       🏆 Top 3 · 30-Day Post Challenge
