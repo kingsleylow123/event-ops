@@ -318,74 +318,87 @@ export default function MeetingsPage() {
         </div>
       </div>
 
-      {/* Per-person attendance summary — visual + scannable */}
-      {personStats.length > 0 && (
-        <section className="bg-[#111] border border-zinc-800 rounded-xl p-5">
-          <div className="flex items-baseline justify-between mb-4">
-            <p className="text-xs text-zinc-500 uppercase tracking-wider">Consistency · sorted best to worst</p>
-            <p className="text-xs text-zinc-600">{meetings.length} meeting{meetings.length === 1 ? '' : 's'} tracked</p>
-          </div>
-          <div className="space-y-2">
-            {personStats.map(p => {
-              const status = statusFor(p.rate, p.total)
-              const last10 = p.history.slice(-10)
-              return (
-                <div key={p.name} className="bg-zinc-950/60 border border-zinc-800 rounded-lg p-3">
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                    {/* Name + role + status */}
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-white font-medium">{p.name}</p>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${status.color}`}>{status.label}</span>
-                        </div>
-                        {p.role && <p className="text-[10px] text-zinc-500 uppercase mt-0.5">{p.role.replace('_', ' ')}</p>}
-                      </div>
-                    </div>
+      {/* Per-person attendance summary — split into separate sections per role */}
+      {personStats.length > 0 && (() => {
+        const ROLE_SECTION_ORDER: { role: string; label: string; color: string; bg: string }[] = [
+          { role: 'facilitator', label: 'Facilitator', color: 'text-emerald-400', bg: 'border-emerald-500/30' },
+          { role: 'content_creator', label: 'Content Creator', color: 'text-pink-400', bg: 'border-pink-500/30' },
+          { role: 'videographer', label: 'Videographer', color: 'text-sky-400', bg: 'border-sky-500/30' },
+          { role: 'speaker', label: 'Speaker', color: 'text-amber-400', bg: 'border-amber-500/30' },
+          { role: '', label: 'Other', color: 'text-zinc-400', bg: 'border-zinc-700' },
+        ]
+        const sections = ROLE_SECTION_ORDER
+          .map(s => ({ ...s, members: personStats.filter(p => (p.role || '') === s.role) }))
+          .filter(s => s.members.length > 0)
 
-                    {/* Dot grid — last 10 meetings */}
-                    <div className="flex items-center gap-1 flex-shrink-0" title="Left = older · Right = most recent">
-                      {Array.from({ length: 10 - last10.length }).map((_, i) => (
-                        <span key={`pad-${i}`} className="w-3 h-3 rounded-full bg-zinc-900 border border-zinc-800" />
-                      ))}
-                      {last10.map((h, i) => (
-                        <span key={i}
-                          title={`${h.title} · ${fmtDateTime(h.meetingDate)} · ${h.attended ? 'Attended' : 'Missed'}`}
-                          className={`w-3 h-3 rounded-full ${h.attended ? 'bg-emerald-500' : 'bg-red-500/70'}`} />
-                      ))}
-                    </div>
-
-                    {/* Numbers */}
-                    <div className="flex items-center gap-4 flex-shrink-0">
-                      <div className="text-right">
-                        <p className={`text-lg font-bold ${p.rate >= 80 ? 'text-emerald-400' : p.rate >= 50 ? 'text-amber-400' : 'text-red-400'}`}>
-                          {p.rate}%
-                        </p>
-                        <p className="text-[10px] text-zinc-500">{p.attended}/{p.total}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm text-white">🔥 {p.currentStreak}</p>
-                        <p className="text-[10px] text-zinc-500">streak</p>
-                      </div>
-                      <div className="text-right hidden sm:block">
-                        <p className="text-xs text-zinc-400">{daysAgo(p.lastAttendedDate)}</p>
-                        <p className="text-[10px] text-zinc-500">last seen</p>
-                      </div>
-                    </div>
-                  </div>
+        return (
+          <div className="space-y-4">
+            {sections.map(section => (
+              <section key={section.label} className={`bg-[#111] border ${section.bg} rounded-xl p-5`}>
+                <div className="flex items-baseline justify-between mb-4 pb-3 border-b border-zinc-800">
+                  <p className={`text-sm uppercase tracking-wider font-semibold ${section.color}`}>
+                    {section.label} consistency
+                  </p>
+                  <p className="text-xs text-zinc-600">{section.members.length} {section.members.length === 1 ? 'person' : 'people'}</p>
                 </div>
-              )
-            })}
+                <div className="space-y-2">
+                  {section.members.map(p => {
+                    const status = statusFor(p.rate, p.total)
+                    const last10 = p.history.slice(-10)
+                    return (
+                      <div key={p.name} className="bg-zinc-950/60 border border-zinc-800 rounded-lg p-3">
+                        <div className="flex items-center justify-between gap-3 flex-wrap">
+                          <div className="flex items-center gap-2 flex-wrap min-w-0 flex-1">
+                            <p className="text-white font-medium">{p.name}</p>
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${status.color}`}>{status.label}</span>
+                          </div>
+
+                          <div className="flex items-center gap-1 flex-shrink-0" title="Left = older · Right = most recent">
+                            {Array.from({ length: 10 - last10.length }).map((_, i) => (
+                              <span key={`pad-${i}`} className="w-3 h-3 rounded-full bg-zinc-900 border border-zinc-800" />
+                            ))}
+                            {last10.map((h, i) => (
+                              <span key={i}
+                                title={`${h.title} · ${fmtDateTime(h.meetingDate)} · ${h.attended ? 'Attended' : 'Missed'}`}
+                                className={`w-3 h-3 rounded-full ${h.attended ? 'bg-emerald-500' : 'bg-red-500/70'}`} />
+                            ))}
+                          </div>
+
+                          <div className="flex items-center gap-4 flex-shrink-0">
+                            <div className="text-right">
+                              <p className={`text-lg font-bold ${p.rate >= 80 ? 'text-emerald-400' : p.rate >= 50 ? 'text-amber-400' : 'text-red-400'}`}>
+                                {p.rate}%
+                              </p>
+                              <p className="text-[10px] text-zinc-500">{p.attended}/{p.total}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm text-white">🔥 {p.currentStreak}</p>
+                              <p className="text-[10px] text-zinc-500">streak</p>
+                            </div>
+                            <div className="text-right hidden sm:block">
+                              <p className="text-xs text-zinc-400">{daysAgo(p.lastAttendedDate)}</p>
+                              <p className="text-[10px] text-zinc-500">last seen</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </section>
+            ))}
+            <p className="text-[10px] text-zinc-600 text-center">
+              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 align-middle mr-1" /> attended
+              <span className="mx-2">·</span>
+              <span className="inline-block w-2 h-2 rounded-full bg-red-500/70 align-middle mr-1" /> missed
+              <span className="mx-2">·</span>
+              <span className="inline-block w-2 h-2 rounded-full bg-zinc-900 border border-zinc-800 align-middle mr-1" /> no meeting yet
+              <span className="mx-2">·</span>
+              <span className="text-emerald-400">Consistent</span> ≥ 80% · <span className="text-amber-400">Inconsistent</span> 50-79% · <span className="text-red-400">Disengaged</span> &lt; 50%
+            </p>
           </div>
-          <div className="flex items-center gap-4 mt-3 text-[10px] text-zinc-600 flex-wrap">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> attended</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500/70" /> missed</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-zinc-900 border border-zinc-800" /> no meeting yet</span>
-            <span>·</span>
-            <span><span className="text-emerald-400">Consistent</span> ≥ 80% · <span className="text-amber-400">Inconsistent</span> 50-79% · <span className="text-red-400">Disengaged</span> &lt; 50%</span>
-          </div>
-        </section>
-      )}
+        )
+      })()}
 
       {showForm && (
         <div className="bg-[#111] border border-amber-500/50 rounded-xl p-5">
