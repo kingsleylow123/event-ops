@@ -42,7 +42,7 @@ export const TICKET_PRICES: Record<TicketType, number> = {
 
 export const CHECKLIST_CATEGORIES = ['Venue', 'Facilitator', 'Media / UGC Creator', 'AV/Video', 'Logistics']
 
-export type TeamRole = 'founder' | 'speaker' | 'facilitator' | 'content_creator' | 'videographer'
+export type TeamRole = 'speaker' | 'facilitator' | 'content_creator' | 'videographer'
 
 export interface TeamMember {
   role: TeamRole
@@ -51,7 +51,6 @@ export interface TeamMember {
 }
 
 export const TEAM_ROLE_LABELS: Record<TeamRole, string> = {
-  founder: 'Founder',
   speaker: 'Speaker',
   facilitator: 'Facilitator',
   content_creator: 'Content Creator',
@@ -59,7 +58,6 @@ export const TEAM_ROLE_LABELS: Record<TeamRole, string> = {
 }
 
 export const TEAM_ROLE_ICONS: Record<TeamRole, string> = {
-  founder: '👑',
   speaker: '🎤',
   facilitator: '🧑‍🏫',
   content_creator: '📸',

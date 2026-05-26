@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { Event, TeamMember, TeamRole } from '@/lib/supabase'
 import { toWhatsApp, TEAM_ROLE_LABELS, TEAM_ROLE_ICONS } from '@/lib/supabase'
 
-const ROLE_ORDER: TeamRole[] = ['founder', 'speaker', 'facilitator', 'content_creator', 'videographer']
+const ROLE_ORDER: TeamRole[] = ['speaker', 'facilitator', 'content_creator', 'videographer']
 
 function eventLabel(ev: Event): string {
   if (!ev.date) return ev.name
