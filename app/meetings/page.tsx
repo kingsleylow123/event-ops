@@ -376,14 +376,14 @@ export default function MeetingsPage() {
           { role: 'videographer', label: 'Videographer', color: 'text-sky-400', bg: 'border-sky-500/30' },
         ]
         return (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="flex flex-wrap justify-center gap-3">
             {TOP_ROLES.map(r => {
               const inRole = personStats.filter(p => (p.role || '') === r.role)
               if (inRole.length === 0) return null  // No people in this role → hide
               const top5 = inRole.slice(0, 3)
               const hasData = top5.some(p => p.total > 0)
               return (
-                <div key={r.role} className={`bg-[#111] border ${r.bg} rounded-xl p-4`}>
+                <div key={r.role} className={`bg-[#111] border ${r.bg} rounded-xl p-4 flex-1 min-w-[280px] max-w-[420px]`}>
                   <p className={`text-xs uppercase tracking-wider font-semibold ${r.color} mb-3`}>
                     🏆 Top 3 {r.label}
                   </p>
