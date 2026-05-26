@@ -15,8 +15,15 @@ const METHOD_LABELS: Record<PaymentMethod, string> = {
   free: 'Free',
 }
 
+function eventLabel(ev: Event): string {
+  if (!ev.date) return ev.name
+  const year = new Date(ev.date).getFullYear()
+  return `${ev.name} ${year}`
+}
+
 export default function AttendeesPage() {
-  const [event, setEvent] = useState<Event | null>(null)
+  const [events, setEvents] = useState<Event[]>([])
+  const [selectedEventId, setSelectedEventId] = useState<string>('')
   const [attendees, setAttendees] = useState<Attendee[]>([])
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
@@ -25,6 +32,8 @@ export default function AttendeesPage() {
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [filterTicket, setFilterTicket] = useState<string>('all')
   const [filterAttendance, setFilterAttendance] = useState<string>('all')
+
+  const event = events.find(e => e.id === selectedEventId) ?? null
 
   const [form, setForm] = useState({
     name: '', phone: '', email: '',
@@ -35,16 +44,15 @@ export default function AttendeesPage() {
     notes: '',
   })
 
-  async function loadData() {
+  async function loadEvents() {
     try {
       const evRes = await fetch('/api/events')
       if (!evRes.ok) throw new Error()
-      const events: Event[] = await evRes.json()
-      const active = events.find(e => e.is_active) ?? null
-      setEvent(active)
-      if (active) {
-        const res = await fetch(`/api/attendees?event_id=${active.id}`)
-        if (res.ok) setAttendees(await res.json())
+      const list: Event[] = await evRes.json()
+      setEvents(list)
+      if (!selectedEventId) {
+        const active = list.find(e => e.is_active) ?? list[0] ?? null
+        if (active) setSelectedEventId(active.id)
       }
     } catch {
       // db not configured yet
@@ -53,23 +61,38 @@ export default function AttendeesPage() {
     }
   }
 
-  useEffect(() => { loadData() }, [])
+  async function loadAttendees(eventId: string) {
+    try {
+      const res = await fetch(`/api/attendees?event_id=${eventId}`)
+      if (res.ok) setAttendees(await res.json())
+    } catch {
+      // ignore
+    }
+  }
+
+  useEffect(() => { loadEvents() }, [])
+
+  useEffect(() => {
+    if (selectedEventId) loadAttendees(selectedEventId)
+  }, [selectedEventId])
 
   async function syncStripe() {
-    if (!event) return
     setSyncing(true)
     setSyncMsg('')
     const res = await fetch('/api/stripe/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ event_id: event.id }),
+      body: JSON.stringify({}),
     })
     const data = await res.json()
     if (data.error) {
       setSyncMsg(`Error: ${data.error}`)
     } else {
-      setSyncMsg(`Synced: ${data.added} added, ${data.skipped} skipped`)
-      await loadData()
+      const parts = [`${data.added} added`, `${data.skipped} skipped`]
+      if (data.unmatched) parts.push(`${data.unmatched} unmatched`)
+      setSyncMsg(`Synced: ${parts.join(', ')}`)
+      await loadEvents()
+      if (selectedEventId) await loadAttendees(selectedEventId)
     }
     setSyncing(false)
   }
@@ -142,11 +165,24 @@ export default function AttendeesPage() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold">Attendees</h1>
-          {event && <p className="text-sm text-zinc-400">{event.name}</p>}
+          {event && (
+            <p className="text-sm text-zinc-400">{eventLabel(event)}</p>
+          )}
         </div>
         <div className="flex gap-2 flex-wrap">
+          {events.length > 1 && (
+            <select
+              value={selectedEventId}
+              onChange={e => setSelectedEventId(e.target.value)}
+              className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm"
+            >
+              {events.map(ev => (
+                <option key={ev.id} value={ev.id}>{eventLabel(ev)}</option>
+              ))}
+            </select>
+          )}
           {syncMsg && <span className="text-xs text-zinc-400 self-center">{syncMsg}</span>}
-          <button onClick={syncStripe} disabled={syncing || !event}
+          <button onClick={syncStripe} disabled={syncing}
             className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg">
             {syncing ? 'Syncing...' : '⚡ Sync Stripe'}
           </button>
@@ -205,6 +241,7 @@ export default function AttendeesPage() {
               <th className="px-4 py-3">Phone</th>
               <th className="px-4 py-3">Ticket</th>
               <th className="px-4 py-3 text-right">Amount</th>
+              <th className="px-4 py-3">Payment Date</th>
               <th className="px-4 py-3">Method</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3 text-center">Attended</th>
@@ -213,7 +250,7 @@ export default function AttendeesPage() {
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={8} className="text-center text-zinc-500 py-10">No attendees found</td></tr>
+              <tr><td colSpan={9} className="text-center text-zinc-500 py-10">No attendees found</td></tr>
             )}
             {filtered.map(a => {
               const waUrl = toWhatsApp(a.phone)
@@ -227,6 +264,11 @@ export default function AttendeesPage() {
                   <td className="px-4 py-3 text-zinc-300">{TICKET_LABELS[a.ticket_type] ?? a.ticket_type}</td>
                   <td className="px-4 py-3 text-right font-mono">
                     {a.payment_amount > 0 ? `RM ${a.payment_amount}` : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-zinc-400 whitespace-nowrap">
+                    {a.paid_at || a.created_at
+                      ? new Date(a.paid_at ?? a.created_at).toLocaleDateString('en-MY', { dateStyle: 'medium' })
+                      : '—'}
                   </td>
                   <td className="px-4 py-3 text-zinc-400">{METHOD_LABELS[a.payment_method]}</td>
                   <td className="px-4 py-3">
