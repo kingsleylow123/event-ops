@@ -37,6 +37,8 @@ export default function RevenuePage() {
   const [addingForEvent, setAddingForEvent] = useState<string | null>(null)
   const [form, setForm] = useState({ description: '', amount: '', category: 'Other' as string })
   const [saving, setSaving] = useState(false)
+  const [search, setSearch] = useState('')
+  const [filterEventId, setFilterEventId] = useState<string>('all')
 
   async function loadAll() {
     try {
@@ -57,8 +59,21 @@ export default function RevenuePage() {
 
   useEffect(() => { loadAll() }, [])
 
+  const visibleEvents = useMemo(() => {
+    let list = events
+    if (filterEventId !== 'all') list = list.filter(ev => ev.id === filterEventId)
+    const q = search.trim().toLowerCase()
+    if (q) {
+      list = list.filter(ev => {
+        const hay = [ev.name, ev.date ?? '', ev.venue ?? '', fmtDate(ev.date)].join(' ').toLowerCase()
+        return hay.includes(q)
+      })
+    }
+    return list
+  }, [events, filterEventId, search])
+
   const byEvent: EventRevenue[] = useMemo(() => {
-    return events.map(ev => {
+    return visibleEvents.map(ev => {
       const rows = attendees.filter(a => a.event_id === ev.id)
       const paid = rows.filter(a => a.payment_status === 'paid')
       const stripe = paid.filter(a => a.payment_method === 'stripe')
@@ -85,7 +100,7 @@ export default function RevenuePage() {
         profit: totalPaid - totalExpenses,
       }
     })
-  }, [events, attendees, expenses])
+  }, [visibleEvents, attendees, expenses])
 
   const grandTotal = byEvent.reduce((s, r) => s + r.totalPaid, 0)
   const grandExpenses = byEvent.reduce((s, r) => s + r.totalExpenses, 0)
@@ -136,11 +151,34 @@ export default function RevenuePage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-xl font-bold">Revenue</h1>
-        <p className="text-sm text-zinc-500">Gross revenue · expenses · profit per event</p>
+        <div className="flex gap-2 flex-wrap items-center">
+          <select
+            value={filterEventId}
+            onChange={e => setFilterEventId(e.target.value)}
+            className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm"
+          >
+            <option value="all">All events</option>
+            {events.map(ev => (
+              <option key={ev.id} value={ev.id}>
+                {ev.name}{ev.date ? ` — ${fmtDate(ev.date)}` : ''}
+              </option>
+            ))}
+          </select>
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search by date or event name..."
+            className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm w-64"
+          />
+        </div>
       </div>
 
-      {/* Grand total card */}
+      {/* Grand total card — reflects only the events currently visible */}
       <div className="bg-[#111] border border-amber-500/40 rounded-xl p-5">
+        <p className="text-xs text-zinc-500 mb-3">
+          {filterEventId === 'all' && !search ? 'Across all events' : `Filtered · ${byEvent.length} event${byEvent.length === 1 ? '' : 's'}`}
+        </p>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Total revenue</p>
