@@ -5,7 +5,12 @@ import { EXPENSE_CATEGORIES } from '@/lib/supabase'
 
 function fmtRM(n: number): string {
   const sign = n < 0 ? '-' : ''
-  return `${sign}RM ${Math.abs(n).toLocaleString('en-MY', { maximumFractionDigits: 0 })}`
+  const abs = Math.abs(n)
+  const hasCents = Math.round(abs * 100) % 100 !== 0
+  return `${sign}RM ${abs.toLocaleString('en-MY', {
+    minimumFractionDigits: hasCents ? 2 : 0,
+    maximumFractionDigits: 2,
+  })}`
 }
 
 function fmtDate(date: string | null): string {
@@ -272,10 +277,15 @@ export default function RevenuePage() {
                         onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
                         placeholder="Amount (RM)"
                         className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm" />
-                      <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                        className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm">
-                        {EXPENSE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
+                      <input
+                        list="expense-categories"
+                        value={form.category}
+                        onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
+                        placeholder="Category (type or pick)"
+                        className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm" />
+                      <datalist id="expense-categories">
+                        {EXPENSE_CATEGORIES.map(c => <option key={c} value={c} />)}
+                      </datalist>
                     </div>
                     <div className="flex gap-2">
                       <button disabled={saving} type="submit"
