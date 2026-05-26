@@ -101,12 +101,20 @@ export default function MeetingsPage() {
   const [expandedNoteIdx, setExpandedNoteIdx] = useState<number | null>(null)
   const [posts, setPosts] = useState<ContentPost[]>([])
   const [logPostFor, setLogPostFor] = useState<string | null>(null)
+  const [participants, setParticipants] = useState<{ name: string }[]>([])
+  const [addingParticipant, setAddingParticipant] = useState(false)
 
   async function loadAll() {
     try {
-      const [mRes, eRes, pRes] = await Promise.all([fetch('/api/meetings'), fetch('/api/events'), fetch('/api/posts')])
+      const [mRes, eRes, pRes, ppRes] = await Promise.all([
+        fetch('/api/meetings'),
+        fetch('/api/events'),
+        fetch('/api/posts'),
+        fetch('/api/post-participants'),
+      ])
       if (mRes.ok) setMeetings(await mRes.json())
       if (pRes.ok) setPosts(await pRes.json())
+      if (ppRes.ok) setParticipants(await ppRes.json())
       if (eRes.ok) setEvents(await eRes.json())
     } catch {
       // ignore
@@ -432,14 +440,47 @@ export default function MeetingsPage() {
                 if (!latestByName[key] || p.created_at > latestByName[key].created_at) latestByName[key] = p
               }
 
-              const ccPeople = personStats.filter(p => p.role === 'content_creator')
-              const ranked = ccPeople
+              // The challenge roster is the post_challenge_participants table — open to any role.
+              // We still display each participant's role label so the user knows where they came from.
+              const participantNames = new Set(participants.map(p => p.name.toLowerCase()))
+              const challengePeople = personStats.filter(p => participantNames.has(p.name.toLowerCase()))
+              // Include any participants who aren't in the team (just in case) with empty role
+              for (const pp of participants) {
+                if (!challengePeople.find(c => c.name.toLowerCase() === pp.name.toLowerCase())) {
+                  challengePeople.push({
+                    name: pp.name, role: '', attended: 0, total: 0, rate: 0,
+                    history: [], lastAttendedDate: null, currentStreak: 0,
+                  } as typeof personStats[number])
+                }
+              }
+              const ranked = challengePeople
                 .map(p => ({
                   name: p.name,
+                  role: p.role,
                   count: countByName[p.name.toLowerCase()] || 0,
                   latest: latestByName[p.name.toLowerCase()] || null,
                 }))
                 .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+
+              const eligibleToAdd = personStats.filter(p =>
+                !participantNames.has(p.name.toLowerCase()) &&
+                ['facilitator', 'content_creator', 'videographer', 'speaker'].includes(p.role || ''))
+
+              async function addParticipant(name: string) {
+                setParticipants(prev => [...prev, { name }])
+                setAddingParticipant(false)
+                await fetch('/api/post-participants', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ name }),
+                })
+              }
+
+              async function removeParticipant(name: string) {
+                if (!confirm(`Remove ${name} from the post challenge?`)) return
+                setParticipants(prev => prev.filter(p => p.name.toLowerCase() !== name.toLowerCase()))
+                await fetch(`/api/post-participants?name=${encodeURIComponent(name)}`, { method: 'DELETE' })
+              }
 
               async function logPost(name: string) {
                 // Optimistic update
@@ -464,11 +505,37 @@ export default function MeetingsPage() {
 
               return (
                 <div className="bg-[#111] border border-purple-500/30 rounded-xl p-4 flex-1 min-w-[280px] max-w-[420px]">
-                  <p className="text-xs uppercase tracking-wider font-semibold text-purple-400 mb-3">
-                    🏆 Top 3 · 30-Day Post Challenge
-                  </p>
-                  {ccPeople.length === 0 ? (
-                    <p className="text-xs text-zinc-600 italic">Add content creators on the Claude Intern page first.</p>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs uppercase tracking-wider font-semibold text-purple-400">
+                      🏆 Top 3 · 30-Day Post Challenge
+                    </p>
+                    <button type="button"
+                      onClick={() => setAddingParticipant(v => !v)}
+                      className="text-[10px] text-purple-400 hover:text-purple-300 border border-purple-500/40 rounded px-2 py-0.5">
+                      {addingParticipant ? 'Close' : '+ Add'}
+                    </button>
+                  </div>
+
+                  {addingParticipant && (
+                    <div className="mb-3 pb-3 border-b border-zinc-800">
+                      <p className="text-[10px] text-zinc-500 mb-1">Add anyone — any role can join.</p>
+                      {eligibleToAdd.length === 0 ? (
+                        <p className="text-xs text-zinc-600 italic">Everyone is already in the challenge.</p>
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          {eligibleToAdd.map(p => (
+                            <button key={p.name} type="button" onClick={() => addParticipant(p.name)}
+                              className="text-xs bg-zinc-900 hover:bg-purple-500/20 border border-zinc-700 hover:border-purple-500/50 rounded-full px-2 py-0.5">
+                              + {p.name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {ranked.length === 0 ? (
+                    <p className="text-xs text-zinc-600 italic">No participants yet — click + Add.</p>
                   ) : (
                     <ul className="space-y-1">
                       {ranked.map((p, i) => {
@@ -494,6 +561,9 @@ export default function MeetingsPage() {
                                 className="text-zinc-600 hover:text-red-400 text-xs px-1 flex-shrink-0"
                                 title="Undo most recent post">↺</button>
                             )}
+                            <button type="button" onClick={() => removeParticipant(p.name)}
+                              className="text-zinc-700 hover:text-red-400 text-xs px-1 flex-shrink-0"
+                              title="Remove from challenge">✕</button>
                           </li>
                         )
                       })}
