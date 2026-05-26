@@ -42,6 +42,29 @@ export const TICKET_PRICES: Record<TicketType, number> = {
 
 export const CHECKLIST_CATEGORIES = ['Venue', 'Facilitator', 'Media / UGC Creator', 'AV/Video', 'Logistics']
 
+export const EXPENSE_CATEGORIES = [
+  'Venue',
+  'F&B',
+  'Speaker fees',
+  'Marketing',
+  'Equipment / AV',
+  'Content',
+  'Logistics',
+  'Other',
+] as const
+
+export type ExpenseCategory = typeof EXPENSE_CATEGORIES[number]
+
+export interface Expense {
+  id: string
+  event_id: string
+  description: string
+  amount: number
+  category: ExpenseCategory | string
+  notes: string | null
+  created_at: string
+}
+
 export type TeamRole = 'speaker' | 'facilitator' | 'content_creator' | 'videographer'
 
 export interface TeamMember {
