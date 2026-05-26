@@ -84,6 +84,14 @@ export interface Meeting {
   created_at: string
 }
 
+export interface ContentPost {
+  id: string
+  person_name: string
+  post_date: string  // YYYY-MM-DD
+  notes: string | null
+  created_at: string
+}
+
 export type TeamRole = 'speaker' | 'facilitator' | 'content_creator' | 'videographer'
 
 export interface TeamMember {

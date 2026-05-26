@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
-import type { Event, Meeting, MeetingAttendee, MeetingCategory } from '@/lib/supabase'
+import type { Event, Meeting, MeetingAttendee, MeetingCategory, ContentPost } from '@/lib/supabase'
 
 function fmtDateTime(iso: string): string {
   return new Date(iso).toLocaleString('en-MY', { dateStyle: 'medium', timeStyle: 'short' })
@@ -99,11 +99,14 @@ export default function MeetingsPage() {
   const [search, setSearch] = useState('')
   const [saving, setSaving] = useState(false)
   const [expandedNoteIdx, setExpandedNoteIdx] = useState<number | null>(null)
+  const [posts, setPosts] = useState<ContentPost[]>([])
+  const [logPostFor, setLogPostFor] = useState<string | null>(null)
 
   async function loadAll() {
     try {
-      const [mRes, eRes] = await Promise.all([fetch('/api/meetings'), fetch('/api/events')])
+      const [mRes, eRes, pRes] = await Promise.all([fetch('/api/meetings'), fetch('/api/events'), fetch('/api/posts')])
       if (mRes.ok) setMeetings(await mRes.json())
+      if (pRes.ok) setPosts(await pRes.json())
       if (eRes.ok) setEvents(await eRes.json())
     } catch {
       // ignore
@@ -414,6 +417,85 @@ export default function MeetingsPage() {
                 </div>
               )
             })}
+
+            {/* Top 3 Post Content — last 30 days */}
+            {(() => {
+              const thirtyDaysAgo = new Date()
+              thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+              const cutoff = thirtyDaysAgo.toISOString().slice(0, 10)
+              const recent = posts.filter(p => p.post_date >= cutoff)
+              const countByName: Record<string, { name: string; count: number }> = {}
+              for (const p of recent) {
+                const key = p.person_name.toLowerCase()
+                if (!countByName[key]) countByName[key] = { name: p.person_name, count: 0 }
+                countByName[key].count += 1
+              }
+              // Only content creators count as candidates (others can post but they're not in this category)
+              const contentCreatorNames = new Set(personStats.filter(p => p.role === 'content_creator').map(p => p.name.toLowerCase()))
+              const ranked = Object.values(countByName)
+                .filter(r => contentCreatorNames.has(r.name.toLowerCase()))
+                .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+                .slice(0, 3)
+
+              const ccPeople = personStats.filter(p => p.role === 'content_creator')
+
+              async function logPost(name: string) {
+                const res = await fetch('/api/posts', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ person_name: name }),
+                })
+                if (res.ok) {
+                  const created: ContentPost = await res.json()
+                  setPosts(prev => [created, ...prev])
+                }
+                setLogPostFor(null)
+              }
+
+              return (
+                <div className="bg-[#111] border border-purple-500/30 rounded-xl p-4 flex-1 min-w-[280px] max-w-[420px]">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs uppercase tracking-wider font-semibold text-purple-400">
+                      🏆 Top 3 Post Content (30d)
+                    </p>
+                    <button onClick={() => setLogPostFor(logPostFor ? null : '__open')}
+                      className="text-[10px] text-purple-400 hover:text-purple-300 border border-purple-500/40 rounded px-2 py-0.5">
+                      {logPostFor ? 'Close' : '+ Log post'}
+                    </button>
+                  </div>
+
+                  {logPostFor && (
+                    <div className="mb-3 pb-3 border-b border-zinc-800">
+                      <p className="text-[10px] text-zinc-500 mb-1">Who posted today?</p>
+                      <div className="flex flex-wrap gap-1">
+                        {ccPeople.map(p => (
+                          <button key={p.name} type="button" onClick={() => logPost(p.name)}
+                            className="text-xs bg-zinc-900 hover:bg-purple-500/20 border border-zinc-700 hover:border-purple-500/50 rounded-full px-2 py-0.5">
+                            +1 {p.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {ranked.length === 0 ? (
+                    <p className="text-xs text-zinc-600 italic">No posts logged in the last 30 days.</p>
+                  ) : (
+                    <ol className="space-y-1">
+                      {ranked.map((p, i) => (
+                        <li key={p.name} className="flex items-center justify-between gap-2 text-sm">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-xs text-zinc-500 w-4 flex-shrink-0">{i + 1}.</span>
+                            <span className="text-white truncate">{p.name}</span>
+                          </div>
+                          <span className="text-purple-400 font-semibold text-xs">{p.count} {p.count === 1 ? 'post' : 'posts'}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </div>
+              )
+            })()}
           </div>
         )
       })()}
