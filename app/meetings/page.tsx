@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
-import type { Event, Meeting, MeetingAttendee, TeamMember } from '@/lib/supabase'
+import type { Event, Meeting, MeetingAttendee, MeetingCategory } from '@/lib/supabase'
 
 function fmtDateTime(iso: string): string {
   return new Date(iso).toLocaleString('en-MY', { dateStyle: 'medium', timeStyle: 'short' })
@@ -66,6 +66,20 @@ const EMPTY_FORM = {
   meeting_date: '',
   event_id: '',
   notes: '',
+  meeting_category: 'facilitator' as MeetingCategory,
+}
+
+const CATEGORY_LABEL: Record<MeetingCategory, string> = {
+  facilitator: 'Facilitator',
+  content_creator: 'Content Creator',
+  videographer: 'Videographer',
+  mixed: 'Mixed (all roles)',
+}
+
+const CATEGORY_FOR_ROLE: Record<string, MeetingCategory> = {
+  facilitator: 'facilitator',
+  content_creator: 'content_creator',
+  videographer: 'videographer',
 }
 
 export default function MeetingsPage() {
@@ -96,13 +110,23 @@ export default function MeetingsPage() {
 
   const people = useMemo(() => uniquePeople(events), [events])
 
-  // Per-name history map for showing dots + streak + last seen on each form row
+  // Per-name history map for showing dots + streak + last seen on each form row.
+  // Note: depends on `people` so this useMemo is declared AFTER `people`.
   const historyByName = useMemo(() => {
     const meetingsAsc = [...meetings].sort((a, b) => new Date(a.meeting_date).getTime() - new Date(b.meeting_date).getTime())
     const map: Record<string, { history: { attended: boolean; date: string; title: string }[]; lastAttended: string | null; streak: number }> = {}
+    // Lookup name → role from the team list for category matching
+    const roleByName: Record<string, string> = {}
+    for (const p of people) roleByName[p.name.toLowerCase()] = p.role
+
     for (const m of meetingsAsc) {
+      const cat = (m.meeting_category ?? 'facilitator') as MeetingCategory
       for (const a of m.attendance ?? []) {
         const key = a.name.toLowerCase()
+        const personRole = roleByName[key] ?? ''
+        const personCategory = CATEGORY_FOR_ROLE[personRole]
+        // Skip meetings not in this person's category (unless mixed)
+        if (cat !== 'mixed' && (!personCategory || personCategory !== cat)) continue
         if (!map[key]) map[key] = { history: [], lastAttended: null, streak: 0 }
         map[key].history.push({ attended: a.attended, date: m.meeting_date, title: m.title })
         if (a.attended) map[key].lastAttended = m.meeting_date
@@ -134,6 +158,7 @@ export default function MeetingsPage() {
       meeting_date: toDatetimeLocalValue(m.meeting_date),
       event_id: m.event_id ?? '',
       notes: m.notes ?? '',
+      meeting_category: (m.meeting_category ?? 'facilitator') as MeetingCategory,
     })
     // Seed attendance with existing + any new team members added since
     const existingByName = new Map((m.attendance ?? []).map(a => [a.name.toLowerCase(), a]))
@@ -175,6 +200,7 @@ export default function MeetingsPage() {
       event_id: form.event_id || null,
       notes: form.notes || null,
       attendance: draftAttendance,
+      meeting_category: form.meeting_category,
     }
     if (editingId) {
       const res = await fetch('/api/meetings', {
@@ -245,11 +271,19 @@ export default function MeetingsPage() {
     }
 
     for (const m of meetingsAsc) {
+      const cat = (m.meeting_category ?? 'facilitator') as MeetingCategory
       for (const a of m.attendance ?? []) {
         const key = a.name.toLowerCase()
         if (!stats[key]) {
           stats[key] = { name: a.name, role: '', attended: 0, total: 0, history: [], lastAttendedDate: null, currentStreak: 0 }
         }
+        // Only count this meeting for the person if (a) the meeting is for their role,
+        // OR (b) the meeting is mixed. Keeps facilitator streak ≠ content creator streak.
+        const personRole = stats[key].role
+        const personCategory = CATEGORY_FOR_ROLE[personRole]
+        const counts = cat === 'mixed' || (personCategory && personCategory === cat)
+        if (!counts) continue
+
         stats[key].total += 1
         stats[key].history.push({ attended: a.attended, meetingDate: m.meeting_date, title: m.title })
         if (a.attended) {
@@ -378,10 +412,18 @@ export default function MeetingsPage() {
             <input required value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
               placeholder="Title (e.g. June 1 prep call) *"
               className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm" />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <input required type="datetime-local" value={form.meeting_date}
                 onChange={e => setForm(f => ({ ...f, meeting_date: e.target.value }))}
                 className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm" />
+              <select value={form.meeting_category}
+                onChange={e => setForm(f => ({ ...f, meeting_category: e.target.value as MeetingCategory }))}
+                className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm">
+                <option value="facilitator">🟢 Facilitator meeting</option>
+                <option value="content_creator">🟣 Content Creator meeting</option>
+                <option value="videographer">🔵 Videographer meeting</option>
+                <option value="mixed">⚪ Mixed (all roles)</option>
+              </select>
               <select value={form.event_id} onChange={e => setForm(f => ({ ...f, event_id: e.target.value }))}
                 className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm">
                 <option value="">(No event tag)</option>

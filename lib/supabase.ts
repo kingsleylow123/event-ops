@@ -71,6 +71,8 @@ export interface MeetingAttendee {
   notes: string | null
 }
 
+export type MeetingCategory = 'facilitator' | 'content_creator' | 'videographer' | 'mixed'
+
 export interface Meeting {
   id: string
   title: string
@@ -78,6 +80,7 @@ export interface Meeting {
   event_id: string | null
   notes: string | null
   attendance: MeetingAttendee[]
+  meeting_category: MeetingCategory
   created_at: string
 }
 
