@@ -96,6 +96,30 @@ export default function MeetingsPage() {
 
   const people = useMemo(() => uniquePeople(events), [events])
 
+  // Per-name history map for showing dots + streak + last seen on each form row
+  const historyByName = useMemo(() => {
+    const meetingsAsc = [...meetings].sort((a, b) => new Date(a.meeting_date).getTime() - new Date(b.meeting_date).getTime())
+    const map: Record<string, { history: { attended: boolean; date: string; title: string }[]; lastAttended: string | null; streak: number }> = {}
+    for (const m of meetingsAsc) {
+      for (const a of m.attendance ?? []) {
+        const key = a.name.toLowerCase()
+        if (!map[key]) map[key] = { history: [], lastAttended: null, streak: 0 }
+        map[key].history.push({ attended: a.attended, date: m.meeting_date, title: m.title })
+        if (a.attended) map[key].lastAttended = m.meeting_date
+      }
+    }
+    for (const key of Object.keys(map)) {
+      let s = 0
+      const h = map[key].history
+      for (let i = h.length - 1; i >= 0; i--) {
+        if (h[i].attended) s++
+        else break
+      }
+      map[key].streak = s
+    }
+    return map
+  }, [meetings])
+
   function openCreate() {
     setEditingId(null)
     setForm({ ...EMPTY_FORM, meeting_date: toDatetimeLocalValue(new Date().toISOString()) })
@@ -417,7 +441,50 @@ export default function MeetingsPage() {
                         <div className="flex items-center gap-3 py-0.5">
                           <input type="checkbox" checked={a.attended} onChange={() => toggleAttended(idx)}
                             className="w-4 h-4 accent-amber-500 flex-shrink-0" />
-                          <span className={`text-sm flex-1 ${a.attended ? 'text-white' : 'text-zinc-400'}`}>{a.name}</span>
+                          <span className={`text-sm w-40 flex-shrink-0 ${a.attended ? 'text-white' : 'text-zinc-400'}`}>{a.name}</span>
+
+                          {/* Recent attendance dots — last 5 meetings */}
+                          {(() => {
+                            const stats = historyByName[a.name.toLowerCase()]
+                            const last5 = stats ? stats.history.slice(-5) : []
+                            return (
+                              <div className="flex items-center gap-0.5 flex-shrink-0" title="Last 5 meetings · left = older">
+                                {Array.from({ length: 5 - last5.length }).map((_, i) => (
+                                  <span key={`pad-${i}`} className="w-2 h-2 rounded-full bg-zinc-900 border border-zinc-800" />
+                                ))}
+                                {last5.map((h, i) => (
+                                  <span key={i}
+                                    title={`${h.title} · ${fmtDateTime(h.date)} · ${h.attended ? 'Attended' : 'Missed'}`}
+                                    className={`w-2 h-2 rounded-full ${h.attended ? 'bg-emerald-500' : 'bg-red-500/70'}`} />
+                                ))}
+                              </div>
+                            )
+                          })()}
+
+                          {/* Streak */}
+                          {(() => {
+                            const stats = historyByName[a.name.toLowerCase()]
+                            const streak = stats?.streak ?? 0
+                            return (
+                              <span className={`text-[11px] w-10 text-right flex-shrink-0 ${streak > 0 ? 'text-amber-400' : 'text-zinc-600'}`}>
+                                {streak > 0 ? `🔥 ${streak}` : '—'}
+                              </span>
+                            )
+                          })()}
+
+                          {/* Last seen */}
+                          {(() => {
+                            const stats = historyByName[a.name.toLowerCase()]
+                            return (
+                              <span className="text-[11px] text-zinc-500 w-16 text-right flex-shrink-0">
+                                {daysAgo(stats?.lastAttended ?? null)}
+                              </span>
+                            )
+                          })()}
+
+                          {/* Spacer */}
+                          <div className="flex-1" />
+
                           {hasNote && !expanded && (
                             <button type="button" onClick={() => setExpandedNoteIdx(idx)}
                               className="text-xs text-zinc-400 hover:text-amber-400 italic truncate max-w-[200px]"
@@ -427,7 +494,7 @@ export default function MeetingsPage() {
                           )}
                           {!hasNote && !expanded && (
                             <button type="button" onClick={() => setExpandedNoteIdx(idx)}
-                              className="text-[11px] text-zinc-600 hover:text-amber-400">
+                              className="text-[11px] text-zinc-600 hover:text-amber-400 flex-shrink-0">
                               + note
                             </button>
                           )}
