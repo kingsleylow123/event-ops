@@ -323,6 +323,54 @@ export default function MeetingsPage() {
         </div>
       </div>
 
+      {/* Top 5 per role — leaderboard at the top */}
+      {personStats.length > 0 && (() => {
+        const TOP_ROLES: { role: string; label: string; color: string; bg: string }[] = [
+          { role: 'facilitator', label: 'Facilitator', color: 'text-emerald-400', bg: 'border-emerald-500/30' },
+          { role: 'content_creator', label: 'Content Creator', color: 'text-pink-400', bg: 'border-pink-500/30' },
+          { role: 'videographer', label: 'Videographer', color: 'text-sky-400', bg: 'border-sky-500/30' },
+        ]
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {TOP_ROLES.map(r => {
+              const top5 = personStats.filter(p => (p.role || '') === r.role).slice(0, 5)
+              const hasData = top5.some(p => p.total > 0)
+              return (
+                <div key={r.role} className={`bg-[#111] border ${r.bg} rounded-xl p-4`}>
+                  <p className={`text-xs uppercase tracking-wider font-semibold ${r.color} mb-3`}>
+                    🏆 Top 5 {r.label}
+                  </p>
+                  {!hasData ? (
+                    <p className="text-xs text-zinc-600 italic">No meeting data yet for this category.</p>
+                  ) : (
+                    <ol className="space-y-1">
+                      {top5.map((p, i) => (
+                        <li key={p.name} className="flex items-center justify-between gap-2 text-sm">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-xs text-zinc-500 w-4 flex-shrink-0">{i + 1}.</span>
+                            <span className={`truncate ${p.total > 0 ? 'text-white' : 'text-zinc-600'}`}>{p.name}</span>
+                          </div>
+                          {p.total > 0 ? (
+                            <div className="flex items-center gap-2 flex-shrink-0 text-xs">
+                              <span className={`font-semibold ${p.rate >= 80 ? 'text-emerald-400' : p.rate >= 50 ? 'text-amber-400' : 'text-red-400'}`}>
+                                {p.rate}%
+                              </span>
+                              {p.currentStreak > 0 && <span className="text-amber-400">🔥{p.currentStreak}</span>}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-zinc-600">—</span>
+                          )}
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )
+      })()}
+
       {/* Per-person attendance summary — split into separate sections per role */}
       {personStats.length > 0 && (() => {
         const ROLE_SECTION_ORDER: { role: string; label: string; color: string; bg: string }[] = [
