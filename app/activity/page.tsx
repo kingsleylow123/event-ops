@@ -48,10 +48,18 @@ function toYMD(d: Date): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
 
-function fmtWeek(d: Date): { month: string; day: string } {
+function fmtWeek(d: Date): { month: string; day: string; range: string } {
+  const end = new Date(d)
+  end.setDate(d.getDate() + 6)
+  const startMonth = d.toLocaleDateString('en-MY', { month: 'short' })
+  const endMonth = end.toLocaleDateString('en-MY', { month: 'short' })
+  const range = startMonth === endMonth
+    ? `${d.getDate()}–${end.getDate()}`
+    : `${d.getDate()} – ${endMonth} ${end.getDate()}`
   return {
-    month: d.toLocaleDateString('en-MY', { month: 'short' }),
+    month: startMonth,
     day: String(d.getDate()),
+    range,
   }
 }
 
@@ -244,9 +252,9 @@ export default function ActivityPage() {
                       const f = fmtWeek(w.date)
                       const isThisWeek = offset === 0 && w === weeks[weeks.length - 1]
                       return (
-                        <th key={w.ymd} className={`px-1 pb-2 text-center font-normal ${isThisWeek ? 'bg-amber-500/10 rounded' : ''}`}>
+                        <th key={w.ymd} className={`px-1 pb-2 text-center font-normal ${isThisWeek ? 'bg-amber-500/10 rounded' : ''}`} title={`Week of ${f.month} ${f.day} (${f.range})`}>
                           <div className="text-[9px] text-zinc-500 uppercase">{f.month}</div>
-                          <div className={`text-[11px] ${isThisWeek ? 'text-amber-400 font-bold' : 'text-zinc-400'}`}>{f.day}</div>
+                          <div className={`text-[11px] whitespace-nowrap ${isThisWeek ? 'text-amber-400 font-bold' : 'text-zinc-400'}`}>{f.range}</div>
                         </th>
                       )
                     })}
