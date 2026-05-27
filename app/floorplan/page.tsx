@@ -25,7 +25,7 @@ function uid(): string {
 }
 
 function emptyFloorPlan(): FloorPlan {
-  return { stage_speaker: '', speaker_needs: [], sections: [], registration: '', main_door: '', fnb: '' }
+  return { stage_speaker: '', speaker_needs: [], sections: [], registration: '', main_door: '', fnb: '', videographer: '' }
 }
 
 function eventLabel(ev: Event): string {
@@ -74,6 +74,7 @@ export default function FloorPlanPage() {
       registration: currentPlan.registration ?? '',
       main_door: currentPlan.main_door ?? '',
       fnb: currentPlan.fnb ?? '',
+      videographer: currentPlan.videographer ?? '',
     })
     setEditing(true)
   }
@@ -323,6 +324,22 @@ export default function FloorPlanPage() {
             )}
           </div>
 
+          {/* Videographer strip — back of room, above main door */}
+          <div className="bg-purple-900/20 border border-purple-700/50 rounded-xl p-4 flex items-center gap-4">
+            <div className="text-purple-400 text-2xl flex-shrink-0">📹</div>
+            <div className="flex-1">
+              <p className="text-xs text-purple-300 uppercase tracking-widest font-semibold">Videographer — Back of Room</p>
+              {editing ? (
+                <input value={draft.videographer ?? ''} onChange={e => setDraft(d => ({ ...d, videographer: e.target.value }))}
+                  placeholder="Name (e.g. Jimmy)"
+                  className="mt-1 w-full bg-zinc-900 border border-purple-700/50 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-purple-400" />
+              ) : (
+                <p className="text-white text-sm mt-0.5">{display.videographer || '—'}</p>
+              )}
+            </div>
+            <div className="text-xs text-purple-500 text-right flex-shrink-0">← behind last row</div>
+          </div>
+
           {/* Bottom row: Registration · Main Door · F&B */}
           <div className="grid grid-cols-3 gap-3 pt-6 border-t border-zinc-800">
             <div className="bg-amber-50/5 border border-amber-500/30 rounded-lg p-3 text-center">
@@ -424,6 +441,16 @@ export default function FloorPlanPage() {
                   </p>
                 </div>
               ))}
+            </div>
+
+            {/* Videographer strip — present mode */}
+            <div className="bg-purple-900/20 border border-purple-700/50 rounded-xl p-4 flex items-center gap-4">
+              <div className="text-purple-400 text-2xl flex-shrink-0">📹</div>
+              <div className="flex-1">
+                <p className="text-xs text-purple-300 uppercase tracking-widest font-semibold">Videographer — Back of Room</p>
+                <p className="text-white text-sm mt-0.5">{currentPlan.videographer || '—'}</p>
+              </div>
+              <div className="text-xs text-purple-500 text-right flex-shrink-0">← behind last row</div>
             </div>
 
             {/* Bottom row — 3 columns matching the layout */}

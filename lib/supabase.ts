@@ -131,6 +131,7 @@ export interface FloorPlan {
   registration?: string | null
   main_door?: string | null
   fnb?: string | null
+  videographer?: string | null
 }
 
 export interface Event {
