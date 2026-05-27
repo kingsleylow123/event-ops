@@ -19,7 +19,7 @@ export default function MobileNav({ userEmail, isAdmin, pendingCount }: MobileNa
     { href: '/events', label: 'Events' },
     { href: '/floorplan', label: 'Floor Plan' },
     { href: '/revenue', label: 'Revenue' },
-    { href: '/meetings', label: 'Meetings' },
+    { href: '/meetings', label: 'Activity' },
     { href: '/team', label: 'Claude Intern' },
     ...(isAdmin ? [{ href: '/admin', label: 'Admin', badge: pendingCount }] : []),
   ]
