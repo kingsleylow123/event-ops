@@ -30,6 +30,7 @@ export default function AttendeesPage() {
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [filterTicket, setFilterTicket] = useState<string>('all')
   const [filterAttendance, setFilterAttendance] = useState<string>('all')
+  const [showQRModal, setShowQRModal] = useState(false)
 
   const event = events.find(e => e.id === selectedEventId) ?? null
 
@@ -184,6 +185,12 @@ export default function AttendeesPage() {
             className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg">
             {syncing ? 'Syncing...' : '⚡ Sync Stripe'}
           </button>
+          {selectedEventId && (
+            <button onClick={() => setShowQRModal(true)}
+              className="bg-zinc-800 hover:bg-zinc-700 text-white text-sm px-4 py-2 rounded-lg flex items-center gap-1.5">
+              <span>📲</span> QR Check-in
+            </button>
+          )}
           <button onClick={() => setShowModal(true)} disabled={!event}
             className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-semibold text-sm px-4 py-2 rounded-lg">
             + Add Attendee
@@ -300,6 +307,59 @@ export default function AttendeesPage() {
           </tbody>
         </table>
       </div>
+
+      {/* QR Check-in Modal */}
+      {showQRModal && selectedEventId && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#111] border border-zinc-800 rounded-xl p-6 w-full max-w-sm text-center">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold">QR Check-in</h2>
+              <button onClick={() => setShowQRModal(false)} className="text-zinc-500 hover:text-white text-xl leading-none">✕</button>
+            </div>
+            {(() => {
+              const url = `https://event-ops-six.vercel.app/checkin/${selectedEventId}`
+              const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`
+              return (
+                <>
+                  <div className="flex justify-center mb-4">
+                    <img
+                      src={qrSrc}
+                      alt="Check-in QR Code"
+                      width={220}
+                      height={220}
+                      className="rounded-xl border border-zinc-700"
+                    />
+                  </div>
+                  <p className="text-xs text-zinc-500 mb-2">Check-in URL</p>
+                  <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 mb-4">
+                    <span className="text-xs text-zinc-300 truncate flex-1 text-left">{url}</span>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(url)}
+                      className="text-xs text-amber-400 hover:text-amber-300 flex-shrink-0 font-medium"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => window.print()}
+                      className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white text-sm py-2 rounded-lg font-medium"
+                    >
+                      🖨 Print
+                    </button>
+                    <button
+                      onClick={() => setShowQRModal(false)}
+                      className="flex-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 text-sm py-2 rounded-lg font-medium border border-zinc-800"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </>
+              )
+            })()}
+          </div>
+        </div>
+      )}
 
       {/* Add Attendee Modal */}
       {showModal && (
