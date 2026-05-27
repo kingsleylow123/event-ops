@@ -17,11 +17,11 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const { eventId, name, phone } = body as { eventId?: string; name?: string; phone?: string }
 
-  if (!eventId || !name?.trim()) {
+  if (!eventId || (!name?.trim() && !phone?.trim())) {
     return NextResponse.json({ success: false, error: 'missing_params' }, { status: 400, headers: NO_STORE_HEADERS })
   }
 
-  const nameLower = name.trim().toLowerCase()
+  const nameLower = name?.trim().toLowerCase() ?? ''
   const phoneDigits = (phone ?? '').replace(/\D/g, '').slice(-8) // last 8 digits for fuzzy match
 
   const { data, error } = await supabase
@@ -35,15 +35,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'db_error', detail: error.message }, { status: 500, headers: NO_STORE_HEADERS })
   }
 
-  // Match by name (fuzzy contains)
-  let matches = (data ?? []).filter(a => (a.name ?? '').toLowerCase().includes(nameLower))
+  const allAttendees = data ?? []
 
-  // If phone provided and multiple name matches, narrow by phone
-  if (matches.length > 1 && phoneDigits.length >= 4) {
-    const phoneFiltered = matches.filter(a =>
+  // Match by name OR phone — whichever is provided
+  const nameMatches = nameLower
+    ? allAttendees.filter(a => (a.name ?? '').toLowerCase().includes(nameLower))
+    : []
+  const phoneMatches = phoneDigits.length >= 6
+    ? allAttendees.filter(a => (a.phone ?? '').replace(/\D/g, '').includes(phoneDigits))
+    : []
+
+  // Merge & deduplicate
+  const seen = new Set<string>()
+  let matches = [...nameMatches, ...phoneMatches].filter(a => {
+    if (seen.has(a.id)) return false
+    seen.add(a.id)
+    return true
+  })
+
+  // If both provided and multiple matches, intersect (must match both)
+  if (nameLower && phoneDigits.length >= 6 && matches.length > 1) {
+    const both = matches.filter(a =>
+      (a.name ?? '').toLowerCase().includes(nameLower) &&
       (a.phone ?? '').replace(/\D/g, '').includes(phoneDigits)
     )
-    if (phoneFiltered.length > 0) matches = phoneFiltered
+    if (both.length > 0) matches = both
   }
 
   if (matches.length === 0) {

@@ -98,7 +98,7 @@ export default function CheckinPage() {
           Check-in
         </div>
         <h1 className="text-3xl font-bold text-white leading-tight">Thanks for coming!</h1>
-        <p className="text-zinc-500 text-sm mt-2">Enter your details to check in</p>
+        <p className="text-zinc-500 text-sm mt-2">Enter your name <span className="text-zinc-600">or</span> phone number to check in</p>
       </div>
 
       {/* Card */}
@@ -120,6 +120,12 @@ export default function CheckinPage() {
                 style={{ background: '#1a1a1a', border: '1px solid #333' }}
               />
             </div>
+            {/* OR divider */}
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px" style={{ background: '#2a2a2a' }} />
+              <span className="text-zinc-600 text-xs uppercase tracking-widest">or</span>
+              <div className="flex-1 h-px" style={{ background: '#2a2a2a' }} />
+            </div>
             <div>
               <label className="block text-xs text-zinc-500 mb-1.5 uppercase tracking-wider">Phone Number</label>
               <input
@@ -134,7 +140,7 @@ export default function CheckinPage() {
             </div>
             <button
               type="submit"
-              disabled={state.status === 'loading' || !name.trim()}
+              disabled={state.status === 'loading' || (!name.trim() && !phone.trim())}
               className="w-full py-3.5 rounded-xl font-bold text-base text-white disabled:opacity-50 transition-opacity"
               style={{ background: state.status === 'loading' ? '#a33c29' : '#e8563a' }}
             >
