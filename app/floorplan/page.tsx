@@ -208,8 +208,8 @@ export default function FloorPlanPage() {
             </div>
           </div>
 
-          {/* Sections grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {/* Sections grid — always 3 columns to match the seating layout */}
+          <div className="grid grid-cols-3 gap-5">
             {(display.sections ?? []).map((section, idx) => (
               <div key={section.id} className="text-center">
                 {editing ? (
@@ -275,7 +275,7 @@ export default function FloorPlanPage() {
           </div>
 
           {/* Bottom row: Registration · Main Door · F&B */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-6 border-t border-zinc-800">
+          <div className="grid grid-cols-3 gap-3 pt-6 border-t border-zinc-800">
             <div className="bg-amber-50/5 border border-amber-500/30 rounded-lg p-3 text-center">
               <p className="text-xs text-amber-400 uppercase tracking-wider">📋 Registration</p>
               {editing ? (
@@ -318,7 +318,7 @@ export default function FloorPlanPage() {
             ✕ Exit
           </button>
 
-          <div className="max-w-md mx-auto px-4 py-10 space-y-8">
+          <div className="max-w-3xl mx-auto px-6 py-10 space-y-8">
             <div className="text-center">
               <h1 className="text-2xl font-bold text-white">{eventLabel(selectedEvent)}</h1>
               {selectedEvent.date && (
@@ -330,7 +330,7 @@ export default function FloorPlanPage() {
 
             {/* Stage */}
             <div className="flex justify-center">
-              <div className="bg-blue-900 border border-blue-800 rounded-xl px-8 py-6 text-center w-full">
+              <div className="bg-blue-900 border border-blue-800 rounded-xl px-10 py-6 text-center min-w-[300px]">
                 <p className="text-xs text-zinc-400 tracking-widest">★ STAGE ★</p>
                 <p className="text-white text-2xl font-bold uppercase mt-2">{currentPlan.stage_speaker || '—'}</p>
               </div>
@@ -345,38 +345,38 @@ export default function FloorPlanPage() {
               </div>
             </div>
 
-            {/* Sections — single column for portrait tablet */}
-            <div className="space-y-4">
+            {/* Sections — 3-column grid matching the seating layout */}
+            <div className="grid grid-cols-3 gap-4">
               {(currentPlan.sections ?? []).map(section => (
                 <div key={section.id} className="text-center">
-                  <h3 className="text-orange-400 text-sm uppercase tracking-widest font-bold mb-2">{section.label}</h3>
-                  <div className={`grid grid-cols-2 gap-1 h-24 rounded-md overflow-hidden`}>
+                  <h3 className="text-orange-400 text-xs uppercase tracking-widest font-bold mb-2">{section.label}</h3>
+                  <div className={`grid grid-cols-2 gap-1 h-32 rounded-md overflow-hidden`}>
                     <div className={`${SECTION_TYPE_COLORS[section.type]} rounded`} />
                     <div className={`${SECTION_TYPE_COLORS[section.type]} rounded`} />
                   </div>
-                  <p className="text-base mt-2 text-zinc-300">
-                    <span className="text-orange-400 font-bold text-lg">{section.pax}</span>{' '}
-                    {section.note ? <span className="text-sm text-zinc-500">({section.note})</span> : SECTION_TYPE_LABELS[section.type]}
+                  <p className="text-sm mt-2 text-zinc-300">
+                    <span className="text-orange-400 font-bold text-base">{section.pax}</span>{' '}
+                    {section.note ? <span className="text-xs text-zinc-500">({section.note})</span> : SECTION_TYPE_LABELS[section.type]}
                   </p>
                 </div>
               ))}
             </div>
 
-            {/* Bottom row */}
-            <div className="grid grid-cols-1 gap-3 pt-6 border-t border-zinc-800">
-              <div className="bg-amber-50/5 border border-amber-500/30 rounded-lg p-4 text-center">
-                <p className="text-sm text-amber-400 uppercase tracking-wider">📋 Registration</p>
-                <p className="text-white text-base mt-1">{currentPlan.registration || '—'}</p>
+            {/* Bottom row — 3 columns matching the layout */}
+            <div className="grid grid-cols-3 gap-3 pt-6 border-t border-zinc-800">
+              <div className="bg-amber-50/5 border border-amber-500/30 rounded-lg p-3 text-center">
+                <p className="text-xs text-amber-400 uppercase tracking-wider">📋 Registration</p>
+                <p className="text-white text-sm mt-1">{currentPlan.registration || '—'}</p>
               </div>
-              <div className="bg-black border border-zinc-700 rounded-lg p-4 text-center">
-                <p className="text-sm text-zinc-400 uppercase tracking-wider">▼ Main Door ▼</p>
+              <div className="bg-black border border-zinc-700 rounded-lg p-3 text-center flex flex-col justify-center">
+                <p className="text-xs text-zinc-400 uppercase tracking-wider">▼ Main Door ▼</p>
                 {currentPlan.main_door
-                  ? <p className="text-white text-base mt-1">{currentPlan.main_door}</p>
-                  : <p className="text-zinc-600 text-xs mt-1 italic">— entrance —</p>}
+                  ? <p className="text-white text-sm mt-1">{currentPlan.main_door}</p>
+                  : null}
               </div>
-              <div className="bg-amber-50/5 border border-amber-500/30 rounded-lg p-4 text-center">
-                <p className="text-sm text-amber-400 uppercase tracking-wider">🍱 F&B Station</p>
-                <p className="text-white text-base mt-1">{currentPlan.fnb || '—'}</p>
+              <div className="bg-amber-50/5 border border-amber-500/30 rounded-lg p-3 text-center">
+                <p className="text-xs text-amber-400 uppercase tracking-wider">🍱 F&B Station</p>
+                <p className="text-white text-sm mt-1">{currentPlan.fnb || '—'}</p>
               </div>
             </div>
 
