@@ -103,10 +103,9 @@ export default function CheckinPage({ params }: { params: { eventId: string } })
         >
           Check-in
         </div>
-        <h1 className="text-2xl font-bold text-white leading-tight">
-          Half Day Workshop
+        <h1 className="text-3xl font-bold text-white leading-tight">
+          Thanks for coming!
         </h1>
-        <p className="text-white/80 text-base font-medium mt-1">with Claude Malaysia</p>
         <p className="text-zinc-500 text-sm mt-2">Enter your name to check in</p>
       </div>
 
