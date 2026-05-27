@@ -5,6 +5,9 @@ import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { isAdminEmail } from '@/lib/auth/admin'
 import SignOutButton from './SignOutButton'
 
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export const metadata: Metadata = {
   title: 'EventOps',
   description: 'Event attendee & payment tracking',

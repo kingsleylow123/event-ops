@@ -3,6 +3,8 @@ import { stripe } from '@/lib/stripe'
 import { supabase } from '@/lib/supabase'
 import type { TicketType, Event } from '@/lib/supabase'
 
+const NO_STORE_HEADERS = { 'Cache-Control': 'no-store, no-cache, must-revalidate' } as const
+
 
 export const dynamic = 'force-dynamic'
 
@@ -96,7 +98,7 @@ export async function POST(req: NextRequest) {
       .from('events')
       .select('*')
     if (eventsErr) {
-      return NextResponse.json({ error: eventsErr.message }, { status: 500 })
+      return NextResponse.json({ error: eventsErr.message }, { status: 500, headers: NO_STORE_HEADERS })
     }
 
     const events: EventWithSlug[] = (rawEvents ?? [])
@@ -178,9 +180,9 @@ export async function POST(req: NextRequest) {
       if (!cursor) break
     }
 
-    return NextResponse.json({ added, skipped, unmatched, pages })
+    return NextResponse.json({ added, skipped, unmatched, pages }, { headers: NO_STORE_HEADERS })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Stripe error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({ error: message }, { status: 500, headers: NO_STORE_HEADERS })
   }
 }

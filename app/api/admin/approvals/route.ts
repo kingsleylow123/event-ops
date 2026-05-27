@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { isAdminEmail } from '@/lib/auth/admin'
 
+const NO_STORE_HEADERS = { 'Cache-Control': 'no-store, no-cache, must-revalidate' } as const
+
 
 export const dynamic = 'force-dynamic'
 
@@ -9,7 +11,7 @@ async function requireAdmin() {
   const supabase = await createSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user || !isAdminEmail(user.email)) {
-    return { supabase, user: null, error: NextResponse.json({ error: 'forbidden' }, { status: 403 }) }
+    return { supabase, user: null, error: NextResponse.json({ error: 'forbidden' }, { status: 403, headers: NO_STORE_HEADERS }) }
   }
   return { supabase, user, error: null }
 }
@@ -21,8 +23,8 @@ export async function GET() {
     .from('user_approvals')
     .select('*')
     .order('requested_at', { ascending: false })
-  if (dbErr) return NextResponse.json({ error: dbErr.message }, { status: 500 })
-  return NextResponse.json({ approvals: data, admin: user!.email })
+  if (dbErr) return NextResponse.json({ error: dbErr.message }, { status: 500, headers: NO_STORE_HEADERS })
+  return NextResponse.json({ approvals: data, admin: user!.email }, { headers: NO_STORE_HEADERS })
 }
 
 export async function POST(req: NextRequest) {
@@ -33,7 +35,7 @@ export async function POST(req: NextRequest) {
   const { email, action, notes } = body as { email?: string; action?: string; notes?: string }
 
   if (!email || !action || !['approve', 'reject', 'reset'].includes(action)) {
-    return NextResponse.json({ error: 'email and action (approve|reject|reset) required' }, { status: 400 })
+    return NextResponse.json({ error: 'email and action (approve|reject|reset) required' }, { status: 400, headers: NO_STORE_HEADERS }, { headers: NO_STORE_HEADERS })
   }
 
   const status = action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : 'pending'
@@ -50,6 +52,6 @@ export async function POST(req: NextRequest) {
     .select()
     .single()
 
-  if (dbErr) return NextResponse.json({ error: dbErr.message }, { status: 500 })
-  return NextResponse.json({ approval: data })
+  if (dbErr) return NextResponse.json({ error: dbErr.message }, { status: 500, headers: NO_STORE_HEADERS })
+  return NextResponse.json({ approval: data }, { headers: NO_STORE_HEADERS })
 }
