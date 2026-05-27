@@ -325,19 +325,20 @@ export default function FloorPlanPage() {
           </div>
 
           {/* Videographer strip — back of room, above main door */}
-          <div className="bg-purple-900/20 border border-purple-700/50 rounded-xl p-4 flex items-center gap-4">
-            <div className="text-purple-400 text-2xl flex-shrink-0">📹</div>
-            <div className="flex-1">
-              <p className="text-xs text-purple-300 uppercase tracking-widest font-semibold">Videographer — Back of Room</p>
-              {editing ? (
-                <input value={draft.videographer ?? ''} onChange={e => setDraft(d => ({ ...d, videographer: e.target.value }))}
-                  placeholder="Name (e.g. Jimmy)"
-                  className="mt-1 w-full bg-zinc-900 border border-purple-700/50 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-purple-400" />
-              ) : (
-                <p className="text-white text-sm mt-0.5">{display.videographer || '—'}</p>
-              )}
+          <div className="flex justify-center">
+            <div className="bg-purple-900/20 border border-purple-700/50 rounded-xl px-6 py-3 flex items-center gap-3 min-w-[280px]">
+              <span className="text-purple-400 text-xl flex-shrink-0">📹</span>
+              <div className="text-center flex-1">
+                <p className="text-[10px] text-purple-300 uppercase tracking-widest font-semibold">Videographer — Back of Room</p>
+                {editing ? (
+                  <input value={draft.videographer ?? ''} onChange={e => setDraft(d => ({ ...d, videographer: e.target.value }))}
+                    placeholder="Name (e.g. Jimmy)"
+                    className="mt-1 w-full bg-zinc-900 border border-purple-700/50 rounded px-2 py-1 text-white text-sm text-center focus:outline-none focus:border-purple-400" />
+                ) : (
+                  <p className="text-white text-sm mt-0.5 font-semibold">{display.videographer || '—'}</p>
+                )}
+              </div>
             </div>
-            <div className="text-xs text-purple-500 text-right flex-shrink-0">← behind last row</div>
           </div>
 
           {/* Bottom row: Registration · Main Door · F&B */}
@@ -444,13 +445,14 @@ export default function FloorPlanPage() {
             </div>
 
             {/* Videographer strip — present mode */}
-            <div className="bg-purple-900/20 border border-purple-700/50 rounded-xl p-4 flex items-center gap-4">
-              <div className="text-purple-400 text-2xl flex-shrink-0">📹</div>
-              <div className="flex-1">
-                <p className="text-xs text-purple-300 uppercase tracking-widest font-semibold">Videographer — Back of Room</p>
-                <p className="text-white text-sm mt-0.5">{currentPlan.videographer || '—'}</p>
+            <div className="flex justify-center">
+              <div className="bg-purple-900/20 border border-purple-700/50 rounded-xl px-6 py-3 flex items-center gap-3 min-w-[280px]">
+                <span className="text-purple-400 text-xl flex-shrink-0">📹</span>
+                <div className="text-center flex-1">
+                  <p className="text-[10px] text-purple-300 uppercase tracking-widest font-semibold">Videographer — Back of Room</p>
+                  <p className="text-white text-sm mt-0.5 font-semibold">{currentPlan.videographer || '—'}</p>
+                </div>
               </div>
-              <div className="text-xs text-purple-500 text-right flex-shrink-0">← behind last row</div>
             </div>
 
             {/* Bottom row — 3 columns matching the layout */}
