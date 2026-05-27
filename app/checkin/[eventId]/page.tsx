@@ -104,9 +104,10 @@ export default function CheckinPage({ params }: { params: { eventId: string } })
           Check-in
         </div>
         <h1 className="text-2xl font-bold text-white leading-tight">
-          {eventName || 'Event'}
+          Half Day Workshop
         </h1>
-        <p className="text-zinc-500 text-sm mt-1">Show your name or email to check in</p>
+        <p className="text-white/80 text-base font-medium mt-1">with Claude Malaysia</p>
+        <p className="text-zinc-500 text-sm mt-2">Enter your name to check in</p>
       </div>
 
       {/* Card */}
@@ -119,14 +120,14 @@ export default function CheckinPage({ params }: { params: { eventId: string } })
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-xs text-zinc-500 mb-1.5 uppercase tracking-wider">
-                Your name or email
+                Your name
               </label>
               <input
                 autoFocus
                 type="text"
                 value={query}
                 onChange={e => setQuery(e.target.value)}
-                placeholder="e.g. Sarah or sarah@email.com"
+                placeholder="e.g. Sarah"
                 disabled={state.status === 'loading'}
                 className="w-full rounded-xl px-4 py-3.5 text-white text-base outline-none focus:ring-2 disabled:opacity-50"
                 style={{
