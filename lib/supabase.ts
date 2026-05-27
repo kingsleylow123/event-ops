@@ -126,6 +126,7 @@ export interface FloorPlanSection {
 
 export interface FloorPlan {
   stage_speaker?: string | null
+  speaker_needs?: string[]
   sections: FloorPlanSection[]
   registration?: string | null
   main_door?: string | null

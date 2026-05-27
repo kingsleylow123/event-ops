@@ -23,7 +23,7 @@ function uid(): string {
 }
 
 function emptyFloorPlan(): FloorPlan {
-  return { stage_speaker: '', sections: [], registration: '', main_door: '', fnb: '' }
+  return { stage_speaker: '', speaker_needs: [], sections: [], registration: '', main_door: '', fnb: '' }
 }
 
 function eventLabel(ev: Event): string {
@@ -67,12 +67,23 @@ export default function FloorPlanPage() {
   function startEdit() {
     setDraft({
       stage_speaker: currentPlan.stage_speaker ?? '',
+      speaker_needs: [...(currentPlan.speaker_needs ?? [])],
       sections: (currentPlan.sections ?? []).map(s => ({ ...s })),
       registration: currentPlan.registration ?? '',
       main_door: currentPlan.main_door ?? '',
       fnb: currentPlan.fnb ?? '',
     })
     setEditing(true)
+  }
+
+  function addSpeakerNeed() {
+    setDraft(d => ({ ...d, speaker_needs: [...(d.speaker_needs ?? []), ''] }))
+  }
+  function updateSpeakerNeed(idx: number, val: string) {
+    setDraft(d => ({ ...d, speaker_needs: (d.speaker_needs ?? []).map((s, i) => i === idx ? val : s) }))
+  }
+  function removeSpeakerNeed(idx: number) {
+    setDraft(d => ({ ...d, speaker_needs: (d.speaker_needs ?? []).filter((_, i) => i !== idx) }))
   }
 
   function cancelEdit() {
@@ -197,6 +208,39 @@ export default function FloorPlanPage() {
               )}
             </div>
           </div>
+
+          {/* Speaker needs */}
+          {(editing || (display.speaker_needs ?? []).length > 0) && (
+            <div className="max-w-md mx-auto bg-blue-950/30 border border-blue-800/40 rounded-lg p-4">
+              <p className="text-xs text-blue-300 uppercase tracking-wider font-semibold mb-2">🎤 Speaker needs</p>
+              {editing ? (
+                <div className="space-y-2">
+                  {(draft.speaker_needs ?? []).map((need, idx) => (
+                    <div key={idx} className="flex gap-2 items-center">
+                      <input value={need} onChange={e => updateSpeakerNeed(idx, e.target.value)}
+                        placeholder="e.g. Lapel mic"
+                        className="flex-1 bg-zinc-900 border border-zinc-700 rounded px-3 py-1.5 text-white text-sm" />
+                      <button type="button" onClick={() => removeSpeakerNeed(idx)}
+                        className="text-zinc-500 hover:text-red-400 text-xs px-2 py-1 border border-zinc-700 hover:border-red-500/50 rounded">✕</button>
+                    </div>
+                  ))}
+                  <button type="button" onClick={addSpeakerNeed}
+                    className="text-xs text-blue-400 hover:text-blue-300 border border-blue-500/40 hover:border-blue-500/70 rounded px-3 py-1.5">
+                    + Add item
+                  </button>
+                </div>
+              ) : (
+                <ul className="space-y-1">
+                  {(display.speaker_needs ?? []).map((need, i) => need && (
+                    <li key={i} className="text-sm text-zinc-300 flex items-start gap-2">
+                      <span className="text-blue-400 flex-shrink-0">•</span>
+                      <span>{need}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
 
           {/* Totals bar */}
           <div className="flex justify-center">
@@ -336,6 +380,21 @@ export default function FloorPlanPage() {
                 <p className="text-white text-2xl font-bold uppercase mt-2">{currentPlan.stage_speaker || '—'}</p>
               </div>
             </div>
+
+            {/* Speaker needs */}
+            {(currentPlan.speaker_needs ?? []).filter(n => n).length > 0 && (
+              <div className="bg-blue-950/30 border border-blue-800/40 rounded-lg p-4">
+                <p className="text-xs text-blue-300 uppercase tracking-wider font-semibold mb-2">🎤 Speaker needs</p>
+                <ul className="space-y-1">
+                  {(currentPlan.speaker_needs ?? []).map((need, i) => need && (
+                    <li key={i} className="text-sm text-zinc-300 flex items-start gap-2">
+                      <span className="text-blue-400 flex-shrink-0">•</span>
+                      <span>{need}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             {/* Totals */}
             <div className="text-center">
