@@ -156,11 +156,11 @@ export default function RevenuePage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-xl font-bold">Revenue</h1>
-        <div className="flex gap-2 flex-wrap items-center">
+        <div className="flex gap-2 flex-wrap items-center w-full sm:w-auto">
           <select
             value={filterEventId}
             onChange={e => setFilterEventId(e.target.value)}
-            className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm"
+            className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm flex-1 sm:flex-none"
           >
             <option value="all">All events</option>
             {events.map(ev => (
@@ -174,13 +174,13 @@ export default function RevenuePage() {
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search by date or event name..."
-            className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm w-64"
+            className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm w-full sm:w-64"
           />
         </div>
       </div>
 
       {/* Grand total card — reflects only the events currently visible */}
-      <div className="bg-[#111] border border-amber-500/40 rounded-xl p-5">
+      <div className="bg-[#111] border border-amber-500/40 rounded-xl p-4 sm:p-5">
         <p className="text-xs text-zinc-500 mb-3">
           {filterEventId === 'all' && !search ? 'Across all events' : `Filtered · ${byEvent.length} event${byEvent.length === 1 ? '' : 's'}`}
         </p>
@@ -213,7 +213,7 @@ export default function RevenuePage() {
           const stripeShare = r.totalPaid > 0 ? Math.round((r.stripeRevenue / r.totalPaid) * 100) : 0
           const bankShare = r.totalPaid > 0 ? Math.round((r.bankRevenue / r.totalPaid) * 100) : 0
           return (
-            <div key={r.event.id} className={`bg-[#111] border rounded-xl p-5 ${r.event.is_active ? 'border-amber-500/50' : 'border-zinc-800'}`}>
+            <div key={r.event.id} className={`bg-[#111] border rounded-xl p-4 sm:p-5 ${r.event.is_active ? 'border-amber-500/50' : 'border-zinc-800'}`}>
               <div className="flex items-baseline justify-between gap-4 flex-wrap mb-4">
                 <div>
                   <h2 className="font-semibold text-lg">{r.event.name}</h2>

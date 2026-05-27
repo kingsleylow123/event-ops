@@ -364,16 +364,16 @@ export default function MeetingsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-xl font-bold">Meetings</h1>
-        <div className="flex gap-2 flex-wrap items-center">
+        <div className="flex gap-2 flex-wrap items-center w-full sm:w-auto">
           <input
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search by title, person, date..."
-            className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm w-64"
+            className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm w-full sm:w-64"
           />
           <button onClick={openCreate}
-            className="bg-amber-500 hover:bg-amber-400 text-black font-semibold text-sm px-4 py-2 rounded-lg">
+            className="bg-amber-500 hover:bg-amber-400 text-black font-semibold text-sm px-4 py-2 rounded-lg w-full sm:w-auto">
             + New Meeting
           </button>
         </div>
@@ -387,14 +387,14 @@ export default function MeetingsPage() {
           { role: 'videographer', label: 'Videographer', color: 'text-sky-400', bg: 'border-sky-500/30' },
         ]
         return (
-          <div className="flex flex-wrap justify-center items-stretch gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
             {TOP_ROLES.map(r => {
               const inRole = personStats.filter(p => (p.role || '') === r.role)
               if (inRole.length === 0) return null  // No people in this role → hide
               const top5 = inRole.slice(0, 3)
               const hasData = top5.some(p => p.total > 0)
               return (
-                <div key={r.role} className={`bg-[#111] border ${r.bg} rounded-xl p-4 w-full sm:w-[380px] shrink-0`}>
+                <div key={r.role} className={`bg-[#111] border ${r.bg} rounded-xl p-4`}>
                   <p className={`text-xs uppercase tracking-wider font-semibold ${r.color} mb-3`}>
                     🏆 Top 3 {r.label}
                   </p>
@@ -504,7 +504,7 @@ export default function MeetingsPage() {
               }
 
               return (
-                <div className="bg-[#111] border border-purple-500/30 rounded-xl p-4 w-full sm:w-[380px] shrink-0">
+                <div className="bg-[#111] border border-purple-500/30 rounded-xl p-4">
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-xs uppercase tracking-wider font-semibold text-purple-400">
                       🏆 Top 3 · 30-Day Post Challenge
@@ -587,7 +587,7 @@ export default function MeetingsPage() {
       })()}
 
       {showForm && (
-        <div className="bg-[#111] border border-amber-500/50 rounded-xl p-5">
+        <div className="bg-[#111] border border-amber-500/50 rounded-xl p-4 sm:p-5">
           <h2 className="font-semibold mb-3">{editingId ? 'Edit Meeting' : 'New Meeting'}</h2>
           <form onSubmit={submitMeeting} className="space-y-3">
             <input required value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
@@ -842,7 +842,7 @@ export default function MeetingsPage() {
           const total = (m.attendance ?? []).length
           const eventName = events.find(e => e.id === m.event_id)?.name
           return (
-            <div key={m.id} className="bg-[#111] border border-zinc-800 rounded-xl p-5">
+            <div key={m.id} className="bg-[#111] border border-zinc-800 rounded-xl p-4 sm:p-5">
               <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
                 <div className="flex-1 min-w-0">
                   <h2 className="font-semibold">{m.title}</h2>

@@ -161,7 +161,7 @@ export default function AttendeesPage() {
   if (loading) return <div className="text-zinc-500 mt-20 text-center">Loading...</div>
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 sm:space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold">Attendees</h1>
@@ -194,7 +194,7 @@ export default function AttendeesPage() {
       </div>
 
       {/* Totals bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {[
           { label: 'Total Participants', value: attendees.length, color: 'text-white', border: 'border-amber-500/50' },
           { label: 'Paid', value: totalPaid, color: 'text-green-400', border: 'border-zinc-800' },
@@ -234,7 +234,7 @@ export default function AttendeesPage() {
 
       {/* Table */}
       <div className="bg-[#111] border border-zinc-800 rounded-xl overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm min-w-[640px]">
           <thead>
             <tr className="text-left text-zinc-500 border-b border-zinc-800">
               <th className="px-4 py-3">Name</th>
