@@ -12,13 +12,13 @@ export default function Dashboard() {
   useEffect(() => {
     async function load() {
       try {
-        const evRes = await fetch('/api/events')
+        const evRes = await fetch('/api/events', { cache: 'no-store' })
         if (!evRes.ok) throw new Error('API error')
         const events: Event[] = await evRes.json()
         const active = events.find(e => e.is_active) ?? null
         setEvent(active)
         if (active) {
-          const attRes = await fetch(`/api/attendees?event_id=${active.id}`)
+          const attRes = await fetch(`/api/attendees?event_id=${active.id}`, { cache: 'no-store' })
           if (attRes.ok) setAttendees(await attRes.json())
         }
       } catch {

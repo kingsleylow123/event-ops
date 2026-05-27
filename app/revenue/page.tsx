@@ -48,9 +48,9 @@ export default function RevenuePage() {
   async function loadAll() {
     try {
       const [evRes, attRes, expRes] = await Promise.all([
-        fetch('/api/events'),
-        fetch('/api/attendees'),
-        fetch('/api/expenses'),
+        fetch('/api/events', { cache: 'no-store' }),
+        fetch('/api/attendees', { cache: 'no-store' }),
+        fetch('/api/expenses', { cache: 'no-store' }),
       ])
       if (evRes.ok) setEvents(await evRes.json())
       if (attRes.ok) setAttendees(await attRes.json())

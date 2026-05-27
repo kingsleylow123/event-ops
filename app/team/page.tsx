@@ -32,7 +32,7 @@ export default function TeamPage() {
 
   async function loadEvents() {
     try {
-      const res = await fetch('/api/events')
+      const res = await fetch('/api/events', { cache: 'no-store' })
       if (res.ok) setEvents(await res.json())
     } catch {
       // db not configured yet

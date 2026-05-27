@@ -30,13 +30,13 @@ export default function ChecklistPage() {
 
   async function loadData() {
     try {
-      const evRes = await fetch('/api/events')
+      const evRes = await fetch('/api/events', { cache: 'no-store' })
       if (!evRes.ok) throw new Error()
       const events: Event[] = await evRes.json()
       const active = events.find(e => e.is_active) ?? null
       setEvent(active)
       if (active) {
-        const res = await fetch(`/api/checklist?event_id=${active.id}`)
+        const res = await fetch(`/api/checklist?event_id=${active.id}`, { cache: 'no-store' })
         if (res.ok) setItems(await res.json())
       }
     } catch {

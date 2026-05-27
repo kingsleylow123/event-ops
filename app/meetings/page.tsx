@@ -107,10 +107,10 @@ export default function MeetingsPage() {
   async function loadAll() {
     try {
       const [mRes, eRes, pRes, ppRes] = await Promise.all([
-        fetch('/api/meetings'),
-        fetch('/api/events'),
-        fetch('/api/posts'),
-        fetch('/api/post-participants'),
+        fetch('/api/meetings', { cache: 'no-store' }),
+        fetch('/api/events', { cache: 'no-store' }),
+        fetch('/api/posts', { cache: 'no-store' }),
+        fetch('/api/post-participants', { cache: 'no-store' }),
       ])
       if (mRes.ok) setMeetings(await mRes.json())
       if (pRes.ok) setPosts(await pRes.json())

@@ -46,7 +46,7 @@ export default function AttendeesPage() {
 
   async function loadEvents() {
     try {
-      const evRes = await fetch('/api/events')
+      const evRes = await fetch('/api/events', { cache: 'no-store' })
       if (!evRes.ok) throw new Error()
       const list: Event[] = await evRes.json()
       setEvents(list)
@@ -63,7 +63,7 @@ export default function AttendeesPage() {
 
   async function loadAttendees(eventId: string) {
     try {
-      const res = await fetch(`/api/attendees?event_id=${eventId}`)
+      const res = await fetch(`/api/attendees?event_id=${eventId}`, { cache: 'no-store' })
       if (res.ok) setAttendees(await res.json())
     } catch {
       // ignore

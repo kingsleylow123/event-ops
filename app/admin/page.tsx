@@ -17,7 +17,7 @@ export default function AdminPage() {
 
   async function load() {
     setError('')
-    const res = await fetch('/api/admin/approvals')
+    const res = await fetch('/api/admin/approvals', { cache: 'no-store' })
     if (res.status === 403) {
       setError('You are not authorised to view this page.')
       setLoading(false)
