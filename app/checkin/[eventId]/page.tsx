@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useParams } from 'next/navigation'
 import { supabase, TICKET_LABELS } from '@/lib/supabase'
 import type { TicketType } from '@/lib/supabase'
 
@@ -13,8 +14,9 @@ type CheckinState =
   | { status: 'multiple'; attendees: { id: string; name: string }[] }
   | { status: 'error'; detail?: string }
 
-export default function CheckinPage({ params }: { params: { eventId: string } }) {
-  const { eventId } = params
+export default function CheckinPage() {
+  const params = useParams()
+  const eventId = params.eventId as string
   const [eventName, setEventName] = useState<string>('')
   const [query, setQuery] = useState('')
   const [state, setState] = useState<CheckinState>({ status: 'idle' })
