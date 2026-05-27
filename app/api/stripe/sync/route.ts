@@ -3,6 +3,9 @@ import { stripe } from '@/lib/stripe'
 import { supabase } from '@/lib/supabase'
 import type { TicketType, Event } from '@/lib/supabase'
 
+
+export const dynamic = 'force-dynamic'
+
 type PriceConfig = {
   amounts: number[]
   ticketTypeByAmount: Record<number, TicketType>
