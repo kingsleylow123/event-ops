@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   const { email, action, notes } = body as { email?: string; action?: string; notes?: string }
 
   if (!email || !action || !['approve', 'reject', 'reset'].includes(action)) {
-    return NextResponse.json({ error: 'email and action (approve|reject|reset) required' }, { status: 400, headers: NO_STORE_HEADERS }, { headers: NO_STORE_HEADERS })
+    return NextResponse.json({ error: 'email and action (approve|reject|reset) required' }, { status: 400, headers: NO_STORE_HEADERS })
   }
 
   const status = action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : 'pending'
