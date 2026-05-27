@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
 
   const { data: attendee, error: fetchError } = await supabase
     .from('attendees')
-    .select('id, name, ticket_type, payment_amount, attendance_confirmed')
+    .select('id, name, ticket_type, payment_amount, payment_status, attendance_confirmed')
     .eq('id', attendeeId)
     .single()
 

@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     .from('attendees')
     .select('id, name, phone, ticket_type, payment_amount, attendance_confirmed')
     .eq('event_id', eventId)
-    .eq('payment_status', 'paid')
+    .in('payment_status', ['paid', 'free'])
 
   if (error) {
     console.error('checkin select error:', error)
