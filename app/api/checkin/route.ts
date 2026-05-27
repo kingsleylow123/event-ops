@@ -1,23 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabase, TICKET_PRICES } from '@/lib/supabase'
+import type { TicketType } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 
 const NO_STORE_HEADERS = { 'Cache-Control': 'no-store, no-cache, must-revalidate' } as const
 
+function isDouble(ticketType: TicketType, paymentAmount: number): boolean {
+  const standard = TICKET_PRICES[ticketType] ?? 0
+  if (standard <= 0) return false
+  // If they paid ~1.8× or more of the standard price, it's a x2 ticket
+  return paymentAmount >= standard * 1.8
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json()
-  const { eventId, query } = body as { eventId: string; query: string }
+  const { eventId, name, phone } = body as { eventId?: string; name?: string; phone?: string }
 
-  if (!eventId || !query) {
+  if (!eventId || !name?.trim()) {
     return NextResponse.json({ success: false, error: 'missing_params' }, { status: 400, headers: NO_STORE_HEADERS })
   }
 
-  const q = query.trim().toLowerCase()
+  const nameLower = name.trim().toLowerCase()
+  const phoneDigits = (phone ?? '').replace(/\D/g, '').slice(-8) // last 8 digits for fuzzy match
 
   const { data, error } = await supabase
     .from('attendees')
-    .select('id, name, email, ticket_type, attendance_confirmed')
+    .select('id, name, phone, ticket_type, payment_amount, attendance_confirmed')
     .eq('event_id', eventId)
     .eq('payment_status', 'paid')
 
@@ -26,11 +35,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'db_error', detail: error.message }, { status: 500, headers: NO_STORE_HEADERS })
   }
 
-  const matches = (data ?? []).filter(
-    a =>
-      (a.name ?? '').toLowerCase().includes(q) ||
-      (a.email ?? '').toLowerCase().includes(q)
-  )
+  // Match by name (fuzzy contains)
+  let matches = (data ?? []).filter(a => (a.name ?? '').toLowerCase().includes(nameLower))
+
+  // If phone provided and multiple name matches, narrow by phone
+  if (matches.length > 1 && phoneDigits.length >= 4) {
+    const phoneFiltered = matches.filter(a =>
+      (a.phone ?? '').replace(/\D/g, '').includes(phoneDigits)
+    )
+    if (phoneFiltered.length > 0) matches = phoneFiltered
+  }
 
   if (matches.length === 0) {
     return NextResponse.json({ success: false, error: 'not_found' }, { headers: NO_STORE_HEADERS })
@@ -38,11 +52,7 @@ export async function POST(req: NextRequest) {
 
   if (matches.length > 1) {
     return NextResponse.json(
-      {
-        success: false,
-        error: 'multiple',
-        attendees: matches.map(a => ({ id: a.id, name: a.name })),
-      },
+      { success: false, error: 'multiple', attendees: matches.map(a => ({ id: a.id, name: a.name, ticket_type: a.ticket_type })) },
       { headers: NO_STORE_HEADERS }
     )
   }
@@ -62,14 +72,13 @@ export async function POST(req: NextRequest) {
     .eq('id', attendee.id)
 
   if (updateError) {
-    return NextResponse.json({ success: false, error: 'db_error' }, { status: 500, headers: NO_STORE_HEADERS })
+    return NextResponse.json({ success: false, error: 'db_error', detail: updateError.message }, { status: 500, headers: NO_STORE_HEADERS })
   }
 
+  const double = isDouble(attendee.ticket_type as TicketType, Number(attendee.payment_amount))
+
   return NextResponse.json(
-    {
-      success: true,
-      attendee: { name: attendee.name, ticket_type: attendee.ticket_type },
-    },
+    { success: true, attendee: { name: attendee.name, ticket_type: attendee.ticket_type, is_double: double } },
     { headers: NO_STORE_HEADERS }
   )
 }
