@@ -142,6 +142,9 @@ export default function TeamPage() {
                 const members = membersFor(ev.team, role)
                 const isEditingThis = editing && editing.eventId === ev.id && editing.role === role
 
+                // Hide roles that have no members in this event AND aren't currently being edited.
+                if (members.length === 0 && !isEditingThis) return null
+
                 return (
                   <div key={role}>
                     <div className="flex items-center justify-between gap-3 mb-1">
