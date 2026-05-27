@@ -6,9 +6,7 @@ import { toWhatsApp, TEAM_ROLE_LABELS, TEAM_ROLE_ICONS } from '@/lib/supabase'
 const ROLE_ORDER: TeamRole[] = ['speaker', 'facilitator', 'content_creator', 'videographer']
 
 function eventLabel(ev: Event): string {
-  if (!ev.date) return ev.name
-  const year = new Date(ev.date).getFullYear()
-  return `${ev.name} ${year}`
+  return ev.name
 }
 
 function formatEventDate(date: string | null): string {
