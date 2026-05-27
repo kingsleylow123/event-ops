@@ -196,9 +196,9 @@ export default function FloorPlanPage() {
         <div className="text-center text-zinc-500 py-20">No event selected.</div>
       ) : (
         <div className="bg-[#0d0d0d] border border-zinc-800 rounded-xl p-6 space-y-6">
-          {/* Stage */}
-          <div className="flex justify-center">
-            <div className="bg-blue-900 border border-blue-800 rounded-lg px-10 py-4 text-center min-w-[300px]">
+          {/* Stage + Speaker needs side-by-side */}
+          <div className="flex flex-col md:flex-row md:items-stretch justify-center gap-4">
+            <div className="bg-blue-900 border border-blue-800 rounded-lg px-10 py-4 text-center min-w-[280px] flex-shrink-0 flex flex-col justify-center">
               <p className="text-[10px] text-zinc-400 tracking-widest">★ STAGE ★</p>
               {editing ? (
                 <input value={draft.stage_speaker ?? ''}
@@ -209,40 +209,40 @@ export default function FloorPlanPage() {
                 <p className="text-white text-lg font-bold uppercase mt-2">{display.stage_speaker || '—'}</p>
               )}
             </div>
-          </div>
 
-          {/* Speaker needs */}
-          {(editing || (display.speaker_needs ?? []).length > 0) && (
-            <div className="max-w-md mx-auto bg-blue-950/30 border border-blue-800/40 rounded-lg p-4">
-              <p className="text-xs text-blue-300 uppercase tracking-wider font-semibold mb-2">🎤 Speaker needs</p>
-              {editing ? (
-                <div className="space-y-2">
-                  {(draft.speaker_needs ?? []).map((need, idx) => (
-                    <div key={idx} className="flex gap-2 items-center">
-                      <input value={need} onChange={e => updateSpeakerNeed(idx, e.target.value)}
-                        placeholder="e.g. Lapel mic"
-                        className="flex-1 bg-zinc-900 border border-zinc-700 rounded px-3 py-1.5 text-white text-sm" />
-                      <button type="button" onClick={() => removeSpeakerNeed(idx)}
-                        className="text-zinc-500 hover:text-red-400 text-xs px-2 py-1 border border-zinc-700 hover:border-red-500/50 rounded">✕</button>
-                    </div>
-                  ))}
-                  <button type="button" onClick={addSpeakerNeed}
-                    className="text-xs text-blue-400 hover:text-blue-300 border border-blue-500/40 hover:border-blue-500/70 rounded px-3 py-1.5">
-                    + Add item
-                  </button>
-                </div>
-              ) : (
-                <ul className="space-y-1">
-                  {(display.speaker_needs ?? []).map((need, i) => need && (
-                    <li key={i} className="text-sm text-zinc-300 flex items-start gap-2">
-                      <span className="text-blue-400 flex-shrink-0">•</span>
-                      <span>{need}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
+            {/* Speaker needs — beside the stage */}
+            {(editing || (display.speaker_needs ?? []).length > 0) && (
+              <div className="flex-1 max-w-md bg-blue-950/30 border border-blue-800/40 rounded-lg p-4">
+                <p className="text-xs text-blue-300 uppercase tracking-wider font-semibold mb-2">🎤 Speaker needs</p>
+                {editing ? (
+                  <div className="space-y-2">
+                    {(draft.speaker_needs ?? []).map((need, idx) => (
+                      <div key={idx} className="flex gap-2 items-center">
+                        <input value={need} onChange={e => updateSpeakerNeed(idx, e.target.value)}
+                          placeholder="e.g. Lapel mic"
+                          className="flex-1 bg-zinc-900 border border-zinc-700 rounded px-3 py-1.5 text-white text-sm" />
+                        <button type="button" onClick={() => removeSpeakerNeed(idx)}
+                          className="text-zinc-500 hover:text-red-400 text-xs px-2 py-1 border border-zinc-700 hover:border-red-500/50 rounded">✕</button>
+                      </div>
+                    ))}
+                    <button type="button" onClick={addSpeakerNeed}
+                      className="text-xs text-blue-400 hover:text-blue-300 border border-blue-500/40 hover:border-blue-500/70 rounded px-3 py-1.5">
+                      + Add item
+                    </button>
+                  </div>
+                ) : (
+                  <ul className="space-y-1">
+                    {(display.speaker_needs ?? []).map((need, i) => need && (
+                      <li key={i} className="text-sm text-zinc-300 flex items-start gap-2">
+                        <span className="text-blue-400 flex-shrink-0">•</span>
+                        <span>{need}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Totals bar */}
           <div className="flex justify-center">
@@ -376,28 +376,26 @@ export default function FloorPlanPage() {
               )}
             </div>
 
-            {/* Stage */}
-            <div className="flex justify-center">
-              <div className="bg-blue-900 border border-blue-800 rounded-xl px-10 py-6 text-center min-w-[300px]">
+            {/* Stage + Speaker needs side-by-side */}
+            <div className="flex flex-col sm:flex-row sm:items-stretch justify-center gap-4">
+              <div className="bg-blue-900 border border-blue-800 rounded-xl px-8 py-6 text-center min-w-[260px] flex-shrink-0 flex flex-col justify-center">
                 <p className="text-xs text-zinc-400 tracking-widest">★ STAGE ★</p>
                 <p className="text-white text-2xl font-bold uppercase mt-2">{currentPlan.stage_speaker || '—'}</p>
               </div>
+              {(currentPlan.speaker_needs ?? []).filter(n => n).length > 0 && (
+                <div className="flex-1 bg-blue-950/30 border border-blue-800/40 rounded-lg p-4">
+                  <p className="text-xs text-blue-300 uppercase tracking-wider font-semibold mb-2">🎤 Speaker needs</p>
+                  <ul className="space-y-1">
+                    {(currentPlan.speaker_needs ?? []).map((need, i) => need && (
+                      <li key={i} className="text-sm text-zinc-300 flex items-start gap-2">
+                        <span className="text-blue-400 flex-shrink-0">•</span>
+                        <span>{need}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
-
-            {/* Speaker needs */}
-            {(currentPlan.speaker_needs ?? []).filter(n => n).length > 0 && (
-              <div className="bg-blue-950/30 border border-blue-800/40 rounded-lg p-4">
-                <p className="text-xs text-blue-300 uppercase tracking-wider font-semibold mb-2">🎤 Speaker needs</p>
-                <ul className="space-y-1">
-                  {(currentPlan.speaker_needs ?? []).map((need, i) => need && (
-                    <li key={i} className="text-sm text-zinc-300 flex items-start gap-2">
-                      <span className="text-blue-400 flex-shrink-0">•</span>
-                      <span>{need}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
 
             {/* Totals */}
             <div className="text-center">
