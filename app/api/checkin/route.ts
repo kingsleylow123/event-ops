@@ -22,7 +22,8 @@ export async function POST(req: NextRequest) {
     .eq('payment_status', 'paid')
 
   if (error) {
-    return NextResponse.json({ success: false, error: 'db_error' }, { status: 500, headers: NO_STORE_HEADERS })
+    console.error('checkin select error:', error)
+    return NextResponse.json({ success: false, error: 'db_error', detail: error.message }, { status: 500, headers: NO_STORE_HEADERS })
   }
 
   const matches = (data ?? []).filter(

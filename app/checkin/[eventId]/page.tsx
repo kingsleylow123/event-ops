@@ -11,7 +11,7 @@ type CheckinState =
   | { status: 'not_found' }
   | { status: 'already_checked_in'; name: string }
   | { status: 'multiple'; attendees: { id: string; name: string }[] }
-  | { status: 'error' }
+  | { status: 'error'; detail?: string }
 
 export default function CheckinPage({ params }: { params: { eventId: string } }) {
   const { eventId } = params
@@ -51,10 +51,10 @@ export default function CheckinPage({ params }: { params: { eventId: string } })
       } else if (data.error === 'multiple') {
         setState({ status: 'multiple', attendees: data.attendees })
       } else {
-        setState({ status: 'error' })
+        setState({ status: 'error', detail: data.detail ?? data.error })
       }
-    } catch {
-      setState({ status: 'error' })
+    } catch (err) {
+      setState({ status: 'error', detail: String(err) })
     }
   }
 
@@ -243,6 +243,9 @@ export default function CheckinPage({ params }: { params: { eventId: string } })
             <div className="text-5xl mb-2">⚠️</div>
             <h2 className="text-xl font-bold text-white">Something went wrong</h2>
             <p className="text-zinc-400 text-sm">Please try again or see the registration desk.</p>
+            {state.status === 'error' && state.detail && (
+              <p className="text-red-400 text-xs font-mono bg-red-900/20 rounded p-2">{state.detail}</p>
+            )}
             <button
               onClick={reset}
               className="w-full py-3.5 rounded-xl font-bold text-white text-base"
