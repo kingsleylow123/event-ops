@@ -114,7 +114,7 @@ export const TEAM_ROLE_ICONS: Record<TeamRole, string> = {
   videographer: '🎥',
 }
 
-export type FloorPlanSectionType = 'vip' | 'general' | 'creator' | 'overflow' | 'other'
+export type FloorPlanSectionType = 'vip' | 'general' | 'creator' | 'overflow' | 'camera' | 'other'
 
 export interface FloorPlanSection {
   id: string

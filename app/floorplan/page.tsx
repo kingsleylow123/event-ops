@@ -7,6 +7,7 @@ const SECTION_TYPE_COLORS: Record<FloorPlanSectionType, string> = {
   general: 'bg-slate-500',
   creator: 'bg-orange-500',
   overflow: 'bg-amber-700',
+  camera: 'bg-purple-700',
   other: 'bg-zinc-600',
 }
 
@@ -15,6 +16,7 @@ const SECTION_TYPE_LABELS: Record<FloorPlanSectionType, string> = {
   general: 'pax',
   creator: 'creators',
   overflow: 'overflow',
+  camera: 'camera',
   other: 'pax',
 }
 
@@ -135,7 +137,7 @@ export default function FloorPlanPage() {
   const totals = useMemo(() => {
     const data = editing ? draft : currentPlan
     const result: Record<FloorPlanSectionType, number> = {
-      vip: 0, general: 0, creator: 0, overflow: 0, other: 0,
+      vip: 0, general: 0, creator: 0, overflow: 0, camera: 0, other: 0,
     }
     for (const s of data.sections ?? []) {
       result[s.type] = (result[s.type] || 0) + (Number(s.pax) || 0)
@@ -276,6 +278,7 @@ export default function FloorPlanPage() {
                         <option value="general">General</option>
                         <option value="creator">Creator</option>
                         <option value="overflow">Overflow</option>
+                        <option value="camera">📹 Camera</option>
                         <option value="other">Other</option>
                       </select>
                       <input type="number" min="0" value={section.pax}
