@@ -354,8 +354,7 @@ export default function AttendeesPage() {
                           .badge{margin-top:16px;background:#fff4e6;border:2px solid #e8563a;color:#e8563a;font-weight:700;font-size:13px;padding:6px 18px;border-radius:999px;letter-spacing:0.5px;}
                         </style></head><body>
                           <img src="${qrSrc}" />
-                          <h1>📲 Scan to Check In</h1>
-                          <p>Please scan your attendance</p>
+                          <h1>📲 Please scan your attendance</h1>
                           <div class="badge">Claude Malaysia Workshop</div>
                           <script>window.onload=()=>window.print()</script>
                         </body></html>`)
