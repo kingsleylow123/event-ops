@@ -329,7 +329,7 @@ export default function FloorPlanPage() {
             <div className="bg-purple-900/20 border border-purple-700/50 rounded-xl px-6 py-3 flex items-center gap-3 min-w-[280px]">
               <span className="text-purple-400 text-xl flex-shrink-0">📹</span>
               <div className="text-center flex-1">
-                <p className="text-[10px] text-purple-300 uppercase tracking-widest font-semibold">Videographer — Back of Room</p>
+                <p className="text-[10px] text-purple-300 uppercase tracking-widest font-semibold">Videographer</p>
                 {editing ? (
                   <input value={draft.videographer ?? ''} onChange={e => setDraft(d => ({ ...d, videographer: e.target.value }))}
                     placeholder="Name (e.g. Jimmy)"
@@ -449,7 +449,7 @@ export default function FloorPlanPage() {
               <div className="bg-purple-900/20 border border-purple-700/50 rounded-xl px-6 py-3 flex items-center gap-3 min-w-[280px]">
                 <span className="text-purple-400 text-xl flex-shrink-0">📹</span>
                 <div className="text-center flex-1">
-                  <p className="text-[10px] text-purple-300 uppercase tracking-widest font-semibold">Videographer — Back of Room</p>
+                  <p className="text-[10px] text-purple-300 uppercase tracking-widest font-semibold">Videographer</p>
                   <p className="text-white text-sm mt-0.5 font-semibold">{currentPlan.videographer || '—'}</p>
                 </div>
               </div>
