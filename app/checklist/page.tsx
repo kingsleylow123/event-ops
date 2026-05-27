@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { Event, ChecklistItem, ChecklistStatus } from '@/lib/supabase'
 import { CHECKLIST_CATEGORIES, toWhatsApp } from '@/lib/supabase'
 
@@ -22,17 +22,38 @@ const EMPTY_FORM = {
 
 export default function ChecklistPage() {
   const [event, setEvent] = useState<Event | null>(null)
+  const [allEvents, setAllEvents] = useState<Event[]>([])
   const [items, setItems] = useState<ChecklistItem[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
 
+  // Build a name → phone lookup from every team member across every event
+  const teamContacts = useMemo(() => {
+    const map: Record<string, string> = {}  // lowercase name → phone
+    const seen = new Set<string>()
+    const list: { name: string; phone: string | null; role: string }[] = []
+    for (const ev of allEvents) {
+      for (const m of ev.team ?? []) {
+        const key = m.name.trim().toLowerCase()
+        if (!key) continue
+        if (m.phone) map[key] = m.phone
+        if (!seen.has(key)) {
+          seen.add(key)
+          list.push({ name: m.name, phone: m.phone, role: m.role })
+        }
+      }
+    }
+    return { lookup: map, list }
+  }, [allEvents])
+
   async function loadData() {
     try {
       const evRes = await fetch('/api/events', { cache: 'no-store' })
       if (!evRes.ok) throw new Error()
       const events: Event[] = await evRes.json()
+      setAllEvents(events)
       const active = events.find(e => e.is_active) ?? null
       setEvent(active)
       if (active) {
@@ -44,6 +65,19 @@ export default function ChecklistPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  function onPicNameChange(name: string) {
+    const key = name.trim().toLowerCase()
+    const auto = teamContacts.lookup[key]
+    setForm(f => ({
+      ...f,
+      pic_name: name,
+      // Auto-fill phone if the user typed a known team member's exact name
+      pic_phone: auto && (!f.pic_phone || f.pic_phone === teamContacts.lookup[f.pic_name.trim().toLowerCase()])
+        ? auto
+        : f.pic_phone,
+    }))
   }
 
   useEffect(() => { loadData() }, [])
@@ -159,8 +193,17 @@ export default function ChecklistPage() {
                 placeholder="Task *" className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm" />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <input value={form.pic_name} onChange={e => setForm(f => ({ ...f, pic_name: e.target.value }))}
-                placeholder="PIC Name" className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm" />
+              <input
+                list="pic-name-suggestions"
+                value={form.pic_name}
+                onChange={e => onPicNameChange(e.target.value)}
+                placeholder="PIC Name (start typing to autocomplete)"
+                className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm" />
+              <datalist id="pic-name-suggestions">
+                {teamContacts.list.map(c => (
+                  <option key={c.name} value={c.name}>{c.phone ?? ''}</option>
+                ))}
+              </datalist>
               <input value={form.pic_phone} onChange={e => setForm(f => ({ ...f, pic_phone: e.target.value }))}
                 placeholder="PIC Phone (e.g. 0123456789)" className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm" />
             </div>
