@@ -26,9 +26,10 @@ export async function POST(req: NextRequest) {
 
   const { data, error } = await supabase
     .from('attendees')
-    .select('id, name, phone, ticket_type, payment_amount, attendance_confirmed')
+    .select('id, name, phone, ticket_type, payment_amount, attendance_confirmed, notes')
     .eq('event_id', eventId)
     .in('payment_status', ['paid', 'free'])
+    .not('notes', 'eq', 'upgrade_payment')
 
   if (error) {
     console.error('checkin select error:', error)
