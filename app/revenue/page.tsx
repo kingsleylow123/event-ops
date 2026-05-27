@@ -165,7 +165,7 @@ export default function RevenuePage() {
             <option value="all">All events</option>
             {events.map(ev => (
               <option key={ev.id} value={ev.id}>
-                {ev.name}{ev.date ? ` — ${fmtDate(ev.date)}` : ''}
+                {ev.name}
               </option>
             ))}
           </select>

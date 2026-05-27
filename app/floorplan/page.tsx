@@ -29,9 +29,7 @@ function emptyFloorPlan(): FloorPlan {
 }
 
 function eventLabel(ev: Event): string {
-  if (!ev.date) return ev.name
-  const year = new Date(ev.date).getFullYear()
-  return `${ev.name} ${year}`
+  return ev.name
 }
 
 export default function FloorPlanPage() {

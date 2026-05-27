@@ -609,7 +609,7 @@ export default function MeetingsPage() {
                 className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm">
                 <option value="">(No event tag)</option>
                 {events.map(ev => (
-                  <option key={ev.id} value={ev.id}>{ev.name}{ev.date ? ` — ${fmtDate(ev.date)}` : ''}</option>
+                  <option key={ev.id} value={ev.id}>{ev.name}</option>
                 ))}
               </select>
             </div>
