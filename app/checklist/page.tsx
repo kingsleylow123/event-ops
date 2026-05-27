@@ -15,15 +15,18 @@ const NEXT_STATUS: Record<ChecklistStatus, ChecklistStatus> = {
   done: 'pending',
 }
 
+const EMPTY_FORM = {
+  category: CHECKLIST_CATEGORIES[0] as string,
+  item: '', pic_name: '', pic_phone: '', due_date: '', notes: '',
+}
+
 export default function ChecklistPage() {
   const [event, setEvent] = useState<Event | null>(null)
   const [items, setItems] = useState<ChecklistItem[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({
-    category: CHECKLIST_CATEGORIES[0],
-    item: '', pic_name: '', pic_phone: '', due_date: '', notes: '',
-  })
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [form, setForm] = useState(EMPTY_FORM)
 
   async function loadData() {
     try {
@@ -61,18 +64,60 @@ export default function ChecklistPage() {
     setItems(prev => prev.filter(x => x.id !== id))
   }
 
-  async function addItem(e: React.FormEvent) {
+  function openCreate() {
+    setEditingId(null)
+    setForm(EMPTY_FORM)
+    setShowForm(true)
+  }
+
+  function openEdit(it: ChecklistItem) {
+    setEditingId(it.id)
+    setForm({
+      category: it.category,
+      item: it.item,
+      pic_name: it.pic_name ?? '',
+      pic_phone: it.pic_phone ?? '',
+      due_date: it.due_date ? it.due_date.slice(0, 10) : '',
+      notes: it.notes ?? '',
+    })
+    setShowForm(true)
+  }
+
+  function closeForm() {
+    setShowForm(false)
+    setEditingId(null)
+    setForm(EMPTY_FORM)
+  }
+
+  async function submitItem(e: React.FormEvent) {
     e.preventDefault()
     if (!event) return
-    const res = await fetch('/api/checklist', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, event_id: event.id }),
-    })
-    const newItem = await res.json()
-    setItems(prev => [...prev, newItem])
-    setForm({ category: CHECKLIST_CATEGORIES[0], item: '', pic_name: '', pic_phone: '', due_date: '', notes: '' })
-    setShowForm(false)
+    const payload = {
+      category: form.category,
+      item: form.item,
+      pic_name: form.pic_name || null,
+      pic_phone: form.pic_phone || null,
+      due_date: form.due_date || null,
+      notes: form.notes || null,
+    }
+    if (editingId) {
+      const res = await fetch('/api/checklist', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: editingId, ...payload }),
+      })
+      const updated = await res.json()
+      setItems(prev => prev.map(x => x.id === editingId ? updated : x))
+    } else {
+      const res = await fetch('/api/checklist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...payload, event_id: event.id, status: 'pending' as ChecklistStatus }),
+      })
+      const newItem = await res.json()
+      setItems(prev => [...prev, newItem])
+    }
+    closeForm()
   }
 
   const grouped = CHECKLIST_CATEGORIES.reduce<Record<string, ChecklistItem[]>>((acc, cat) => {
@@ -80,7 +125,6 @@ export default function ChecklistPage() {
     return acc
   }, {})
 
-  // also handle any custom categories
   const extraCats = [...new Set(items.map(i => i.category))].filter(c => !CHECKLIST_CATEGORIES.includes(c))
   extraCats.forEach(cat => { grouped[cat] = items.filter(i => i.category === cat) })
 
@@ -95,21 +139,21 @@ export default function ChecklistPage() {
           <h1 className="text-xl font-bold">Event Checklist</h1>
           {event && <p className="text-sm text-zinc-400">{event.name}</p>}
         </div>
-        <button onClick={() => setShowForm(s => !s)} disabled={!event}
+        <button onClick={openCreate} disabled={!event}
           className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-semibold text-sm px-4 py-2 rounded-lg">
           + Add Item
         </button>
       </div>
 
-      {/* Add Item Form */}
       {showForm && (
-        <div className="bg-[#111] border border-zinc-800 rounded-xl p-5">
-          <form onSubmit={addItem} className="space-y-3">
+        <div className="bg-[#111] border border-amber-500/50 rounded-xl p-5">
+          <h2 className="font-semibold mb-3">{editingId ? 'Edit Item' : 'New Item'}</h2>
+          <form onSubmit={submitItem} className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
                 className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm">
                 {CHECKLIST_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                <option value="custom">Other…</option>
+                {extraCats.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
               <input required value={form.item} onChange={e => setForm(f => ({ ...f, item: e.target.value }))}
                 placeholder="Task *" className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm" />
@@ -127,14 +171,15 @@ export default function ChecklistPage() {
                 placeholder="Notes" className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm" />
             </div>
             <div className="flex gap-2">
-              <button type="submit" className="bg-amber-500 hover:bg-amber-400 text-black font-semibold px-4 py-2 rounded-lg text-sm">Add Item</button>
-              <button type="button" onClick={() => setShowForm(false)} className="bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2 rounded-lg text-sm">Cancel</button>
+              <button type="submit" className="bg-amber-500 hover:bg-amber-400 text-black font-semibold px-4 py-2 rounded-lg text-sm">
+                {editingId ? 'Save Changes' : 'Add Item'}
+              </button>
+              <button type="button" onClick={closeForm} className="bg-zinc-800 hover:bg-zinc-700 text-white px-4 py-2 rounded-lg text-sm">Cancel</button>
             </div>
           </form>
         </div>
       )}
 
-      {/* Grouped checklist */}
       {allCategories.map(cat => {
         const catItems = grouped[cat] ?? []
         const done = catItems.filter(i => i.status === 'done').length
@@ -162,7 +207,7 @@ export default function ChecklistPage() {
                     <th className="px-5 py-2">PIC</th>
                     <th className="px-5 py-2">Due</th>
                     <th className="px-5 py-2">Status</th>
-                    <th className="px-5 py-2"></th>
+                    <th className="px-5 py-2 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -194,8 +239,17 @@ export default function ChecklistPage() {
                             {it.status.replace('_', ' ')}
                           </button>
                         </td>
-                        <td className="px-5 py-3">
-                          <button onClick={() => deleteItem(it.id)} className="text-zinc-600 hover:text-red-400 text-xs">✕</button>
+                        <td className="px-5 py-3 text-right">
+                          <div className="flex justify-end gap-2">
+                            <button onClick={() => openEdit(it)}
+                              className="text-xs text-zinc-400 hover:text-amber-400 border border-zinc-700 hover:border-amber-500/50 px-2 py-1 rounded">
+                              Edit
+                            </button>
+                            <button onClick={() => deleteItem(it.id)}
+                              className="text-xs text-zinc-600 hover:text-red-400 border border-zinc-800 hover:border-red-500/50 px-2 py-1 rounded">
+                              ✕
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     )
