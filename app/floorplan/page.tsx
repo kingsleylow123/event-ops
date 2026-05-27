@@ -214,7 +214,8 @@ export default function FloorPlanPage() {
               <div key={section.id} className="text-center">
                 {editing ? (
                   <input value={section.label} onChange={e => updateSection(idx, { label: e.target.value })}
-                    className="bg-transparent border-b border-zinc-700 text-orange-400 text-xs uppercase tracking-widest font-bold text-center w-full focus:outline-none focus:border-orange-400" />
+                    placeholder="Section name (e.g. Zac)"
+                    className="bg-zinc-900 border border-zinc-700 hover:border-orange-500/50 focus:border-orange-400 rounded px-2 py-1.5 text-orange-400 text-xs uppercase tracking-widest font-bold text-center w-full focus:outline-none" />
                 ) : (
                   <h3 className="text-orange-400 text-xs uppercase tracking-widest font-bold">{section.label}</h3>
                 )}
