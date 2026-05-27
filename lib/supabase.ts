@@ -114,6 +114,24 @@ export const TEAM_ROLE_ICONS: Record<TeamRole, string> = {
   videographer: '🎥',
 }
 
+export type FloorPlanSectionType = 'vip' | 'general' | 'creator' | 'overflow' | 'other'
+
+export interface FloorPlanSection {
+  id: string
+  label: string
+  type: FloorPlanSectionType
+  pax: number
+  note?: string | null
+}
+
+export interface FloorPlan {
+  stage_speaker?: string | null
+  sections: FloorPlanSection[]
+  registration?: string | null
+  main_door?: string | null
+  fnb?: string | null
+}
+
 export interface Event {
   id: string
   name: string
@@ -122,6 +140,7 @@ export interface Event {
   capacity: number | null
   is_active: boolean
   team: TeamMember[]
+  floor_plan?: FloorPlan
   // Legacy single-member columns — kept for back-compat, no longer used by UI
   host_name: string | null
   host_phone: string | null
