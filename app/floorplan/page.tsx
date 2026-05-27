@@ -218,9 +218,9 @@ export default function FloorPlanPage() {
                 ) : (
                   <h3 className="text-orange-400 text-xs uppercase tracking-widest font-bold">{section.label}</h3>
                 )}
-                <div className={`mt-2 grid grid-cols-2 gap-1 h-32 rounded-md overflow-hidden ${editing ? 'cursor-default' : ''}`}>
-                  <div className={`${SECTION_TYPE_COLORS[section.type]} rounded`} />
-                  <div className={`${SECTION_TYPE_COLORS[section.type]} rounded`} />
+                <div className="mt-2 flex justify-center gap-2 h-44">
+                  <div className={`w-14 h-full ${SECTION_TYPE_COLORS[section.type]} rounded`} />
+                  <div className={`w-14 h-full ${SECTION_TYPE_COLORS[section.type]} rounded`} />
                 </div>
                 {editing ? (
                   <div className="mt-2 space-y-1">
@@ -350,9 +350,9 @@ export default function FloorPlanPage() {
               {(currentPlan.sections ?? []).map(section => (
                 <div key={section.id} className="text-center">
                   <h3 className="text-orange-400 text-xs uppercase tracking-widest font-bold mb-2">{section.label}</h3>
-                  <div className={`grid grid-cols-2 gap-1 h-32 rounded-md overflow-hidden`}>
-                    <div className={`${SECTION_TYPE_COLORS[section.type]} rounded`} />
-                    <div className={`${SECTION_TYPE_COLORS[section.type]} rounded`} />
+                  <div className="flex justify-center gap-2 h-44">
+                    <div className={`w-14 h-full ${SECTION_TYPE_COLORS[section.type]} rounded`} />
+                    <div className={`w-14 h-full ${SECTION_TYPE_COLORS[section.type]} rounded`} />
                   </div>
                   <p className="text-sm mt-2 text-zinc-300">
                     <span className="text-orange-400 font-bold text-base">{section.pax}</span>{' '}
