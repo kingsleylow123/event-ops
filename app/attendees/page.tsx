@@ -342,7 +342,25 @@ export default function AttendeesPage() {
                   </div>
                   <div className="flex gap-2">
                     <button
-                      onClick={() => window.print()}
+                      onClick={() => {
+                        const w = window.open('', '_blank', 'width=600,height=700')
+                        if (!w) return
+                        w.document.write(`<!DOCTYPE html><html><head><title>Check-in QR</title><style>
+                          *{margin:0;padding:0;box-sizing:border-box;}
+                          body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:40px;}
+                          img{width:280px;height:280px;display:block;}
+                          h1{font-size:28px;font-weight:800;color:#111;margin-top:24px;text-align:center;}
+                          p{font-size:15px;color:#666;margin-top:10px;text-align:center;}
+                          .badge{margin-top:16px;background:#fff4e6;border:2px solid #e8563a;color:#e8563a;font-weight:700;font-size:13px;padding:6px 18px;border-radius:999px;letter-spacing:0.5px;}
+                        </style></head><body>
+                          <img src="${qrSrc}" />
+                          <h1>📲 Scan to Check In</h1>
+                          <p>Please scan your attendance</p>
+                          <div class="badge">Claude Malaysia Workshop</div>
+                          <script>window.onload=()=>window.print()</script>
+                        </body></html>`)
+                        w.document.close()
+                      }}
                       className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white text-sm py-2 rounded-lg font-medium"
                     >
                       🖨 Print
