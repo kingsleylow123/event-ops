@@ -39,6 +39,7 @@ export default function FloorPlanPage() {
   const [draft, setDraft] = useState<FloorPlan>(emptyFloorPlan())
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [presentMode, setPresentMode] = useState(false)
 
   async function loadEvents() {
     try {
@@ -153,10 +154,16 @@ export default function FloorPlanPage() {
             </select>
           )}
           {!editing ? (
-            <button onClick={startEdit} disabled={!selectedEvent}
-              className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-semibold text-sm px-4 py-2 rounded-lg">
-              Edit
-            </button>
+            <>
+              <button onClick={() => setPresentMode(true)} disabled={!selectedEvent}
+                className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg">
+                📺 Present
+              </button>
+              <button onClick={startEdit} disabled={!selectedEvent}
+                className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-semibold text-sm px-4 py-2 rounded-lg">
+                Edit
+              </button>
+            </>
           ) : (
             <>
               <button onClick={cancelEdit}
@@ -299,6 +306,83 @@ export default function FloorPlanPage() {
                 <p className="text-white text-sm mt-1">{display.fnb || '—'}</p>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* PRESENT MODE — full-screen portrait overlay for tablet at event entrance */}
+      {presentMode && selectedEvent && (
+        <div className="fixed inset-0 z-50 bg-[#0a0a0a] overflow-auto" onClick={e => e.stopPropagation()}>
+          <button onClick={() => setPresentMode(false)}
+            className="absolute top-4 right-4 z-10 bg-zinc-800 hover:bg-zinc-700 text-white text-sm px-3 py-2 rounded-lg">
+            ✕ Exit
+          </button>
+
+          <div className="max-w-md mx-auto px-4 py-10 space-y-8">
+            <div className="text-center">
+              <h1 className="text-2xl font-bold text-white">{eventLabel(selectedEvent)}</h1>
+              {selectedEvent.date && (
+                <p className="text-sm text-zinc-500 mt-1">
+                  {new Date(selectedEvent.date).toLocaleDateString('en-MY', { dateStyle: 'full' })}
+                </p>
+              )}
+            </div>
+
+            {/* Stage */}
+            <div className="flex justify-center">
+              <div className="bg-blue-900 border border-blue-800 rounded-xl px-8 py-6 text-center w-full">
+                <p className="text-xs text-zinc-400 tracking-widest">★ STAGE ★</p>
+                <p className="text-white text-2xl font-bold uppercase mt-2">{currentPlan.stage_speaker || '—'}</p>
+              </div>
+            </div>
+
+            {/* Totals */}
+            <div className="text-center">
+              <div className="inline-block border border-orange-500/60 text-orange-400 text-sm uppercase tracking-wider rounded-full px-4 py-2">
+                ◆ VIP {totals.byType.vip} · GENERAL {totals.byType.general}
+                {totals.byType.creator > 0 && ` · CREATORS ${totals.byType.creator}`}
+                {' = '} <span className="text-orange-300 font-bold">{totals.grand} PAX</span>
+              </div>
+            </div>
+
+            {/* Sections — single column for portrait tablet */}
+            <div className="space-y-4">
+              {(currentPlan.sections ?? []).map(section => (
+                <div key={section.id} className="text-center">
+                  <h3 className="text-orange-400 text-sm uppercase tracking-widest font-bold mb-2">{section.label}</h3>
+                  <div className={`grid grid-cols-2 gap-1 h-24 rounded-md overflow-hidden`}>
+                    <div className={`${SECTION_TYPE_COLORS[section.type]} rounded`} />
+                    <div className={`${SECTION_TYPE_COLORS[section.type]} rounded`} />
+                  </div>
+                  <p className="text-base mt-2 text-zinc-300">
+                    <span className="text-orange-400 font-bold text-lg">{section.pax}</span>{' '}
+                    {section.note ? <span className="text-sm text-zinc-500">({section.note})</span> : SECTION_TYPE_LABELS[section.type]}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            {/* Bottom row */}
+            <div className="grid grid-cols-1 gap-3 pt-6 border-t border-zinc-800">
+              <div className="bg-amber-50/5 border border-amber-500/30 rounded-lg p-4 text-center">
+                <p className="text-sm text-amber-400 uppercase tracking-wider">📋 Registration</p>
+                <p className="text-white text-base mt-1">{currentPlan.registration || '—'}</p>
+              </div>
+              <div className="bg-black border border-zinc-700 rounded-lg p-4 text-center">
+                <p className="text-sm text-zinc-400 uppercase tracking-wider">▼ Main Door ▼</p>
+                {currentPlan.main_door
+                  ? <p className="text-white text-base mt-1">{currentPlan.main_door}</p>
+                  : <p className="text-zinc-600 text-xs mt-1 italic">— entrance —</p>}
+              </div>
+              <div className="bg-amber-50/5 border border-amber-500/30 rounded-lg p-4 text-center">
+                <p className="text-sm text-amber-400 uppercase tracking-wider">🍱 F&B Station</p>
+                <p className="text-white text-base mt-1">{currentPlan.fnb || '—'}</p>
+              </div>
+            </div>
+
+            <p className="text-center text-xs text-zinc-700 mt-8">
+              Find your facilitator's section above
+            </p>
           </div>
         </div>
       )}
