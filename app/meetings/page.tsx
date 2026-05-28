@@ -750,8 +750,8 @@ export default function MeetingsPage() {
         </div>
       )}
 
-      {/* Per-person attendance summary — split into separate sections per role */}
-      {personStats.length > 0 && (() => {
+      {/* Consistency table removed per user request */}
+      {false && personStats.length > 0 && (() => {
         const ROLE_ORDER = ['facilitator','content_creator','videographer','speaker','']
         const ROLE_LABELS: Record<string,string> = { facilitator:'Facilitator', content_creator:'Content Creator', videographer:'Videographer', speaker:'Speaker', '':'Other' }
         const ROLE_COLORS: Record<string,string> = { facilitator:'bg-emerald-900/40 text-emerald-400 border border-emerald-800', content_creator:'bg-pink-900/40 text-pink-400 border border-pink-800', videographer:'bg-sky-900/40 text-sky-400 border border-sky-800', speaker:'bg-amber-900/40 text-amber-400 border border-amber-800', '':'bg-zinc-800 text-zinc-400 border border-zinc-700' }
@@ -907,28 +907,6 @@ export default function MeetingsPage() {
                 </div>
               </div>
 
-              {attended.length > 0 && (
-                <div className="border-t border-zinc-800 pt-3">
-                  <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">✅ Attended ({attended.length})</p>
-                  <ul className="space-y-1">
-                    {attended.map((a, i) => (
-                      <li key={i} className="text-sm flex items-start gap-3">
-                        <span className="text-white font-medium flex-shrink-0">{a.name}</span>
-                        {a.notes && <span className="text-zinc-500 text-xs">— {a.notes}</span>}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {total - attended.length > 0 && (
-                <div className="border-t border-zinc-800 pt-3 mt-3">
-                  <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">❌ Missed ({total - attended.length})</p>
-                  <p className="text-sm text-zinc-500">
-                    {(m.attendance ?? []).filter(a => !a.attended).map(a => a.name).join(', ')}
-                  </p>
-                </div>
-              )}
             </div>
           )
         })}
