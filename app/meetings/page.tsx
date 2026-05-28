@@ -655,50 +655,49 @@ export default function MeetingsPage() {
               )
             })()}
 
-          </div>
-        )
-      })()}
-
-      {/* QR Check-in — single QR with saved title */}
-      {meetings.length > 0 && (() => {
-        const latestMeeting = meetings[0]
-        const savedTitle = qrTitles['main'] ?? ''
-        const titleToUse = savedTitle.trim() || latestMeeting.title || 'Check-in'
-        const checkinUrl = `https://event-ops-six.vercel.app/meeting-checkin/${latestMeeting.id}?title=${encodeURIComponent(titleToUse)}`
-        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(checkinUrl)}`
-        return (
-          <div className="bg-[#111] border border-zinc-800 rounded-xl p-4 flex flex-col sm:flex-row gap-4 items-center sm:items-start">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={qrUrl} alt="QR" width={150} height={150} className="flex-shrink-0" style={{ background: '#fff', padding: 6, borderRadius: 8 }} />
-            <div className="flex flex-col gap-3 flex-1 w-full">
-              <p className="text-xs uppercase tracking-wider font-semibold text-zinc-400">📲 QR Check-in</p>
-              <input
-                type="text"
-                value={savedTitle}
-                onChange={e => saveQrTitle('main', e.target.value)}
-                placeholder="e.g. 1st June Workshop"
-                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500"
-              />
-              <p className="text-[10px] text-zinc-600">Title shown when team scans · auto-saved as you type</p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    const w = window.open('', '_blank', 'width=500,height=600')
-                    if (!w) return
-                    w.document.write(`<!DOCTYPE html><html><head><title>QR</title><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,sans-serif;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:40px;}img{width:280px;height:280px;}h1{font-size:22px;font-weight:800;color:#111;margin-top:20px;text-align:center;}p{font-size:13px;color:#666;margin-top:8px;text-align:center;}.badge{margin-top:14px;background:#fff4e6;border:2px solid #e8563a;color:#e8563a;font-weight:700;font-size:12px;padding:5px 16px;border-radius:999px;}</style></head><body><img src="https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(checkinUrl)}" /><h1>📲 Please scan your attendance</h1><p>${titleToUse}</p><div class="badge">Claude Malaysia</div><script>window.onload=()=>window.print()</script></body></html>`)
-                    w.document.close()
-                  }}
-                  className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white text-sm py-2 rounded-lg"
-                >🖨 Print</button>
-                <button
-                  onClick={() => {
-                    saveQrTitle('main', savedTitle)
-                    navigator.clipboard.writeText(checkinUrl)
-                  }}
-                  className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm py-2 rounded-lg"
-                >💾 Save & Copy</button>
-              </div>
-            </div>
+            {/* 4th box: QR Check-in */}
+            {meetings.length > 0 && (() => {
+              // Always use the most recent meeting by date
+              const latestMeeting = [...meetings].sort((a, b) =>
+                new Date(b.meeting_date).getTime() - new Date(a.meeting_date).getTime()
+              )[0]
+              const savedTitle = qrTitles['main'] ?? ''
+              const titleToUse = savedTitle.trim() || latestMeeting.title || 'Check-in'
+              const checkinUrl = `https://event-ops-six.vercel.app/meeting-checkin/${latestMeeting.id}?title=${encodeURIComponent(titleToUse)}`
+              const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(checkinUrl)}`
+              return (
+                <div className="bg-[#111] border border-zinc-700/50 rounded-xl p-4 flex flex-col gap-3">
+                  <p className="text-xs uppercase tracking-wider font-semibold text-zinc-400">📲 QR Check-in</p>
+                  <div className="flex justify-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={qrUrl} alt="QR" width={130} height={130} style={{ background: '#fff', padding: 5, borderRadius: 8 }} />
+                  </div>
+                  <input
+                    type="text"
+                    value={savedTitle}
+                    onChange={e => saveQrTitle('main', e.target.value)}
+                    placeholder="e.g. 1st June Workshop"
+                    className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none focus:border-amber-500"
+                  />
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={() => {
+                        const w = window.open('', '_blank', 'width=500,height=600')
+                        if (!w) return
+                        w.document.write(`<!DOCTYPE html><html><head><title>QR</title><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,sans-serif;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:40px;}img{width:280px;height:280px;}h1{font-size:22px;font-weight:800;color:#111;margin-top:20px;text-align:center;}p{font-size:13px;color:#666;margin-top:8px;text-align:center;}.badge{margin-top:14px;background:#fff4e6;border:2px solid #e8563a;color:#e8563a;font-weight:700;font-size:12px;padding:5px 16px;border-radius:999px;}</style></head><body><img src="https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(checkinUrl)}" /><h1>📲 Please scan your attendance</h1><p>${titleToUse}</p><div class="badge">Claude Malaysia</div><script>window.onload=()=>window.print()</script></body></html>`)
+                        w.document.close()
+                      }}
+                      className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white text-xs py-1.5 rounded-lg"
+                    >🖨 Print</button>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(checkinUrl)}
+                      className="flex-1 bg-amber-600 hover:bg-amber-500 text-white text-xs py-1.5 rounded-lg font-semibold"
+                    >Copy Link</button>
+                  </div>
+                  <p className="text-[10px] text-zinc-700 text-center">→ {latestMeeting.title}</p>
+                </div>
+              )
+            })()}
           </div>
         )
       })()}
