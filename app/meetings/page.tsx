@@ -364,7 +364,7 @@ export default function MeetingsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-xl font-bold">Meetings</h1>
+        <h1 className="text-xl font-bold">Activity</h1>
         <div className="flex gap-2 flex-wrap items-center w-full sm:w-auto">
           <input
             type="text"
