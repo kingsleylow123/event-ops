@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Event, Meeting, MeetingAttendee, MeetingCategory, ContentPost } from '@/lib/supabase'
 
 function fmtDateTime(iso: string): string {
@@ -104,6 +104,18 @@ export default function MeetingsPage() {
   const [participants, setParticipants] = useState<{ name: string }[]>([])
   const [addingParticipant, setAddingParticipant] = useState(false)
   const [qrMeetingId, setQrMeetingId] = useState<string | null>(null)
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set())
+  const [flashedNames, setFlashedNames] = useState<Set<string>>(new Set())
+  const prevMeetingsRef = useRef<Meeting[]>([])
+
+  function toggleCard(id: string) {
+    setExpandedCards(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   async function loadAll() {
     try {
@@ -125,6 +137,47 @@ export default function MeetingsPage() {
   }
 
   useEffect(() => { loadAll() }, [])
+
+  // Auto-poll every 10 seconds — chips turn green live as people scan
+  useEffect(() => {
+    const id = setInterval(async () => {
+      try {
+        const res = await fetch('/api/meetings', { cache: 'no-store' })
+        if (!res.ok) return
+        const fresh: Meeting[] = await res.json()
+
+        // Detect newly scanned names (attended flipped true since last poll)
+        const prev = prevMeetingsRef.current
+        const newlyScanned: string[] = []
+        for (const m of fresh) {
+          const oldM = prev.find(p => p.id === m.id)
+          for (const a of m.attendance ?? []) {
+            if (a.attended) {
+              const wasAttended = oldM?.attendance?.find(p => p.name === a.name)?.attended
+              if (!wasAttended) newlyScanned.push(`${m.id}:${a.name}`)
+            }
+          }
+        }
+        if (newlyScanned.length > 0) {
+          setFlashedNames(prev => {
+            const next = new Set([...prev, ...newlyScanned])
+            setTimeout(() => {
+              setFlashedNames(s => {
+                const clean = new Set(s)
+                newlyScanned.forEach(n => clean.delete(n))
+                return clean
+              })
+            }, 3000)
+            return next
+          })
+        }
+
+        prevMeetingsRef.current = fresh
+        setMeetings(fresh)
+      } catch { /* ignore */ }
+    }, 10_000)
+    return () => clearInterval(id)
+  }, [])
 
   const people = useMemo(() => uniquePeople(events), [events])
 
@@ -872,25 +925,34 @@ export default function MeetingsPage() {
           const attended = (m.attendance ?? []).filter(a => a.attended)
           const total = (m.attendance ?? []).length
           const eventName = events.find(e => e.id === m.event_id)?.name
+          const isExpanded = expandedCards.has(m.id)
+          // Sort: attended (green) first, then pending
+          const sortedAttendance = [...(m.attendance ?? [])].sort((a, b) =>
+            (b.attended ? 1 : 0) - (a.attended ? 1 : 0)
+          )
           return (
             <div key={m.id} className="bg-[#111] border border-zinc-800 rounded-xl p-4 sm:p-5">
-              <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+              <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div className="flex-1 min-w-0">
                   <h2 className="font-semibold">{m.title}</h2>
                   <p className="text-xs text-zinc-500 mt-0.5">
                     {fmtDateTime(m.meeting_date)}
                     {eventName && <span className="ml-2">· {eventName}</span>}
                   </p>
-                  {m.notes && <p className="text-sm text-zinc-400 mt-2 whitespace-pre-wrap">{m.notes}</p>}
+                  {m.notes && <p className="text-sm text-zinc-400 mt-1.5 whitespace-pre-wrap">{m.notes}</p>}
                 </div>
-                <div className="flex gap-2 flex-shrink-0">
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${
-                    total > 0 && attended.length / total >= 0.8 ? 'bg-green-900/40 text-green-400 border border-green-800' :
-                    total > 0 && attended.length / total >= 0.5 ? 'bg-yellow-900/40 text-yellow-400 border border-yellow-800' :
-                    'bg-red-900/40 text-red-400 border border-red-800'
-                  }`}>
-                    {attended.length}/{total} attended
-                  </span>
+                <div className="flex gap-2 flex-shrink-0 flex-wrap">
+                  {/* Clickable badge to expand/collapse */}
+                  <button
+                    onClick={() => toggleCard(m.id)}
+                    className={`text-xs px-2 py-0.5 rounded-full border cursor-pointer transition-colors ${
+                      total > 0 && attended.length / total >= 0.8 ? 'bg-green-900/40 text-green-400 border-green-800 hover:bg-green-900/60' :
+                      total > 0 && attended.length / total >= 0.5 ? 'bg-yellow-900/40 text-yellow-400 border-yellow-800 hover:bg-yellow-900/60' :
+                      'bg-red-900/40 text-red-400 border-red-800 hover:bg-red-900/60'
+                    }`}
+                  >
+                    {attended.length}/{total} ✓ {isExpanded ? '▲' : '▼'}
+                  </button>
                   <button onClick={() => setQrMeetingId(m.id)}
                     className="text-xs border border-zinc-700 text-zinc-300 hover:border-blue-500/50 hover:text-blue-400 px-3 py-1 rounded-lg"
                     title="Show QR code for self check-in">
@@ -907,6 +969,34 @@ export default function MeetingsPage() {
                 </div>
               </div>
 
+              {/* Expandable attendance chips */}
+              {isExpanded && total > 0 && (
+                <div className="mt-3 pt-3 border-t border-zinc-800">
+                  <div className="flex flex-wrap gap-1.5">
+                    {sortedAttendance.map(a => {
+                      const flashKey = `${m.id}:${a.name}`
+                      const isFlashing = flashedNames.has(flashKey)
+                      return (
+                        <span
+                          key={a.name}
+                          className={`text-xs px-2.5 py-1 rounded-full font-medium transition-all duration-500 ${
+                            a.attended
+                              ? isFlashing
+                                ? 'bg-emerald-400 text-black scale-110 shadow-lg shadow-emerald-500/30'
+                                : 'bg-emerald-900/50 text-emerald-300 border border-emerald-700'
+                              : 'bg-zinc-800/80 text-zinc-500 border border-zinc-700'
+                          }`}
+                        >
+                          {a.attended ? '✓ ' : ''}{a.name}
+                        </span>
+                      )
+                    })}
+                  </div>
+                  <p className="text-[10px] text-zinc-600 mt-2">
+                    🟢 {attended.length} checked in · ⚪ {total - attended.length} pending · auto-updates every 10s
+                  </p>
+                </div>
+              )}
             </div>
           )
         })}
