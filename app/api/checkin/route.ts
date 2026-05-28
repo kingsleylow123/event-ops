@@ -22,7 +22,13 @@ export async function POST(req: NextRequest) {
   }
 
   const nameLower = name?.trim().toLowerCase() ?? ''
-  const phoneDigits = (phone ?? '').replace(/\D/g, '').slice(-8) // last 8 digits for fuzzy match
+
+  // Normalise phone: strip all non-digits, strip leading country code (60) to get local digits
+  const rawPhoneDigits = (phone ?? '').replace(/\D/g, '')
+  const phoneDigits = rawPhoneDigits.startsWith('60') ? rawPhoneDigits.slice(2) : rawPhoneDigits
+
+  // Phone must be at least 9 digits (Malaysian mobile = 10-11 digits)
+  const phoneProvided = phoneDigits.length >= 9
 
   const { data, error } = await supabase
     .from('attendees')
@@ -38,12 +44,20 @@ export async function POST(req: NextRequest) {
 
   const allAttendees = data ?? []
 
-  // Match by name OR phone — whichever is provided
+  // Name: fuzzy match (attendee types any variation of their name)
   const nameMatches = nameLower
     ? allAttendees.filter(a => (a.name ?? '').toLowerCase().includes(nameLower))
     : []
-  const phoneMatches = phoneDigits.length >= 6
-    ? allAttendees.filter(a => (a.phone ?? '').replace(/\D/g, '').includes(phoneDigits))
+
+  // Phone: EXACT match only — normalise stored phone same way, compare last digits
+  const phoneMatches = phoneProvided
+    ? allAttendees.filter(a => {
+        const stored = (a.phone ?? '').replace(/\D/g, '')
+        const storedLocal = stored.startsWith('60') ? stored.slice(2) : stored
+        // Must match exactly on the local digits (both ways, in case one is shorter)
+        return storedLocal === phoneDigits || stored === rawPhoneDigits ||
+          storedLocal.endsWith(phoneDigits) || phoneDigits.endsWith(storedLocal)
+      })
     : []
 
   // Merge & deduplicate
@@ -55,10 +69,10 @@ export async function POST(req: NextRequest) {
   })
 
   // If both provided and multiple matches, intersect (must match both)
-  if (nameLower && phoneDigits.length >= 6 && matches.length > 1) {
+  if (nameLower && phoneProvided && matches.length > 1) {
     const both = matches.filter(a =>
       (a.name ?? '').toLowerCase().includes(nameLower) &&
-      (a.phone ?? '').replace(/\D/g, '').includes(phoneDigits)
+      phoneMatches.some(p => p.id === a.id)
     )
     if (both.length > 0) matches = both
   }
