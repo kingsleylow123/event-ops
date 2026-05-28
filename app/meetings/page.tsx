@@ -103,6 +103,7 @@ export default function MeetingsPage() {
   const [logPostFor, setLogPostFor] = useState<string | null>(null)
   const [participants, setParticipants] = useState<{ name: string }[]>([])
   const [addingParticipant, setAddingParticipant] = useState(false)
+  const [qrMeetingId, setQrMeetingId] = useState<string | null>(null)
 
   async function loadAll() {
     try {
@@ -831,6 +832,43 @@ export default function MeetingsPage() {
         )
       })()}
 
+      {/* QR Code Modal */}
+      {qrMeetingId && (() => {
+        const meeting = meetings.find(m => m.id === qrMeetingId)
+        const checkinUrl = `https://event-ops-six.vercel.app/meeting-checkin/${qrMeetingId}`
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(checkinUrl)}`
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center px-4"
+            style={{ background: 'rgba(0,0,0,0.75)' }}
+            onClick={() => setQrMeetingId(null)}
+          >
+            <div
+              className="bg-[#111] border border-zinc-700 rounded-2xl p-6 max-w-xs w-full text-center space-y-4"
+              onClick={e => e.stopPropagation()}
+            >
+              <h3 className="text-white font-semibold text-sm">{meeting?.title ?? 'Meeting Check-in'}</h3>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={qrUrl}
+                alt="QR code for meeting check-in"
+                width={250}
+                height={250}
+                className="mx-auto rounded-xl"
+                style={{ background: '#fff', padding: '8px' }}
+              />
+              <p className="text-zinc-500 text-xs break-all">{checkinUrl}</p>
+              <button
+                onClick={() => setQrMeetingId(null)}
+                className="w-full py-2.5 rounded-xl text-sm font-medium border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )
+      })()}
+
       <div className="space-y-3">
         {filtered.length === 0 && !showForm && (
           <div className="text-center text-zinc-500 py-20">
@@ -860,6 +898,11 @@ export default function MeetingsPage() {
                   }`}>
                     {attended.length}/{total} attended
                   </span>
+                  <button onClick={() => setQrMeetingId(m.id)}
+                    className="text-xs border border-zinc-700 text-zinc-300 hover:border-blue-500/50 hover:text-blue-400 px-3 py-1 rounded-lg"
+                    title="Show QR code for self check-in">
+                    📲
+                  </button>
                   <button onClick={() => openEdit(m)}
                     className="text-xs border border-zinc-700 text-zinc-300 hover:border-amber-500/50 hover:text-amber-400 px-3 py-1 rounded-lg">
                     Edit
