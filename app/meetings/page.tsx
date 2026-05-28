@@ -915,13 +915,29 @@ export default function MeetingsPage() {
         )
       })()}
 
-      <div className="space-y-3">
-        {filtered.length === 0 && !showForm && (
-          <div className="text-center text-zinc-500 py-20">
-            {meetings.length === 0 ? 'No activities yet. Click + New Activity to start.' : 'No activities match your search.'}
-          </div>
-        )}
-        {filtered.map(m => {
+      {filtered.length === 0 && !showForm && (
+        <div className="text-center text-zinc-500 py-20">
+          {meetings.length === 0 ? 'No activities yet. Click + New Activity to start.' : 'No activities match your search.'}
+        </div>
+      )}
+
+      {/* Split: Facilitator left, Content Creator right */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {(['facilitator', 'content_creator'] as const).map(colCat => {
+          const colMeetings = filtered.filter(m => (m.meeting_category ?? 'facilitator') === colCat)
+          const colLabel = colCat === 'facilitator' ? 'Facilitator' : 'Content Creator'
+          const colColor = colCat === 'facilitator' ? 'text-emerald-400' : 'text-pink-400'
+          if (colMeetings.length === 0 && filtered.length > 0) return (
+            <div key={colCat} className="space-y-3">
+              <p className={`text-xs font-semibold uppercase tracking-wider ${colColor}`}>{colLabel}</p>
+              <div className="text-zinc-600 text-sm text-center py-8 border border-dashed border-zinc-800 rounded-xl">No {colLabel.toLowerCase()} sessions yet</div>
+            </div>
+          )
+          if (colMeetings.length === 0) return null
+          return (
+            <div key={colCat} className="space-y-3">
+              <p className={`text-xs font-semibold uppercase tracking-wider ${colColor}`}>{colLabel}</p>
+              {colMeetings.map(m => {
           const cat = m.meeting_category ?? 'facilitator'
           const roleByName: Record<string, string> = {}
           for (const p of people) roleByName[p.name.toLowerCase()] = p.role
@@ -1029,6 +1045,9 @@ export default function MeetingsPage() {
                   </p>
                 </div>
               )}
+              </div>
+            )
+          })}
             </div>
           )
         })}
