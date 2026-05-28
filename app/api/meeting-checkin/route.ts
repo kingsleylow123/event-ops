@@ -30,10 +30,6 @@ export async function POST(req: NextRequest) {
 
   const matches = attendance.filter(a => a.name.toLowerCase().includes(nameLower))
 
-  if (matches.length === 0) {
-    return NextResponse.json({ success: false, error: 'not_found' }, { headers: NO_STORE_HEADERS })
-  }
-
   if (matches.length > 1) {
     return NextResponse.json(
       { success: false, error: 'multiple', names: matches.map(a => a.name) },
@@ -41,20 +37,29 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const matched = matches[0]
+  let finalName: string
+  let updatedAttendance: MeetingAttendee[]
 
-  if (matched.attended) {
-    return NextResponse.json(
-      { success: false, error: 'already_checked_in', name: matched.name },
-      { headers: NO_STORE_HEADERS }
+  if (matches.length === 0) {
+    // Name not found — AUTO-CREATE a new attendance entry
+    const newEntry: MeetingAttendee = { name: name.trim(), attended: true, notes: null }
+    updatedAttendance = [...attendance, newEntry]
+    finalName = name.trim()
+  } else {
+    const matched = matches[0]
+    if (matched.attended) {
+      return NextResponse.json(
+        { success: false, error: 'already_checked_in', name: matched.name },
+        { headers: NO_STORE_HEADERS }
+      )
+    }
+    updatedAttendance = attendance.map(a =>
+      a.name.toLowerCase() === matched.name.toLowerCase()
+        ? { ...a, attended: true }
+        : a
     )
+    finalName = matched.name
   }
-
-  const updatedAttendance = attendance.map(a =>
-    a.name.toLowerCase() === matched.name.toLowerCase()
-      ? { ...a, attended: true }
-      : a
-  )
 
   const { error: updateError } = await supabase
     .from('meetings')
@@ -65,5 +70,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'db_error', detail: updateError.message }, { status: 500, headers: NO_STORE_HEADERS })
   }
 
-  return NextResponse.json({ success: true, name: matched.name }, { headers: NO_STORE_HEADERS })
+  return NextResponse.json({ success: true, name: finalName }, { headers: NO_STORE_HEADERS })
 }
