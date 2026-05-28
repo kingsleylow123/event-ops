@@ -656,21 +656,6 @@ export default function MeetingsPage() {
                     <img src={qrUrl} alt="QR" width={130} height={130} style={{ background: '#fff', padding: 5, borderRadius: 8 }} />
                   </div>
 
-                  {/* Session picker */}
-                  <select
-                    value={qrSelectedMeetingId || selMeeting?.id}
-                    onChange={e => {
-                      setQrSelectedMeetingId(e.target.value)
-                      const m = meetings.find(x => x.id === e.target.value)
-                      if (m) setQrTitle(m.title)
-                    }}
-                    className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5 text-white text-xs"
-                  >
-                    {meetings.map(m => (
-                      <option key={m.id} value={m.id}>{m.title}</option>
-                    ))}
-                  </select>
-
                   {/* Editable title */}
                   <input
                     type="text"
