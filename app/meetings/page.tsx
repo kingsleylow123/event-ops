@@ -104,6 +104,9 @@ export default function MeetingsPage() {
   const [participants, setParticipants] = useState<{ name: string }[]>([])
   const [addingParticipant, setAddingParticipant] = useState(false)
   const [qrMeetingId, setQrMeetingId] = useState<string | null>(null)
+  const [showQRPanel, setShowQRPanel] = useState(false)
+  const [qrTitle, setQrTitle] = useState('')
+  const [qrSelectedMeetingId, setQrSelectedMeetingId] = useState('')
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set())
   const [flashedNames, setFlashedNames] = useState<Set<string>>(new Set())
   const prevMeetingsRef = useRef<Meeting[]>([])
@@ -426,12 +429,94 @@ export default function MeetingsPage() {
             placeholder="Search by title, person, date..."
             className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm w-full sm:w-64"
           />
+          <button onClick={() => {
+              setShowQRPanel(v => !v)
+              if (!qrSelectedMeetingId && meetings.length > 0) {
+                setQrSelectedMeetingId(meetings[0].id)
+                setQrTitle(meetings[0].title)
+              }
+            }}
+            className="bg-zinc-800 hover:bg-zinc-700 text-white text-sm px-4 py-2 rounded-lg w-full sm:w-auto flex items-center gap-1.5">
+            📲 QR Check-in
+          </button>
           <button onClick={openCreate}
             className="bg-amber-500 hover:bg-amber-400 text-black font-semibold text-sm px-4 py-2 rounded-lg w-full sm:w-auto">
             + New Activity
           </button>
         </div>
       </div>
+
+      {/* QR Generator Panel */}
+      {showQRPanel && meetings.length > 0 && (() => {
+        const selMeeting = meetings.find(m => m.id === qrSelectedMeetingId) ?? meetings[0]
+        const titleToUse = qrTitle.trim() || selMeeting?.title || 'Check-in'
+        const checkinUrl = `https://event-ops-six.vercel.app/meeting-checkin/${selMeeting?.id}?title=${encodeURIComponent(titleToUse)}`
+        const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(checkinUrl)}`
+        return (
+          <div className="bg-[#111] border border-zinc-700 rounded-xl p-5 flex flex-col sm:flex-row gap-6 items-start">
+            {/* QR code */}
+            <div className="flex-shrink-0 flex flex-col items-center gap-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={qrUrl} alt="QR" width={180} height={180} className="rounded-xl" style={{ background: '#fff', padding: 6 }} />
+              <p className="text-[10px] text-zinc-600 text-center max-w-[180px] break-all">{checkinUrl}</p>
+            </div>
+            {/* Controls */}
+            <div className="flex-1 space-y-4">
+              <div>
+                <label className="text-xs text-zinc-500 uppercase tracking-wider block mb-1">Session</label>
+                <select
+                  value={qrSelectedMeetingId || selMeeting?.id}
+                  onChange={e => {
+                    setQrSelectedMeetingId(e.target.value)
+                    const m = meetings.find(x => x.id === e.target.value)
+                    if (m) setQrTitle(m.title)
+                  }}
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm"
+                >
+                  {meetings.map(m => (
+                    <option key={m.id} value={m.id}>
+                      {m.title} — {fmtDate(m.meeting_date)} [{CATEGORY_LABEL[m.meeting_category as MeetingCategory] ?? m.meeting_category}]
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-zinc-500 uppercase tracking-wider block mb-1">Display Title on Check-in Page</label>
+                <input
+                  type="text"
+                  value={qrTitle}
+                  onChange={e => setQrTitle(e.target.value)}
+                  placeholder={selMeeting?.title ?? 'e.g. 1st June Workshop'}
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500"
+                />
+                <p className="text-[10px] text-zinc-600 mt-1">This is the title team members see when they scan</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    const w = window.open('', '_blank', 'width=500,height=600')
+                    if (!w) return
+                    w.document.write(`<!DOCTYPE html><html><head><title>Check-in QR</title><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,sans-serif;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:40px;}img{width:280px;height:280px;}h1{font-size:24px;font-weight:800;color:#111;margin-top:20px;text-align:center;}p{font-size:14px;color:#666;margin-top:8px;text-align:center;}.badge{margin-top:14px;background:#fff4e6;border:2px solid #e8563a;color:#e8563a;font-weight:700;font-size:12px;padding:5px 16px;border-radius:999px;}</style></head><body><img src="https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(checkinUrl)}" /><h1>📲 Please scan your attendance</h1><p>${titleToUse}</p><div class="badge">Claude Malaysia</div><script>window.onload=()=>window.print()</script></body></html>`)
+                    w.document.close()
+                  }}
+                  className="bg-zinc-800 hover:bg-zinc-700 text-white text-sm px-4 py-2 rounded-lg"
+                >
+                  🖨 Print
+                </button>
+                <button
+                  onClick={() => navigator.clipboard.writeText(checkinUrl)}
+                  className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-sm px-4 py-2 rounded-lg"
+                >
+                  Copy Link
+                </button>
+                <button onClick={() => setShowQRPanel(false)} className="text-zinc-500 hover:text-zinc-300 text-sm px-3 py-2">
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Top 5 per role — leaderboard at the top */}
       {personStats.length > 0 && (() => {

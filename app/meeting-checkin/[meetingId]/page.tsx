@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
 type CheckinState =
@@ -15,7 +15,9 @@ type CheckinState =
 
 export default function MeetingCheckinPage() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const meetingId = params.meetingId as string
+  const customTitle = searchParams.get('title')
 
   const [meetingTitle, setMeetingTitle] = useState<string | null>(null)
   const [name, setName] = useState('')
@@ -95,8 +97,10 @@ export default function MeetingCheckinPage() {
           style={{ background: '#e8563a22', color: '#e8563a' }}>
           CHECK-IN
         </div>
-        <h1 className="text-3xl font-bold text-white leading-tight">Activity Session</h1>
-        {meetingTitle && (
+        <h1 className="text-3xl font-bold text-white leading-tight">
+          {customTitle || meetingTitle || 'Activity Session'}
+        </h1>
+        {!customTitle && meetingTitle && (
           <p className="text-zinc-400 text-sm mt-2">{meetingTitle}</p>
         )}
       </div>
