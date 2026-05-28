@@ -752,82 +752,75 @@ export default function MeetingsPage() {
 
       {/* Per-person attendance summary — split into separate sections per role */}
       {personStats.length > 0 && (() => {
-        const ROLE_SECTION_ORDER: { role: string; label: string; color: string; bg: string }[] = [
-          { role: 'facilitator', label: 'Facilitator', color: 'text-emerald-400', bg: 'border-emerald-500/30' },
-          { role: 'content_creator', label: 'Content Creator', color: 'text-pink-400', bg: 'border-pink-500/30' },
-          { role: 'videographer', label: 'Videographer', color: 'text-sky-400', bg: 'border-sky-500/30' },
-          { role: 'speaker', label: 'Speaker', color: 'text-amber-400', bg: 'border-amber-500/30' },
-          { role: '', label: 'Other', color: 'text-zinc-400', bg: 'border-zinc-700' },
-        ]
-        const sections = ROLE_SECTION_ORDER
-          .map(s => ({ ...s, members: personStats.filter(p => (p.role || '') === s.role) }))
-          .filter(s => s.members.length > 0)
+        const ROLE_ORDER = ['facilitator','content_creator','videographer','speaker','']
+        const ROLE_LABELS: Record<string,string> = { facilitator:'Facilitator', content_creator:'Content Creator', videographer:'Videographer', speaker:'Speaker', '':'Other' }
+        const ROLE_COLORS: Record<string,string> = { facilitator:'bg-emerald-900/40 text-emerald-400 border border-emerald-800', content_creator:'bg-pink-900/40 text-pink-400 border border-pink-800', videographer:'bg-sky-900/40 text-sky-400 border border-sky-800', speaker:'bg-amber-900/40 text-amber-400 border border-amber-800', '':'bg-zinc-800 text-zinc-400 border border-zinc-700' }
+
+        const sorted = [...personStats].sort((a,b) => {
+          const ai = ROLE_ORDER.indexOf(a.role||'')
+          const bi = ROLE_ORDER.indexOf(b.role||'')
+          if (ai !== bi) return (ai<0?99:ai) - (bi<0?99:bi)
+          return a.name.localeCompare(b.name)
+        })
 
         return (
-          <div className="space-y-4">
-            {sections.map(section => (
-              <section key={section.label} className={`bg-[#111] border ${section.bg} rounded-xl p-5`}>
-                <div className="flex items-baseline justify-between mb-4 pb-3 border-b border-zinc-800">
-                  <p className={`text-sm uppercase tracking-wider font-semibold ${section.color}`}>
-                    {section.label} consistency
-                  </p>
-                  <p className="text-xs text-zinc-600">{section.members.length} {section.members.length === 1 ? 'person' : 'people'}</p>
-                </div>
-                <div className="space-y-2">
-                  {section.members.map(p => {
+          <div className="bg-[#111] border border-zinc-800 rounded-xl overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800">
+              <p className="text-sm font-semibold text-zinc-300 uppercase tracking-wider">Team Consistency</p>
+              <p className="text-xs text-zinc-600">{sorted.length} members</p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-zinc-800">
+                    <th className="text-left text-[10px] uppercase tracking-wider text-zinc-500 px-5 py-2">#</th>
+                    <th className="text-left text-[10px] uppercase tracking-wider text-zinc-500 px-3 py-2">Name</th>
+                    <th className="text-left text-[10px] uppercase tracking-wider text-zinc-500 px-3 py-2">Role</th>
+                    <th className="text-left text-[10px] uppercase tracking-wider text-zinc-500 px-3 py-2">Sessions</th>
+                    <th className="text-right text-[10px] uppercase tracking-wider text-zinc-500 px-3 py-2">%</th>
+                    <th className="text-right text-[10px] uppercase tracking-wider text-zinc-500 px-3 py-2">Streak</th>
+                    <th className="text-right text-[10px] uppercase tracking-wider text-zinc-500 px-3 py-2 hidden sm:table-cell">Last Seen</th>
+                    <th className="text-right text-[10px] uppercase tracking-wider text-zinc-500 px-5 py-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sorted.map((p, idx) => {
                     const status = statusFor(p.rate, p.total)
-                    const last10 = p.history.slice(-10)
+                    const roleKey = p.role || ''
                     return (
-                      <div key={p.name} className="bg-zinc-950/60 border border-zinc-800 rounded-lg p-3">
-                        <div className="flex items-center justify-between gap-3 flex-wrap">
-                          <div className="flex items-center gap-2 flex-wrap min-w-0 flex-1">
-                            <p className="text-white font-medium">{p.name}</p>
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${status.color}`}>{status.label}</span>
-                          </div>
-
-                          <div className="flex items-center gap-1 flex-shrink-0" title="Left = older · Right = most recent">
-                            {Array.from({ length: 10 - last10.length }).map((_, i) => (
-                              <span key={`pad-${i}`} className="w-3 h-3 rounded-full bg-zinc-900 border border-zinc-800" />
-                            ))}
-                            {last10.map((h, i) => (
-                              <span key={i}
-                                title={`${h.title} · ${fmtDateTime(h.meetingDate)} · ${h.attended ? 'Attended' : 'Missed'}`}
-                                className={`w-3 h-3 rounded-full ${h.attended ? 'bg-emerald-500' : 'bg-red-500/70'}`} />
-                            ))}
-                          </div>
-
-                          <div className="flex items-center gap-4 flex-shrink-0">
-                            <div className="text-right">
-                              <p className={`text-lg font-bold ${p.rate >= 80 ? 'text-emerald-400' : p.rate >= 50 ? 'text-amber-400' : 'text-red-400'}`}>
-                                {p.rate}%
-                              </p>
-                              <p className="text-[10px] text-zinc-500">{p.attended}/{p.total}</p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-sm text-white">🔥 {p.currentStreak}</p>
-                              <p className="text-[10px] text-zinc-500">streak</p>
-                            </div>
-                            <div className="text-right hidden sm:block">
-                              <p className="text-xs text-zinc-400">{daysAgo(p.lastAttendedDate)}</p>
-                              <p className="text-[10px] text-zinc-500">last seen</p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                      <tr key={p.name} className="border-b border-zinc-800/50 hover:bg-zinc-900/40 transition-colors">
+                        <td className="px-5 py-3 text-zinc-600 text-sm">{idx + 1}</td>
+                        <td className="px-3 py-3">
+                          <p className="text-white font-medium text-sm">{p.name}</p>
+                        </td>
+                        <td className="px-3 py-3">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${ROLE_COLORS[roleKey]}`}>
+                            {ROLE_LABELS[roleKey] ?? roleKey}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3">
+                          <p className="text-zinc-400 text-sm">{p.attended}/{p.total}</p>
+                        </td>
+                        <td className="px-3 py-3 text-right">
+                          <p className={`text-sm font-bold ${p.rate >= 80 ? 'text-emerald-400' : p.rate >= 50 ? 'text-amber-400' : 'text-red-400'}`}>
+                            {p.rate}%
+                          </p>
+                        </td>
+                        <td className="px-3 py-3 text-right">
+                          <p className="text-sm text-white">🔥 {p.currentStreak}</p>
+                        </td>
+                        <td className="px-3 py-3 text-right hidden sm:table-cell">
+                          <p className="text-xs text-zinc-400">{daysAgo(p.lastAttendedDate)}</p>
+                        </td>
+                        <td className="px-5 py-3 text-right">
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${status.color}`}>{status.label}</span>
+                        </td>
+                      </tr>
                     )
                   })}
-                </div>
-              </section>
-            ))}
-            <p className="text-[10px] text-zinc-600 text-center">
-              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500 align-middle mr-1" /> attended
-              <span className="mx-2">·</span>
-              <span className="inline-block w-2 h-2 rounded-full bg-red-500/70 align-middle mr-1" /> missed
-              <span className="mx-2">·</span>
-              <span className="inline-block w-2 h-2 rounded-full bg-zinc-900 border border-zinc-800 align-middle mr-1" /> no meeting yet
-              <span className="mx-2">·</span>
-              <span className="text-emerald-400">Consistent</span> ≥ 80% · <span className="text-amber-400">Inconsistent</span> 50-79% · <span className="text-red-400">Disengaged</span> &lt; 50%
-            </p>
+                </tbody>
+              </table>
+            </div>
           </div>
         )
       })()}
