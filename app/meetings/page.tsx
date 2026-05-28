@@ -107,6 +107,21 @@ export default function MeetingsPage() {
   const [showQRPanel, setShowQRPanel] = useState(false)
   const [qrTitle, setQrTitle] = useState('')
   const [qrSelectedMeetingId, setQrSelectedMeetingId] = useState('')
+  // Per-meeting saved titles (localStorage)
+  const [qrTitles, setQrTitles] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('qr_titles')
+      if (saved) setQrTitles(JSON.parse(saved))
+    } catch { /* ignore */ }
+  }, [])
+
+  function saveQrTitle(meetingId: string, title: string) {
+    const next = { ...qrTitles, [meetingId]: title }
+    setQrTitles(next)
+    try { localStorage.setItem('qr_titles', JSON.stringify(next)) } catch { /* ignore */ }
+  }
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set())
   const [flashedNames, setFlashedNames] = useState<Set<string>>(new Set())
   const prevMeetingsRef = useRef<Meeting[]>([])
@@ -640,28 +655,34 @@ export default function MeetingsPage() {
               )
             })()}
 
-            {/* 4th box: QR Check-in Generator */}
-            {meetings.length > 0 && (() => {
-              const selMeeting = meetings.find(m => m.id === qrSelectedMeetingId) ?? meetings[0]
-              const titleToUse = qrTitle.trim() || selMeeting?.title || 'Check-in'
-              const checkinUrl = `https://event-ops-six.vercel.app/meeting-checkin/${selMeeting?.id}?title=${encodeURIComponent(titleToUse)}`
+          </div>
+        )
+      })()}
+
+      {/* QR Check-in — one card per meeting */}
+      {meetings.length > 0 && (
+        <div>
+          <p className="text-xs uppercase tracking-wider font-semibold text-zinc-500 mb-3">📲 QR Check-in</p>
+          <div className="flex flex-wrap gap-3">
+            {meetings.map(m => {
+              const savedTitle = qrTitles[m.id] ?? ''
+              const titleToUse = savedTitle.trim() || m.title || 'Check-in'
+              const checkinUrl = `https://event-ops-six.vercel.app/meeting-checkin/${m.id}?title=${encodeURIComponent(titleToUse)}`
               const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(checkinUrl)}`
               return (
-                <div className="bg-[#111] border border-zinc-700/50 rounded-xl p-4 flex flex-col gap-3">
-                  <p className="text-xs uppercase tracking-wider font-semibold text-zinc-400">📲 QR Check-in</p>
-
+                <div key={m.id} className="bg-[#111] border border-zinc-800 rounded-xl p-4 flex flex-col gap-3 w-full sm:w-56">
                   {/* QR image */}
                   <div className="flex justify-center">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={qrUrl} alt="QR" width={130} height={130} style={{ background: '#fff', padding: 5, borderRadius: 8 }} />
                   </div>
 
-                  {/* Editable title */}
+                  {/* Editable title — saved to localStorage on change */}
                   <input
                     type="text"
-                    value={qrTitle}
-                    onChange={e => setQrTitle(e.target.value)}
-                    placeholder="e.g. 1st June Workshop"
+                    value={savedTitle}
+                    onChange={e => saveQrTitle(m.id, e.target.value)}
+                    placeholder={m.title}
                     className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none focus:border-amber-500"
                   />
 
@@ -677,16 +698,19 @@ export default function MeetingsPage() {
                       className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white text-xs py-1.5 rounded-lg"
                     >🖨 Print</button>
                     <button
-                      onClick={() => navigator.clipboard.writeText(checkinUrl)}
+                      onClick={() => {
+                        saveQrTitle(m.id, savedTitle)
+                        navigator.clipboard.writeText(checkinUrl)
+                      }}
                       className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs py-1.5 rounded-lg"
-                    >Copy</button>
+                    >💾 Save & Copy</button>
                   </div>
                 </div>
               )
-            })()}
+            })}
           </div>
-        )
-      })()}
+        </div>
+      )}
 
       {showForm && (
         <div className="bg-[#111] border border-amber-500/50 rounded-xl p-4 sm:p-5">
