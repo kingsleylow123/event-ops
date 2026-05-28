@@ -922,19 +922,51 @@ export default function MeetingsPage() {
           </div>
         )}
         {filtered.map(m => {
-          const attended = (m.attendance ?? []).filter(a => a.attended)
-          const total = (m.attendance ?? []).length
+          const cat = m.meeting_category ?? 'facilitator'
+          const roleByName: Record<string, string> = {}
+          for (const p of people) roleByName[p.name.toLowerCase()] = p.role
+
+          // Filter attendance to only people relevant to this meeting's category
+          const relevantAttendance = cat === 'mixed'
+            ? (m.attendance ?? [])
+            : (m.attendance ?? []).filter(a => {
+                const role = roleByName[a.name.toLowerCase()] ?? ''
+                return CATEGORY_FOR_ROLE[role] === cat
+              })
+
+          const attended = relevantAttendance.filter(a => a.attended)
+          const total = relevantAttendance.length
           const eventName = events.find(e => e.id === m.event_id)?.name
           const isExpanded = expandedCards.has(m.id)
+
           // Sort: attended (green) first, then pending
-          const sortedAttendance = [...(m.attendance ?? [])].sort((a, b) =>
+          const sortedAttendance = [...relevantAttendance].sort((a, b) =>
             (b.attended ? 1 : 0) - (a.attended ? 1 : 0)
           )
+
+          const CAT_BADGE: Record<string, string> = {
+            facilitator: 'bg-emerald-900/30 text-emerald-400 border-emerald-800',
+            content_creator: 'bg-pink-900/30 text-pink-400 border-pink-800',
+            videographer: 'bg-sky-900/30 text-sky-400 border-sky-800',
+            mixed: 'bg-zinc-800 text-zinc-400 border-zinc-700',
+          }
+          const CAT_LABEL: Record<string, string> = {
+            facilitator: 'Facilitator',
+            content_creator: 'Content Creator',
+            videographer: 'Videographer',
+            mixed: 'Mixed',
+          }
+
           return (
             <div key={m.id} className="bg-[#111] border border-zinc-800 rounded-xl p-4 sm:p-5">
               <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div className="flex-1 min-w-0">
-                  <h2 className="font-semibold">{m.title}</h2>
+                  <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                    <h2 className="font-semibold">{m.title}</h2>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full border font-semibold ${CAT_BADGE[cat] ?? CAT_BADGE.mixed}`}>
+                      {CAT_LABEL[cat] ?? cat}
+                    </span>
+                  </div>
                   <p className="text-xs text-zinc-500 mt-0.5">
                     {fmtDateTime(m.meeting_date)}
                     {eventName && <span className="ml-2">· {eventName}</span>}
