@@ -657,9 +657,9 @@ export default function MeetingsPage() {
 
             {/* 4th box: QR Check-in */}
             {meetings.length > 0 && (() => {
-              // Always use the most recent meeting by date
+              // Always use the most recently CREATED meeting
               const latestMeeting = [...meetings].sort((a, b) =>
-                new Date(b.meeting_date).getTime() - new Date(a.meeting_date).getTime()
+                new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
               )[0]
               const savedTitle = qrTitles['main'] ?? ''
               const titleToUse = savedTitle.trim() || latestMeeting.title || 'Check-in'
@@ -1005,12 +1005,15 @@ export default function MeetingsPage() {
           for (const p of people) roleByName[p.name.toLowerCase()] = p.role
 
           // Filter attendance to only people relevant to this meeting's category
-          const relevantAttendance = cat === 'mixed'
-            ? (m.attendance ?? [])
-            : (m.attendance ?? []).filter(a => {
+          // Fall back to all attendees if role filtering returns nothing (e.g. new meeting)
+          const allAttendance = m.attendance ?? []
+          const filtered_by_role = cat === 'mixed'
+            ? allAttendance
+            : allAttendance.filter(a => {
                 const role = roleByName[a.name.toLowerCase()] ?? ''
                 return CATEGORY_FOR_ROLE[role] === cat
               })
+          const relevantAttendance = filtered_by_role.length > 0 ? filtered_by_role : allAttendance
 
           const attended = relevantAttendance.filter(a => a.attended)
           const total = relevantAttendance.length
