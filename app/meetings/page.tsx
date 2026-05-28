@@ -246,7 +246,7 @@ export default function MeetingsPage() {
   }
 
   async function deleteMeeting(id: string) {
-    if (!confirm('Delete this meeting?')) return
+    if (!confirm('Delete this activity?')) return
     const res = await fetch(`/api/meetings?id=${id}`, { method: 'DELETE' })
     if (res.ok) setMeetings(prev => prev.filter(m => m.id !== id))
   }
@@ -375,7 +375,7 @@ export default function MeetingsPage() {
           />
           <button onClick={openCreate}
             className="bg-amber-500 hover:bg-amber-400 text-black font-semibold text-sm px-4 py-2 rounded-lg w-full sm:w-auto">
-            + New Meeting
+            + New Activity
           </button>
         </div>
       </div>
@@ -400,7 +400,7 @@ export default function MeetingsPage() {
                     🏆 Top 3 {r.label}
                   </p>
                   {!hasData ? (
-                    <p className="text-xs text-zinc-600 italic">No meeting data yet for this category.</p>
+                    <p className="text-xs text-zinc-600 italic">No activity data yet.</p>
                   ) : (
                     <ol className="space-y-1">
                       {top5.map((p, i) => (
@@ -589,7 +589,7 @@ export default function MeetingsPage() {
 
       {showForm && (
         <div className="bg-[#111] border border-amber-500/50 rounded-xl p-4 sm:p-5">
-          <h2 className="font-semibold mb-3">{editingId ? 'Edit Meeting' : 'New Meeting'}</h2>
+          <h2 className="font-semibold mb-3">{editingId ? 'Edit Activity' : 'New Activity'}</h2>
           <form onSubmit={submitMeeting} className="space-y-3">
             <input required value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
               placeholder="Title (e.g. June 1 prep call) *"
@@ -872,7 +872,7 @@ export default function MeetingsPage() {
       <div className="space-y-3">
         {filtered.length === 0 && !showForm && (
           <div className="text-center text-zinc-500 py-20">
-            {meetings.length === 0 ? 'No meetings yet. Click + New Meeting to start.' : 'No meetings match your search.'}
+            {meetings.length === 0 ? 'No activities yet. Click + New Activity to start.' : 'No activities match your search.'}
           </div>
         )}
         {filtered.map(m => {
