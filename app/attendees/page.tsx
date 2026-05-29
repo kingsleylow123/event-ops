@@ -15,8 +15,13 @@ const METHOD_LABELS: Record<PaymentMethod, string> = {
   free: 'Free',
 }
 
+function eventLabel(ev: Event): string {
+  return ev.name
+}
+
 export default function AttendeesPage() {
-  const [event, setEvent] = useState<Event | null>(null)
+  const [events, setEvents] = useState<Event[]>([])
+  const [selectedEventId, setSelectedEventId] = useState<string>('')
   const [attendees, setAttendees] = useState<Attendee[]>([])
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
@@ -25,6 +30,9 @@ export default function AttendeesPage() {
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [filterTicket, setFilterTicket] = useState<string>('all')
   const [filterAttendance, setFilterAttendance] = useState<string>('all')
+  const [showQRModal, setShowQRModal] = useState(false)
+
+  const event = events.find(e => e.id === selectedEventId) ?? null
 
   const [form, setForm] = useState({
     name: '', phone: '', email: '',
@@ -35,16 +43,15 @@ export default function AttendeesPage() {
     notes: '',
   })
 
-  async function loadData() {
+  async function loadEvents() {
     try {
-      const evRes = await fetch('/api/events')
+      const evRes = await fetch('/api/events', { cache: 'no-store' })
       if (!evRes.ok) throw new Error()
-      const events: Event[] = await evRes.json()
-      const active = events.find(e => e.is_active) ?? null
-      setEvent(active)
-      if (active) {
-        const res = await fetch(`/api/attendees?event_id=${active.id}`)
-        if (res.ok) setAttendees(await res.json())
+      const list: Event[] = await evRes.json()
+      setEvents(list)
+      if (!selectedEventId) {
+        const active = list.find(e => e.is_active) ?? list[0] ?? null
+        if (active) setSelectedEventId(active.id)
       }
     } catch {
       // db not configured yet
@@ -53,23 +60,38 @@ export default function AttendeesPage() {
     }
   }
 
-  useEffect(() => { loadData() }, [])
+  async function loadAttendees(eventId: string) {
+    try {
+      const res = await fetch(`/api/attendees?event_id=${eventId}`, { cache: 'no-store' })
+      if (res.ok) setAttendees(await res.json())
+    } catch {
+      // ignore
+    }
+  }
+
+  useEffect(() => { loadEvents() }, [])
+
+  useEffect(() => {
+    if (selectedEventId) loadAttendees(selectedEventId)
+  }, [selectedEventId])
 
   async function syncStripe() {
-    if (!event) return
     setSyncing(true)
     setSyncMsg('')
     const res = await fetch('/api/stripe/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ event_id: event.id }),
+      body: JSON.stringify({}),
     })
     const data = await res.json()
     if (data.error) {
       setSyncMsg(`Error: ${data.error}`)
     } else {
-      setSyncMsg(`Synced: ${data.added} added, ${data.skipped} skipped`)
-      await loadData()
+      const parts = [`${data.added} added`, `${data.skipped} skipped`]
+      if (data.unmatched) parts.push(`${data.unmatched} unmatched`)
+      setSyncMsg(`Synced: ${parts.join(', ')}`)
+      await loadEvents()
+      if (selectedEventId) await loadAttendees(selectedEventId)
     }
     setSyncing(false)
   }
@@ -145,18 +167,37 @@ export default function AttendeesPage() {
   if (loading) return <div className="text-zinc-500 mt-20 text-center">Loading...</div>
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3 sm:space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-bold">Attendees</h1>
-          {event && <p className="text-sm text-zinc-400">{event.name}</p>}
+          {event && (
+            <p className="text-sm text-zinc-400">{eventLabel(event)}</p>
+          )}
         </div>
         <div className="flex gap-2 flex-wrap">
+          {events.length > 1 && (
+            <select
+              value={selectedEventId}
+              onChange={e => setSelectedEventId(e.target.value)}
+              className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm"
+            >
+              {events.map(ev => (
+                <option key={ev.id} value={ev.id}>{eventLabel(ev)}</option>
+              ))}
+            </select>
+          )}
           {syncMsg && <span className="text-xs text-zinc-400 self-center">{syncMsg}</span>}
-          <button onClick={syncStripe} disabled={syncing || !event}
+          <button onClick={syncStripe} disabled={syncing}
             className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg">
             {syncing ? 'Syncing...' : '⚡ Sync Stripe'}
           </button>
+          {selectedEventId && (
+            <button onClick={() => setShowQRModal(true)}
+              className="bg-zinc-800 hover:bg-zinc-700 text-white text-sm px-4 py-2 rounded-lg flex items-center gap-1.5">
+              <span>📲</span> QR Check-in
+            </button>
+          )}
           <button onClick={() => setShowModal(true)} disabled={!event}
             className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-semibold text-sm px-4 py-2 rounded-lg">
             + Add Attendee
@@ -165,7 +206,7 @@ export default function AttendeesPage() {
       </div>
 
       {/* Totals bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {[
           { label: 'Total Participants', value: attendees.length, color: 'text-white', border: 'border-amber-500/50' },
           { label: 'Paid', value: totalPaid, color: 'text-green-400', border: 'border-zinc-800' },
@@ -205,13 +246,14 @@ export default function AttendeesPage() {
 
       {/* Table */}
       <div className="bg-[#111] border border-zinc-800 rounded-xl overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-sm min-w-[640px]">
           <thead>
             <tr className="text-left text-zinc-500 border-b border-zinc-800">
               <th className="px-4 py-3">Name</th>
               <th className="px-4 py-3">Phone</th>
               <th className="px-4 py-3">Ticket</th>
               <th className="px-4 py-3 text-right">Amount</th>
+              <th className="px-4 py-3">Payment Date</th>
               <th className="px-4 py-3">Method</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3 text-center">Attended</th>
@@ -220,7 +262,7 @@ export default function AttendeesPage() {
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={8} className="text-center text-zinc-500 py-10">No attendees found</td></tr>
+              <tr><td colSpan={9} className="text-center text-zinc-500 py-10">No attendees found</td></tr>
             )}
             {filtered.map(a => {
               const waUrl = toWhatsApp(a.phone)
@@ -234,6 +276,11 @@ export default function AttendeesPage() {
                   <td className="px-4 py-3 text-zinc-300">{TICKET_LABELS[a.ticket_type] ?? a.ticket_type}</td>
                   <td className="px-4 py-3 text-right font-mono">
                     {a.payment_amount > 0 ? `RM ${a.payment_amount}` : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-zinc-400 whitespace-nowrap">
+                    {a.paid_at || a.created_at
+                      ? new Date(a.paid_at ?? a.created_at).toLocaleDateString('en-MY', { dateStyle: 'medium' })
+                      : '—'}
                   </td>
                   <td className="px-4 py-3 text-zinc-400">{METHOD_LABELS[a.payment_method]}</td>
                   <td className="px-4 py-3">
@@ -271,6 +318,76 @@ export default function AttendeesPage() {
           </tbody>
         </table>
       </div>
+
+      {/* QR Check-in Modal */}
+      {showQRModal && selectedEventId && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#111] border border-zinc-800 rounded-xl p-6 w-full max-w-sm text-center">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold">QR Check-in</h2>
+              <button onClick={() => setShowQRModal(false)} className="text-zinc-500 hover:text-white text-xl leading-none">✕</button>
+            </div>
+            {(() => {
+              const url = `https://event-ops-six.vercel.app/checkin/${selectedEventId}`
+              const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`
+              return (
+                <>
+                  <div className="flex justify-center mb-4">
+                    <img
+                      src={qrSrc}
+                      alt="Check-in QR Code"
+                      width={220}
+                      height={220}
+                      className="rounded-xl border border-zinc-700"
+                    />
+                  </div>
+                  <p className="text-xs text-zinc-500 mb-2">Check-in URL</p>
+                  <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 mb-4">
+                    <span className="text-xs text-zinc-300 truncate flex-1 text-left">{url}</span>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(url)}
+                      className="text-xs text-amber-400 hover:text-amber-300 flex-shrink-0 font-medium"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        const w = window.open('', '_blank', 'width=600,height=700')
+                        if (!w) return
+                        w.document.write(`<!DOCTYPE html><html><head><title>Check-in QR</title><style>
+                          *{margin:0;padding:0;box-sizing:border-box;}
+                          body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:40px;}
+                          img{width:280px;height:280px;display:block;}
+                          h1{font-size:28px;font-weight:800;color:#111;margin-top:24px;text-align:center;}
+                          p{font-size:15px;color:#666;margin-top:10px;text-align:center;}
+                          .badge{margin-top:16px;background:#fff4e6;border:2px solid #e8563a;color:#e8563a;font-weight:700;font-size:13px;padding:6px 18px;border-radius:999px;letter-spacing:0.5px;}
+                        </style></head><body>
+                          <img src="${qrSrc}" />
+                          <h1>📲 Please scan your attendance</h1>
+                          <div class="badge">Claude Malaysia Workshop</div>
+                          <script>window.onload=()=>window.print()</script>
+                        </body></html>`)
+                        w.document.close()
+                      }}
+                      className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white text-sm py-2 rounded-lg font-medium"
+                    >
+                      🖨 Print
+                    </button>
+                    <button
+                      onClick={() => setShowQRModal(false)}
+                      className="flex-1 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 text-sm py-2 rounded-lg font-medium border border-zinc-800"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </>
+              )
+            })()}
+          </div>
+        </div>
+      )}
 
       {/* Add Attendee Modal */}
       {showModal && (

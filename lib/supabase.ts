@@ -6,52 +6,133 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? 'placeholde
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 export type TicketType =
-  // June 1 event — Table 2 pricing
+  | 'free_general'
+  | 'free_vip'
   | 'super_early_bird_general'
   | 'super_early_bird_vip'
   | 'early_bird_general'
   | 'early_bird_vip'
-  | 'public_general'
-  | 'public_vip'
-  // May 16 event — legacy
   | 'standard_general'
   | 'standard_vip'
-  | 'free_general'
-  | 'free_vip'
-
 export type PaymentMethod = 'stripe' | 'bank_transfer' | 'free'
 export type PaymentStatus = 'paid' | 'pending' | 'free'
 export type ChecklistStatus = 'pending' | 'in_progress' | 'done'
 
 export const TICKET_LABELS: Record<TicketType, string> = {
+  free_general: 'Free General',
+  free_vip: 'Free VIP',
   super_early_bird_general: 'Super Early Bird General',
   super_early_bird_vip: 'Super Early Bird VIP',
   early_bird_general: 'Early Bird General',
   early_bird_vip: 'Early Bird VIP',
-  public_general: 'Public General',
-  public_vip: 'Public VIP',
-  standard_general: 'Standard General',
-  standard_vip: 'Standard VIP',
-  free_general: 'Free General',
-  free_vip: 'Free VIP',
+  standard_general: 'Public General',
+  standard_vip: 'Public VIP',
 }
 
 export const TICKET_PRICES: Record<TicketType, number> = {
-  // June 1 Table 2 prices
-  super_early_bird_general: 247,
-  super_early_bird_vip: 497,
-  early_bird_general: 300,
-  early_bird_vip: 597,
-  public_general: 347,
-  public_vip: 697,
-  // May 16 legacy prices
-  standard_general: 159,
-  standard_vip: 397,
   free_general: 0,
   free_vip: 0,
+  super_early_bird_general: 249,
+  super_early_bird_vip: 497,
+  early_bird_general: 297,
+  early_bird_vip: 597,
+  standard_general: 347,
+  standard_vip: 697,
 }
 
 export const CHECKLIST_CATEGORIES = ['Venue', 'Facilitator', 'Media / UGC Creator', 'AV/Video', 'Logistics']
+
+export const EXPENSE_CATEGORIES = [
+  'Venue',
+  'F&B',
+  'Speaker fees',
+  'Marketing',
+  'Equipment / AV',
+  'Content',
+  'Logistics',
+  'Other',
+] as const
+
+export type ExpenseCategory = typeof EXPENSE_CATEGORIES[number]
+
+export interface Expense {
+  id: string
+  event_id: string
+  description: string
+  amount: number
+  category: ExpenseCategory | string
+  notes: string | null
+  created_at: string
+}
+
+export interface MeetingAttendee {
+  name: string
+  attended: boolean
+  notes: string | null
+}
+
+export type MeetingCategory = 'facilitator' | 'content_creator' | 'videographer' | 'mixed'
+
+export interface Meeting {
+  id: string
+  title: string
+  meeting_date: string
+  event_id: string | null
+  notes: string | null
+  attendance: MeetingAttendee[]
+  meeting_category: MeetingCategory
+  created_at: string
+}
+
+export interface ContentPost {
+  id: string
+  person_name: string
+  post_date: string  // YYYY-MM-DD
+  notes: string | null
+  created_at: string
+}
+
+export type TeamRole = 'speaker' | 'facilitator' | 'content_creator' | 'videographer'
+
+export interface TeamMember {
+  role: TeamRole
+  name: string
+  phone: string | null
+}
+
+export const TEAM_ROLE_LABELS: Record<TeamRole, string> = {
+  speaker: 'Speaker',
+  facilitator: 'Facilitator',
+  content_creator: 'Content Creator',
+  videographer: 'Videographer',
+}
+
+export const TEAM_ROLE_ICONS: Record<TeamRole, string> = {
+  speaker: '🎤',
+  facilitator: '🧑‍🏫',
+  content_creator: '📸',
+  videographer: '🎥',
+}
+
+export type FloorPlanSectionType = 'vip' | 'general' | 'creator' | 'overflow' | 'camera' | 'other'
+
+export interface FloorPlanSection {
+  id: string
+  label: string
+  type: FloorPlanSectionType
+  pax: number
+  note?: string | null
+}
+
+export interface FloorPlan {
+  stage_speaker?: string | null
+  speaker_needs?: string[]
+  sections: FloorPlanSection[]
+  registration?: string | null
+  main_door?: string | null
+  fnb?: string | null
+  videographer?: string | null
+}
 
 export interface Event {
   id: string
@@ -60,6 +141,15 @@ export interface Event {
   venue: string | null
   capacity: number | null
   is_active: boolean
+  team: TeamMember[]
+  floor_plan?: FloorPlan
+  // Legacy single-member columns — kept for back-compat, no longer used by UI
+  host_name: string | null
+  host_phone: string | null
+  facilitator_name: string | null
+  facilitator_phone: string | null
+  content_creator_name: string | null
+  content_creator_phone: string | null
   created_at: string
 }
 
@@ -76,6 +166,7 @@ export interface Attendee {
   stripe_session_id: string | null
   attendance_confirmed: boolean
   notes: string | null
+  paid_at: string | null
   created_at: string
 }
 

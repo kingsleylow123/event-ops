@@ -12,13 +12,13 @@ export default function Dashboard() {
   useEffect(() => {
     async function load() {
       try {
-        const evRes = await fetch('/api/events')
+        const evRes = await fetch('/api/events', { cache: 'no-store' })
         if (!evRes.ok) throw new Error('API error')
         const events: Event[] = await evRes.json()
         const active = events.find(e => e.is_active) ?? null
         setEvent(active)
         if (active) {
-          const attRes = await fetch(`/api/attendees?event_id=${active.id}`)
+          const attRes = await fetch(`/api/attendees?event_id=${active.id}`, { cache: 'no-store' })
           if (attRes.ok) setAttendees(await attRes.json())
         }
       } catch {
@@ -48,17 +48,17 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       {event ? (
-        <div className="bg-[#111] border border-zinc-800 rounded-xl p-5 flex items-start justify-between">
+        <div className="bg-[#111] border border-zinc-800 rounded-xl p-4 sm:p-5 flex items-start justify-between gap-3">
           <div>
             <p className="text-xs text-amber-400 font-semibold uppercase tracking-widest mb-1">Active Event</p>
-            <h1 className="text-2xl font-bold">{event.name}</h1>
-            <div className="flex gap-4 mt-2 text-sm text-zinc-400">
+            <h1 className="text-xl sm:text-2xl font-bold">{event.name}</h1>
+            <div className="flex flex-wrap gap-2 sm:gap-4 mt-2 text-sm text-zinc-400">
               {event.date && <span>📅 {new Date(event.date).toLocaleDateString('en-MY', { dateStyle: 'medium' })}</span>}
               {event.venue && <span>📍 {event.venue}</span>}
               {event.capacity && <span>👥 Capacity: {event.capacity}</span>}
             </div>
           </div>
-          <Link href="/events" className="text-xs text-zinc-500 hover:text-white border border-zinc-700 rounded px-3 py-1.5">Manage Events</Link>
+          <Link href="/events" className="text-xs text-zinc-500 hover:text-white border border-zinc-700 rounded px-3 py-1.5 flex-shrink-0">Manage Events</Link>
         </div>
       ) : (
         <div className="bg-[#111] border border-zinc-800 rounded-xl p-5 text-center">
@@ -67,7 +67,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         {[
           { label: 'Total', value: attendees.length, color: 'text-white' },
           { label: 'Paid', value: paid.length, color: 'text-green-400' },
@@ -76,17 +76,18 @@ export default function Dashboard() {
           { label: 'Attended', value: attended.length, color: 'text-purple-400' },
           { label: 'Revenue', value: `RM ${revenue.toLocaleString()}`, color: 'text-amber-400' },
         ].map(s => (
-          <div key={s.label} className="bg-[#111] border border-zinc-800 rounded-xl p-4">
+          <div key={s.label} className="bg-[#111] border border-zinc-800 rounded-xl p-3 sm:p-4">
             <p className="text-xs text-zinc-500 mb-1">{s.label}</p>
-            <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
+            <p className={`text-xl sm:text-2xl font-bold ${s.color}`}>{s.value}</p>
           </div>
         ))}
       </div>
 
       {byTicket.length > 0 && (
-        <div className="bg-[#111] border border-zinc-800 rounded-xl p-5">
+        <div className="bg-[#111] border border-zinc-800 rounded-xl p-4 sm:p-5">
           <h2 className="text-sm font-semibold text-zinc-400 mb-4">Ticket Breakdown</h2>
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[280px]">
             <thead>
               <tr className="text-left text-zinc-500 border-b border-zinc-800">
                 <th className="pb-2">Ticket Type</th>
@@ -104,6 +105,7 @@ export default function Dashboard() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
