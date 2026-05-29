@@ -31,6 +31,7 @@ export default function AttendeesPage() {
   const [filterTicket, setFilterTicket] = useState<string>('all')
   const [filterAttendance, setFilterAttendance] = useState<string>('all')
   const [showQRModal, setShowQRModal] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   const event = events.find(e => e.id === selectedEventId) ?? null
 
@@ -74,6 +75,13 @@ export default function AttendeesPage() {
   useEffect(() => {
     if (selectedEventId) loadAttendees(selectedEventId)
   }, [selectedEventId])
+
+  useEffect(() => {
+    fetch('/api/me', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setIsAdmin(data.is_admin) })
+      .catch(() => {})
+  }, [])
 
   async function syncStripe() {
     setSyncing(true)
@@ -187,21 +195,25 @@ export default function AttendeesPage() {
               ))}
             </select>
           )}
-          {syncMsg && <span className="text-xs text-zinc-400 self-center">{syncMsg}</span>}
-          <button onClick={syncStripe} disabled={syncing}
-            className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg">
-            {syncing ? 'Syncing...' : '⚡ Sync Stripe'}
-          </button>
+          {isAdmin && syncMsg && <span className="text-xs text-zinc-400 self-center">{syncMsg}</span>}
+          {isAdmin && (
+            <button onClick={syncStripe} disabled={syncing}
+              className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg">
+              {syncing ? 'Syncing...' : '⚡ Sync Stripe'}
+            </button>
+          )}
           {selectedEventId && (
             <button onClick={() => setShowQRModal(true)}
               className="bg-zinc-800 hover:bg-zinc-700 text-white text-sm px-4 py-2 rounded-lg flex items-center gap-1.5">
               <span>📲</span> QR Check-in
             </button>
           )}
-          <button onClick={() => setShowModal(true)} disabled={!event}
-            className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-semibold text-sm px-4 py-2 rounded-lg">
-            + Add Attendee
-          </button>
+          {isAdmin && (
+            <button onClick={() => setShowModal(true)} disabled={!event}
+              className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-semibold text-sm px-4 py-2 rounded-lg">
+              + Add Attendee
+            </button>
+          )}
         </div>
       </div>
 
@@ -251,18 +263,18 @@ export default function AttendeesPage() {
             <tr className="text-left text-zinc-500 border-b border-zinc-800">
               <th className="px-4 py-3">Name</th>
               <th className="px-4 py-3">Phone</th>
-              <th className="px-4 py-3">Ticket</th>
-              <th className="px-4 py-3 text-right">Amount</th>
+              {isAdmin && <th className="px-4 py-3">Ticket</th>}
+              {isAdmin && <th className="px-4 py-3 text-right">Amount</th>}
               <th className="px-4 py-3">Payment Date</th>
-              <th className="px-4 py-3">Method</th>
-              <th className="px-4 py-3">Status</th>
+              {isAdmin && <th className="px-4 py-3">Method</th>}
+              {isAdmin && <th className="px-4 py-3">Status</th>}
               <th className="px-4 py-3 text-center">Attended</th>
-              <th className="px-4 py-3"></th>
+              {isAdmin && <th className="px-4 py-3"></th>}
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={9} className="text-center text-zinc-500 py-10">No attendees found</td></tr>
+              <tr><td colSpan={isAdmin ? 9 : 4} className="text-center text-zinc-500 py-10">No attendees found</td></tr>
             )}
             {filtered.map(a => {
               const waUrl = toWhatsApp(a.phone)
@@ -273,45 +285,56 @@ export default function AttendeesPage() {
                     {a.email && <div className="text-xs text-zinc-500">{a.email}</div>}
                   </td>
                   <td className="px-4 py-3 text-zinc-300">{a.phone ?? '—'}</td>
-                  <td className="px-4 py-3 text-zinc-300">{TICKET_LABELS[a.ticket_type] ?? a.ticket_type}</td>
-                  <td className="px-4 py-3 text-right font-mono">
-                    {a.payment_amount > 0 ? `RM ${a.payment_amount}` : '—'}
-                  </td>
+                  {isAdmin && (
+                    <td className="px-4 py-3 text-zinc-300">{TICKET_LABELS[a.ticket_type] ?? a.ticket_type}</td>
+                  )}
+                  {isAdmin && (
+                    <td className="px-4 py-3 text-right font-mono">
+                      {a.payment_amount > 0 ? `RM ${a.payment_amount}` : '—'}
+                    </td>
+                  )}
                   <td className="px-4 py-3 text-zinc-400 whitespace-nowrap">
                     {a.paid_at || a.created_at
                       ? new Date(a.paid_at ?? a.created_at).toLocaleDateString('en-MY', { dateStyle: 'medium' })
                       : '—'}
                   </td>
-                  <td className="px-4 py-3 text-zinc-400">{METHOD_LABELS[a.payment_method]}</td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => a.payment_method === 'bank_transfer' ? togglePaid(a) : undefined}
-                      className={`text-xs px-2 py-1 rounded-full font-medium ${STATUS_COLORS[a.payment_status]} ${a.payment_method === 'bank_transfer' ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
-                    >
-                      {a.payment_status}
-                    </button>
-                  </td>
+                  {isAdmin && (
+                    <td className="px-4 py-3 text-zinc-400">{METHOD_LABELS[a.payment_method]}</td>
+                  )}
+                  {isAdmin && (
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => a.payment_method === 'bank_transfer' ? togglePaid(a) : undefined}
+                        className={`text-xs px-2 py-1 rounded-full font-medium ${STATUS_COLORS[a.payment_status]} ${a.payment_method === 'bank_transfer' ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
+                      >
+                        {a.payment_status}
+                      </button>
+                    </td>
+                  )}
                   <td className="px-4 py-3 text-center">
                     <input type="checkbox" checked={a.attendance_confirmed}
-                      onChange={() => toggleAttendance(a)}
-                      className="w-4 h-4 accent-amber-500 cursor-pointer" />
+                      onChange={isAdmin ? () => toggleAttendance(a) : undefined}
+                      readOnly={!isAdmin}
+                      className={`w-4 h-4 accent-amber-500 ${isAdmin ? 'cursor-pointer' : 'cursor-default opacity-70'}`} />
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-2 items-center">
-                      {waUrl && (
-                        <a href={waUrl} target="_blank" rel="noopener noreferrer"
-                          className="text-green-400 hover:text-green-300 text-lg" title="WhatsApp">
-                          💬
-                        </a>
-                      )}
-                      <button onClick={() => copySurveyLink(a)}
-                        className="text-zinc-400 hover:text-amber-400 text-sm" title="Copy survey link">
-                        📋
-                      </button>
-                      <button onClick={() => deleteAttendee(a.id)}
-                        className="text-zinc-600 hover:text-red-400 text-xs">✕</button>
-                    </div>
-                  </td>
+                  {isAdmin && (
+                    <td className="px-4 py-3">
+                      <div className="flex gap-2 items-center">
+                        {waUrl && (
+                          <a href={waUrl} target="_blank" rel="noopener noreferrer"
+                            className="text-green-400 hover:text-green-300 text-lg" title="WhatsApp">
+                            💬
+                          </a>
+                        )}
+                        <button onClick={() => copySurveyLink(a)}
+                          className="text-zinc-400 hover:text-amber-400 text-sm" title="Copy survey link">
+                          📋
+                        </button>
+                        <button onClick={() => deleteAttendee(a.id)}
+                          className="text-zinc-600 hover:text-red-400 text-xs">✕</button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               )
             })}

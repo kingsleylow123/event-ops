@@ -59,6 +59,9 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url)
     }
 
+    // Pass is_admin to downstream via response header
+    response.headers.set('x-is-admin', approval?.is_admin ? '1' : '0')
+
     // Approved + on /login → bounce to home (or `next`)
     if (pathname === '/login') {
       const url = request.nextUrl.clone()
