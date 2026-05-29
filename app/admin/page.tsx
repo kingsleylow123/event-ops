@@ -89,7 +89,7 @@ export default function AdminPage() {
                     disabled={actingOn === a.email + 'reject'}
                     onClick={() => act(a.email, 'reject')}
                     className="border border-red-500/50 text-red-400 hover:bg-red-500/10 disabled:opacity-50 text-xs px-3 py-1.5 rounded-lg">
-                    {actingOn === a.email + 'reject' ? '…' : 'Reject'}
+                    {actingOn === a.email + 'reject' ? '…' : 'Delete'}
                   </button>
                 </div>
               </div>
