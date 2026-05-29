@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 
-const PUBLIC_PATHS = ['/login', '/auth/callback', '/pending', '/checkin', '/api/checkin', '/meeting-checkin', '/api/meeting-checkin', '/survey', '/api/survey']
+const PUBLIC_PATHS = ['/login', '/auth/callback', '/pending', '/reset-password', '/checkin', '/api/checkin', '/meeting-checkin', '/api/meeting-checkin', '/survey', '/api/survey']
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))
@@ -58,6 +58,9 @@ export async function middleware(request: NextRequest) {
       if (status === 'rejected') url.searchParams.set('error', 'rejected')
       return NextResponse.redirect(url)
     }
+
+    // Pass is_admin to downstream via response header
+    response.headers.set('x-is-admin', approval?.is_admin ? '1' : '0')
 
     // Approved + on /login → bounce to home (or `next`)
     if (pathname === '/login') {

@@ -8,6 +8,14 @@ export default function Dashboard() {
   const [event, setEvent] = useState<Event | null>(null)
   const [attendees, setAttendees] = useState<Attendee[]>([])
   const [loading, setLoading] = useState(true)
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/me', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setIsAdmin(d.is_admin) })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     async function load() {
@@ -69,13 +77,13 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         {[
-          { label: 'Total', value: attendees.length, color: 'text-white' },
-          { label: 'Paid', value: paid.length, color: 'text-green-400' },
-          { label: 'Pending', value: pending.length, color: 'text-yellow-400' },
-          { label: 'Free', value: free.length, color: 'text-blue-400' },
-          { label: 'Attended', value: attended.length, color: 'text-purple-400' },
-          { label: 'Revenue', value: `RM ${revenue.toLocaleString()}`, color: 'text-amber-400' },
-        ].map(s => (
+          { label: 'Total', value: attendees.length, color: 'text-white', adminOnly: false },
+          { label: 'Paid', value: paid.length, color: 'text-green-400', adminOnly: false },
+          { label: 'Pending', value: pending.length, color: 'text-yellow-400', adminOnly: true },
+          { label: 'Free', value: free.length, color: 'text-blue-400', adminOnly: true },
+          { label: 'Attended', value: attended.length, color: 'text-purple-400', adminOnly: false },
+          { label: 'Revenue', value: `RM ${revenue.toLocaleString()}`, color: 'text-amber-400', adminOnly: true },
+        ].filter(s => !s.adminOnly || isAdmin).map(s => (
           <div key={s.label} className="bg-[#111] border border-zinc-800 rounded-xl p-3 sm:p-4">
             <p className="text-xs text-zinc-500 mb-1">{s.label}</p>
             <p className={`text-xl sm:text-2xl font-bold ${s.color}`}>{s.value}</p>
@@ -83,7 +91,7 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {byTicket.length > 0 && (
+      {isAdmin && byTicket.length > 0 && (
         <div className="bg-[#111] border border-zinc-800 rounded-xl p-4 sm:p-5">
           <h2 className="text-sm font-semibold text-zinc-400 mb-4">Ticket Breakdown</h2>
           <div className="overflow-x-auto">

@@ -38,7 +38,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'email and action (approve|reject|reset) required' }, { status: 400, headers: NO_STORE_HEADERS })
   }
 
-  const status = action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : 'pending'
+  // 'reject' now means hard delete
+  if (action === 'reject') {
+    const { error: dbErr } = await supabase
+      .from('user_approvals')
+      .delete()
+      .eq('email', email.toLowerCase())
+    if (dbErr) return NextResponse.json({ error: dbErr.message }, { status: 500, headers: NO_STORE_HEADERS })
+    return NextResponse.json({ deleted: true }, { headers: NO_STORE_HEADERS })
+  }
+
+  const status = action === 'approve' ? 'approved' : 'pending'
 
   const { data, error: dbErr } = await supabase
     .from('user_approvals')

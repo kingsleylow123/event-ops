@@ -53,7 +53,7 @@ export default function AdminPage() {
   if (error) return <div className="text-red-400 mt-20 text-center">{error}</div>
 
   const pending = approvals.filter(a => a.status === 'pending')
-  const decided = approvals.filter(a => a.status !== 'pending')
+  const decided = approvals.filter(a => a.status === 'approved')
 
   return (
     <div className="space-y-6">
@@ -89,7 +89,7 @@ export default function AdminPage() {
                     disabled={actingOn === a.email + 'reject'}
                     onClick={() => act(a.email, 'reject')}
                     className="border border-red-500/50 text-red-400 hover:bg-red-500/10 disabled:opacity-50 text-xs px-3 py-1.5 rounded-lg">
-                    {actingOn === a.email + 'reject' ? '…' : 'Reject'}
+                    {actingOn === a.email + 'reject' ? '…' : 'Delete'}
                   </button>
                 </div>
               </div>
@@ -100,10 +100,10 @@ export default function AdminPage() {
 
       <section>
         <h2 className="text-sm uppercase tracking-wider text-zinc-500 mb-3">
-          Decided ({decided.length})
+          Approved ({decided.length})
         </h2>
         {decided.length === 0 ? (
-          <p className="text-sm text-zinc-600 italic">No decisions yet.</p>
+          <p className="text-sm text-zinc-600 italic">No approved users yet.</p>
         ) : (
           <div className="space-y-2">
             {decided.map(a => (
@@ -115,15 +115,15 @@ export default function AdminPage() {
                     <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[a.status]}`}>{a.status}</span>
                   </div>
                   <p className="text-xs text-zinc-500 mt-0.5">
-                    {a.decided_at ? `Decided ${new Date(a.decided_at).toLocaleString('en-MY')} by ${a.decided_by ?? '?'}` : '—'}
+                    {a.decided_at ? `Approved ${new Date(a.decided_at).toLocaleString('en-MY')}` : '—'}
                   </p>
                 </div>
                 {!a.is_admin && (
                   <button
-                    disabled={actingOn === a.email + 'reset'}
-                    onClick={() => act(a.email, 'reset')}
-                    className="text-xs text-zinc-500 hover:text-amber-400 disabled:opacity-50 border border-zinc-700 hover:border-amber-500/50 px-3 py-1.5 rounded-lg">
-                    Reset to pending
+                    disabled={actingOn === a.email + 'reject'}
+                    onClick={() => act(a.email, 'reject')}
+                    className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50 border border-red-500/30 hover:border-red-500/60 px-3 py-1.5 rounded-lg">
+                    {actingOn === a.email + 'reject' ? '…' : 'Delete'}
                   </button>
                 )}
               </div>
