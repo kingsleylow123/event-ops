@@ -91,7 +91,7 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {byTicket.length > 0 && (
+      {isAdmin && byTicket.length > 0 && (
         <div className="bg-[#111] border border-zinc-800 rounded-xl p-4 sm:p-5">
           <h2 className="text-sm font-semibold text-zinc-400 mb-4">Ticket Breakdown</h2>
           <div className="overflow-x-auto">
