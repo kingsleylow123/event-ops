@@ -1,0 +1,1189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Claude Malaysia — Event Briefing</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f5f5f7;
+    color: #1a1a1a;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  header {
+    background: #1a1a1a;
+    color: #fff;
+    padding: 18px 20px 14px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  header h1 { font-size: 16px; font-weight: 700; letter-spacing: 0.3px; }
+  header p { font-size: 12px; opacity: 0.55; margin-top: 2px; }
+
+  .tab-bar {
+    display: flex;
+    overflow-x: auto;
+    background: #fff;
+    border-bottom: 1px solid #e5e5e5;
+    position: sticky;
+    top: 62px;
+    z-index: 99;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tab-bar::-webkit-scrollbar { display: none; }
+
+  .tab-btn {
+    flex-shrink: 0;
+    padding: 12px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #888;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .tab-btn.active { color: #1a1a1a; border-bottom-color: #1a1a1a; }
+  .tab-btn:hover:not(.active) { color: #444; }
+
+  .content { max-width: 680px; margin: 0 auto; padding: 24px 16px 60px; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .role-badge {
+    display: inline-block;
+    background: #1a1a1a;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-bottom: 10px;
+  }
+  .role-title { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+  .role-desc {
+    color: #555;
+    font-size: 14px;
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #e5e5e5;
+  }
+
+  .section { margin-bottom: 28px; }
+  .section-title {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #888;
+    margin-bottom: 12px;
+  }
+
+  .card {
+    background: #fff;
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 10px;
+    border: 1px solid #ebebeb;
+  }
+  .card p, .card li { font-size: 14px; color: #333; }
+
+  ul { list-style: none; padding: 0; }
+  ul li {
+    padding: 5px 0 5px 18px;
+    position: relative;
+    font-size: 14px;
+    color: #333;
+  }
+  ul li::before {
+    content: "·";
+    position: absolute;
+    left: 4px;
+    color: #aaa;
+    font-size: 18px;
+    line-height: 1.2;
+  }
+
+  /* ── Real checkboxes ── */
+  .checklist { list-style: none; padding: 0; }
+  .checklist li {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 7px 0;
+    border-bottom: 1px solid #f5f5f5;
+    position: static;
+  }
+  .checklist li:last-child { border-bottom: none; }
+  .checklist li::before { display: none; }
+
+  .checklist input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    border: 2px solid #ccc;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+    margin-top: 2px;
+    transition: background 0.15s, border-color 0.15s;
+    position: relative;
+  }
+  .checklist input[type="checkbox"]:checked {
+    background: #1a1a1a;
+    border-color: #1a1a1a;
+  }
+  .checklist input[type="checkbox"]:checked::after {
+    content: "";
+    position: absolute;
+    left: 4px;
+    top: 1px;
+    width: 6px;
+    height: 10px;
+    border: 2px solid #fff;
+    border-top: none;
+    border-left: none;
+    transform: rotate(45deg);
+  }
+  .checklist label {
+    font-size: 14px;
+    color: #333;
+    cursor: pointer;
+    line-height: 1.5;
+    flex: 1;
+  }
+  .checklist input[type="checkbox"]:checked + label {
+    text-decoration: line-through;
+    color: #aaa;
+  }
+
+  /* ── Links ── */
+  .link-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 16px;
+    background: #0071e3;
+    border: none;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    text-decoration: none;
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+  }
+  .link-btn:hover { background: #0062c4; transform: translateY(-1px); }
+  .link-btn:active { transform: translateY(0); }
+  .link-btn .link-icon { font-size: 18px; flex-shrink: 0; }
+  .link-btn .link-text { flex: 1; }
+  .link-btn .link-label { font-weight: 700; font-size: 14px; }
+  .link-btn .link-sub { font-size: 12px; opacity: 0.8; margin-top: 1px; }
+  .link-btn .link-arrow { font-size: 16px; opacity: 0.7; }
+
+  .link-btn.secondary {
+    background: #fff;
+    border: 1.5px solid #0071e3;
+    color: #0071e3;
+  }
+  .link-btn.secondary:hover { background: #f0f7ff; }
+  .link-btn.secondary .link-sub { opacity: 0.7; }
+
+  /* ── Agenda ── */
+  .agenda-item {
+    display: flex;
+    gap: 14px;
+    padding: 10px 0;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  .agenda-item:last-child { border-bottom: none; }
+  .agenda-time {
+    font-size: 12px;
+    font-weight: 700;
+    color: #888;
+    white-space: nowrap;
+    min-width: 52px;
+    padding-top: 2px;
+  }
+  .agenda-text { font-size: 14px; color: #333; }
+  .agenda-text strong { display: block; font-weight: 600; color: #1a1a1a; margin-bottom: 2px; }
+
+  /* ── Good / Poor ── */
+  .good-poor { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .good-box, .poor-box { border-radius: 10px; padding: 14px; border: 1px solid; }
+  .good-box { background: #f0faf4; border-color: #b6e8c8; }
+  .poor-box { background: #fff5f5; border-color: #fecaca; }
+  .good-box .gp-label { font-size: 11px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: #16a34a; margin-bottom: 8px; }
+  .poor-box .gp-label { font-size: 11px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: #dc2626; margin-bottom: 8px; }
+  .good-box li::before { color: #16a34a; }
+  .poor-box li::before { color: #dc2626; }
+
+  /* ── Cue table ── */
+  .cue-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .cue-table th {
+    text-align: left; padding: 8px 12px; background: #f5f5f7;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.8px;
+    text-transform: uppercase; color: #888; border-bottom: 1px solid #e5e5e5;
+  }
+  .cue-table td { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+  .cue-table tr:last-child td { border-bottom: none; }
+
+  .pill { display: inline-block; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; background: #f0f0f0; color: #555; }
+  .pill.energy { background: #fff0d6; color: #b45309; }
+  .pill.piano { background: #e8f0ff; color: #2563eb; }
+  .pill.silence { background: #f0f0f0; color: #555; }
+
+  /* ── Q blocks ── */
+  .q-block {
+    background: #f9f9f9;
+    border-left: 3px solid #1a1a1a;
+    border-radius: 0 8px 8px 0;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+  }
+  .q-block .q-text { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+  .q-block .q-prompt { font-size: 13px; color: #666; font-style: italic; }
+
+  /* ── Alert ── */
+  .alert {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 13.5px;
+    color: #92400e;
+    margin-bottom: 16px;
+  }
+
+  /* ── Pricing table ── */
+  .pricing-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .pricing-table th {
+    text-align: left; padding: 8px 12px; background: #f5f5f7;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.8px;
+    text-transform: uppercase; color: #888; border-bottom: 1px solid #e5e5e5;
+  }
+  .pricing-table td { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; font-size: 13.5px; vertical-align: top; }
+  .pricing-table tr:last-child td { border-bottom: none; }
+  .pricing-table .tier-label { font-weight: 700; }
+
+  .seat-counter {
+    background: #1a1a1a;
+    color: #fff;
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .seat-counter .sc-label { font-size: 13px; opacity: 0.7; }
+  .seat-counter .sc-num { font-size: 28px; font-weight: 800; }
+
+  .team-slot {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid #f0f0f0;
+  }
+  .team-slot:last-child { border-bottom: none; }
+  .slot-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #1a1a1a;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .slot-name { font-size: 14px; font-weight: 600; }
+  .slot-tbd { font-size: 14px; color: #aaa; font-style: italic; }
+
+  .warning-box {
+    background: #fff5f0;
+    border: 1px solid #fed7aa;
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 14px;
+    color: #9a3412;
+    margin-bottom: 10px;
+  }
+  .warning-box strong { display: block; margin-bottom: 4px; font-size: 13px; letter-spacing: 0.5px; text-transform: uppercase; }
+
+  /* ── Mobile optimisation ── */
+  @media (max-width: 600px) {
+    header { padding: 12px 14px 10px; }
+    header h1 { font-size: 14px; }
+
+    .tab-bar { top: 52px; }
+    .tab-btn { padding: 10px 12px; font-size: 12px; }
+
+    .content { padding: 16px 12px 60px; }
+
+    .role-title { font-size: 19px; }
+    .role-desc { font-size: 13px; }
+
+    .card { padding: 12px; }
+    .card p, .card li, ul li { font-size: 13px; }
+
+    .good-poor { grid-template-columns: 1fr; }
+
+    .agenda-time { min-width: 42px; font-size: 11px; }
+    .agenda-text { font-size: 13px; }
+
+    .link-btn { padding: 11px 12px; font-size: 13px; }
+    .link-btn .link-label { font-size: 13px; }
+    .link-btn .link-sub { font-size: 11px; }
+
+    .q-block { padding: 10px 12px; }
+    .q-block .q-text { font-size: 13px; }
+    .q-block .q-prompt { font-size: 12px; }
+
+    .pricing-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .pricing-table { min-width: 320px; font-size: 13px; }
+    .cue-table { font-size: 12.5px; }
+
+    .seat-counter { padding: 12px; }
+    .seat-counter .sc-num { font-size: 24px; }
+
+    .warning-box { font-size: 13px; }
+    .alert { font-size: 13px; }
+
+    .team-slot { gap: 10px; }
+    .slot-name, .slot-tbd { font-size: 13px; }
+
+    .checklist label { font-size: 13px; }
+    .section-title { font-size: 11px; }
+    .section { margin-bottom: 22px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Claude Malaysia — Event Briefing</h1>
+  <p>Select your role below</p>
+</header>
+
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab(this,'agenda')">📋 Agenda</button>
+  <button class="tab-btn" onclick="switchTab(this,'organisers')">Organisers</button>
+  <button class="tab-btn" onclick="switchTab(this,'ugc')">UGC Creators</button>
+  <button class="tab-btn" onclick="switchTab(this,'video')">Videographer</button>
+  <button class="tab-btn" onclick="switchTab(this,'facilitators')">Facilitators</button>
+  <button class="tab-btn" onclick="switchTab(this,'music')">Music / AV</button>
+  <button class="tab-btn" onclick="switchTab(this,'mic')">Mic Runner</button>
+  <button class="tab-btn" onclick="switchTab(this,'upsell')">Upsell Team</button>
+</div>
+
+<div class="content">
+
+  <!-- ═══════════════════════════════════════
+       EVENT AGENDA — EVERYONE
+  ════════════════════════════════════════ -->
+  <div id="tab-agenda" class="tab-panel active">
+    <div class="role-badge">All Roles</div>
+    <div class="role-title">Event Agenda</div>
+    <div class="role-desc">Common knowledge for every member of the team. Know the full picture before the event day.</div>
+
+    <div class="section">
+      <div class="section-title">Team Roles at a Glance</div>
+      <div class="card" style="padding:0; overflow:hidden;">
+        <table class="cue-table">
+          <thead><tr><th>Role</th><th>One-line job</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Organisers</strong></td><td>Run everything — logistics, flow, energy</td></tr>
+            <tr><td><strong>UGC Creators</strong></td><td>Authentic content from genuine experience</td></tr>
+            <tr><td><strong>Videographer</strong></td><td>Testimonial capture at 1pm and 4pm</td></tr>
+            <tr><td><strong>Facilitators</strong></td><td>Coach participants at assigned tables</td></tr>
+            <tr><td><strong>Music / AV</strong></td><td>Control room energy via music cues</td></tr>
+            <tr><td><strong>Mic Runner</strong></td><td>Get the mic to the right person fast</td></tr>
+            <tr><td><strong>Upsell Team</strong></td><td>Back table close — objection handling + sign up</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Full Day Schedule</div>
+      <div class="card">
+        <div class="agenda-item"><div class="agenda-time">8:00am</div><div class="agenda-text"><strong>Team Call Time</strong>Briefing + full setup — music, projector, slides, registration booth, tables & chairs.</div></div>
+        <div class="agenda-item"><div class="agenda-time">9:00am</div><div class="agenda-text"><strong>Registration Opens</strong>High energy music. Countdown timer on screen. Help participants set up Claude Code / Git / Homebrew. Usher to front seats.</div></div>
+        <div class="agenda-item"><div class="agenda-time">10:00am</div><div class="agenda-text"><strong>Event Starts</strong>Registration team follows up on missing attendees.</div></div>
+        <div class="agenda-item"><div class="agenda-time">10:15am</div><div class="agenda-text">Kingsley — Claude Malaysia vision: impact 10k Malaysians</div></div>
+        <div class="agenda-item"><div class="agenda-time">10:20am</div><div class="agenda-text">5 Facilitator intros — 3 mins each to share something they built</div></div>
+        <div class="agenda-item"><div class="agenda-time">10:25am</div><div class="agenda-text">Teach basic Claude Code desktop UI</div></div>
+        <div class="agenda-item"><div class="agenda-time">10:30am</div><div class="agenda-text"><strong>Modules 1–5</strong>Each module: show laptop → whiteboard feedback → 3 min piano exercise → coach at tables → repeat. Mic runner standby throughout.</div></div>
+        <div class="agenda-item"><div class="agenda-time">12:00pm</div><div class="agenda-text"><strong>Module 5: Build Your Dashboard 🔥</strong>WOW moment. Facilitators and videographer on HIGH ALERT.</div></div>
+        <div class="agenda-item"><div class="agenda-time">12:30pm</div><div class="agenda-text"><strong>Upsell</strong>Kingsley presents offer. Upsell team moves to back tables. QR codes + pen and paper ready.</div></div>
+        <div class="agenda-item"><div class="agenda-time">12:45pm</div><div class="agenda-text">Food ready outside — unboxed, cutlery sorted. Kingsley announces 2 afternoon speakers.</div></div>
+        <div class="agenda-item"><div class="agenda-time">1:00pm</div><div class="agenda-text"><strong>Lunch Break</strong>Videographer: Testimonial Window 1 🎥</div></div>
+        <div class="agenda-item"><div class="agenda-time">1:30pm</div><div class="agenda-text">3 facilitators help install Viral IG Carousel Skill at 1 specific table</div></div>
+        <div class="agenda-item"><div class="agenda-time">2:00pm</div><div class="agenda-text">Implementing in Your Business + 2nd Close</div></div>
+        <div class="agenda-item"><div class="agenda-time">3:00pm</div><div class="agenda-text">Tom</div></div>
+        <div class="agenda-item"><div class="agenda-time">3:30pm</div><div class="agenda-text">Benjamin — WhatsApp API</div></div>
+        <div class="agenda-item"><div class="agenda-time">4:00pm</div><div class="agenda-text"><strong>Wrap 🎉</strong>Videographer: Testimonial Window 2 🎥 — catch people near exit before they leave.</div></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">General House Rules — Everyone</div>
+      <div class="card">
+        <ul>
+          <li><strong>When the speaker is talking, everyone is silent</strong> — this includes team members. Model the right behaviour.</li>
+          <li><strong>Be early</strong> — 8am is 8am, not 8:05. Setup depends on every person arriving on time.</li>
+          <li><strong>Stay in your lane</strong> — focus on your assigned role. Don't drift into other roles unless asked.</li>
+          <li><strong>High energy at all times</strong> — the room takes its cues from the team. If the team is flat, the room will be flat.</li>
+          <li><strong>No phones during sessions</strong> unless your role requires it (UGC, videographer, music).</li>
+          <li><strong>Check in with Kingsley or Huda</strong> if you're unsure about anything — don't wing it.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       ORGANISERS
+  ════════════════════════════════════════ -->
+  <div id="tab-organisers" class="tab-panel">
+    <div class="role-badge">Organisers</div>
+    <div class="role-title">Kingsley & Huda</div>
+    <div class="role-desc">Own the full event experience end to end — logistics, flow, people, and energy.</div>
+
+    <div class="section">
+      <div class="section-title">Selling the Event</div>
+      <div class="card">
+        <ul>
+          <li>Run an interest poll — if 20–30 votes, confirm and run the event</li>
+          <li>Create WhatsApp group + Stripe links (10 super early / 15 early bird / 15 general)</li>
+          <li>Update GHL page with event details</li>
+          <li>Announce ticket availability</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Pre-Event Checklist — Kingsley</div>
+      <div class="card">
+        <ul class="checklist">
+          <li><input type="checkbox" id="k1"><label for="k1">Check GitHub course content is up to date</label></li>
+          <li><input type="checkbox" id="k2"><label for="k2">Confirm upsell offer and pricing</label></li>
+          <li><input type="checkbox" id="k3"><label for="k3">Brief videographer on testimonial questions</label></li>
+          <li><input type="checkbox" id="k4"><label for="k4">Speaker clicker ready</label></li>
+          <li><input type="checkbox" id="k5"><label for="k5">Video intro before speaker prepared</label></li>
+          <li><input type="checkbox" id="k6"><label for="k6">Countdown timer set up</label></li>
+          <li><input type="checkbox" id="k7"><label for="k7">HDMI converter packed</label></li>
+          <li><input type="checkbox" id="k8"><label for="k8">Power extension (4 heads) packed</label></li>
+          <li><input type="checkbox" id="k9"><label for="k9">DJI Mic charged</label></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Pre-Event Checklist — Huda</div>
+      <div class="card">
+        <ul class="checklist">
+          <li><input type="checkbox" id="h1"><label for="h1">Pre-event survey ready</label></li>
+          <li><input type="checkbox" id="h2"><label for="h2">Bunting prepared</label></li>
+          <li><input type="checkbox" id="h3"><label for="h3">Confirm pre-event briefing time</label></li>
+          <li><input type="checkbox" id="h4"><label for="h4">Confirm handout / printing items</label></li>
+          <li><input type="checkbox" id="h5"><label for="h5">Masking tape and sharpie for registration booth</label></li>
+          <li><input type="checkbox" id="h6"><label for="h6">2–3 bottles of water for speaker</label></li>
+          <li><input type="checkbox" id="h7"><label for="h7">Stripe upsell link ready</label></li>
+          <li><input type="checkbox" id="h8"><label for="h8">QR code printed for Stripe link</label></li>
+          <li><input type="checkbox" id="h9"><label for="h9">Facilitator showcase slides done</label></li>
+          <li><input type="checkbox" id="h10"><label for="h10">Extra AA and AAA batteries for mic</label></li>
+          <li><input type="checkbox" id="h11"><label for="h11">Pre-order food for VIPs</label></li>
+          <li><input type="checkbox" id="h12"><label for="h12">Assign registration team</label></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">On the Day — Agenda</div>
+      <div class="card">
+        <div class="agenda-item"><div class="agenda-time">8:00am</div><div class="agenda-text"><strong>Call Time</strong>Full team briefing. Setup music laptop, projector, Kingsley's Mac, clicker, tables, chairs, registration booth.</div></div>
+        <div class="agenda-item"><div class="agenda-time">9:00am</div><div class="agenda-text"><strong>Registration Opens</strong>Huda leads registration team. 2 on registration, 2 helping participants install Claude Code / Git / Homebrew. Usher to front seats. Energy music + countdown timer on screen.</div></div>
+        <div class="agenda-item"><div class="agenda-time">10:00am</div><div class="agenda-text"><strong>Event Starts</strong>Registration team calls anyone who hasn't arrived for ETA.</div></div>
+        <div class="agenda-item"><div class="agenda-time">10:15am</div><div class="agenda-text">Kingsley: Claude Malaysia vision — impact 10k Malaysians</div></div>
+        <div class="agenda-item"><div class="agenda-time">10:20am</div><div class="agenda-text">5 Facilitator intros + 3 min demo each</div></div>
+        <div class="agenda-item"><div class="agenda-time">10:25am</div><div class="agenda-text">Teach basic Claude Code desktop UI</div></div>
+        <div class="agenda-item"><div class="agenda-time">10:30am</div><div class="agenda-text"><strong>Modules 1–5</strong>Repeat format each module. Mic runner standby.</div></div>
+        <div class="agenda-item"><div class="agenda-time">12:00pm</div><div class="agenda-text"><strong>Module 5: Build Your Dashboard</strong>High alert — this is the WOW moment.</div></div>
+        <div class="agenda-item"><div class="agenda-time">12:30pm</div><div class="agenda-text"><strong>Upsell</strong>Back tables ready with QR codes, pen and paper. Upsell team in position.</div></div>
+        <div class="agenda-item"><div class="agenda-time">12:45pm</div><div class="agenda-text">Confirm food ready outside, unboxed, cutlery sorted. Kingsley announces 2 afternoon speakers.</div></div>
+        <div class="agenda-item"><div class="agenda-time">1:00pm</div><div class="agenda-text"><strong>Lunch Break</strong></div></div>
+        <div class="agenda-item"><div class="agenda-time">1:30pm</div><div class="agenda-text">3 facilitators help install Viral IG Carousel Skill at 1 specific table</div></div>
+        <div class="agenda-item"><div class="agenda-time">2:00pm</div><div class="agenda-text">Implementing in Your Business + 2nd Close</div></div>
+        <div class="agenda-item"><div class="agenda-time">3:00pm</div><div class="agenda-text">Tom</div></div>
+        <div class="agenda-item"><div class="agenda-time">3:30pm</div><div class="agenda-text">Benjamin — WhatsApp API</div></div>
+        <div class="agenda-item"><div class="agenda-time">4:00pm</div><div class="agenda-text"><strong>Wrap</strong></div></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Good vs Poor</div>
+      <div class="good-poor">
+        <div class="good-box">
+          <div class="gp-label">✓ Good</div>
+          <ul>
+            <li>Everything ready before 8am — no scrambling</li>
+            <li>Participants never feel organiser stress</li>
+            <li>Flow moves on time, no dead air</li>
+            <li>Upsell tables set before Kingsley needs them</li>
+            <li>Food ready and unboxed before 12:45pm</li>
+          </ul>
+        </div>
+        <div class="poor-box">
+          <div class="gp-label">✗ Poor</div>
+          <ul>
+            <li>Running around looking for items during the event</li>
+            <li>Slides or tech not tested beforehand</li>
+            <li>Food arrives late or still in boxes</li>
+            <li>QR codes missing at upsell time</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Course Access Link</div>
+      <div class="warning-box" style="background:#f0f7ff; border-color:#bfdbfe; color:#1e40af;">
+        <strong>📚 Share With Participants After Event</strong>
+        Paste the course access link here before briefing — this is what you send to all paid attendees within 24hrs of the event.
+      </div>
+      <div class="card" style="font-size:14px; color:#888; font-style:italic; text-align:center; padding:20px;">
+        [ Course link TBC — update before event ]
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Post-Event</div>
+      <div class="card">
+        <ul>
+          <li>Pack down — all equipment accounted for</li>
+          <li>Confirm upsell payments collected</li>
+          <li>Send follow-up WhatsApp to all participants within 24hrs</li>
+          <li>Share course access link with paid participants within 24hrs</li>
+          <li>Facilitator debrief call within 24hrs</li>
+          <li>Update GHL page with recap and testimonials within 48hrs</li>
+          <li>Compile feedback notes for next event within 1 week</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       FACILITATORS
+  ════════════════════════════════════════ -->
+  <div id="tab-facilitators" class="tab-panel">
+    <div class="role-badge">Facilitators</div>
+    <div class="role-title">Table Coaches</div>
+    <div class="role-desc">You are the coaching force on the ground. Every participant at your table should feel supported — never lost.</div>
+
+    <div class="section">
+      <div class="section-title">Pre-Event — Your Intro Slide</div>
+      <div class="card" style="margin-bottom:12px">
+        <p style="font-size:14px; margin-bottom:14px">Every faci prepares a 1-slide intro to share what you built. You get 3 minutes to shine.</p>
+        <a class="link-btn" href="https://www.loom.com/share/3d0a096d42a84086a4d0b01fc0098bc1" target="_blank">
+          <span class="link-icon">🎬</span>
+          <div class="link-text">
+            <div class="link-label">How to Update Your One-Slide Template</div>
+            <div class="link-sub">Watch on Loom</div>
+          </div>
+          <span class="link-arrow">↗</span>
+        </a>
+        <a class="link-btn secondary" href="https://gamma.app/docs/Claude-Malaysia--0n7zbidml21eqix" target="_blank">
+          <span class="link-icon">📊</span>
+          <div class="link-text">
+            <div class="link-label">Gamma Slides Template</div>
+            <div class="link-sub">Open in Gamma</div>
+          </div>
+          <span class="link-arrow">↗</span>
+        </a>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">During Event — Your Role</div>
+      <div class="card">
+        <ul>
+          <li><strong>You are assigned to a specific table</strong> — own it for the whole event</li>
+          <li><strong>When speaker is talking — you are silent.</strong> No side conversations. Full attention on the speaker. This is respect, and it models the right behaviour for participants.</li>
+          <li><strong>When piano music plays = exercise time</strong> — get up, walk behind your group, look over shoulders, coach quietly and individually</li>
+          <li><strong>Stay on high alert</strong> listening to the speaker — know what's being asked so you can help your table execute it</li>
+          <li><strong>Raise your hand (don't speak)</strong> if your group needs more time — Kingsley will see it. You are the ground gauge for pace.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Good vs Poor</div>
+      <div class="good-poor">
+        <div class="good-box">
+          <div class="gp-label">✓ Good</div>
+          <ul>
+            <li>Silent and focused when speaker is talking</li>
+            <li>Up and moving the moment piano plays</li>
+            <li>Every person at your table makes progress</li>
+            <li>You catch someone stuck before they raise their hand</li>
+            <li>Hand goes up (silently) when your table isn't ready</li>
+          </ul>
+        </div>
+        <div class="poor-box">
+          <div class="gp-label">✗ Poor</div>
+          <ul>
+            <li>Standing at the back joking and chatting with other facis — disrespectful to speaker and kills the room energy</li>
+            <li>Talking when the speaker is talking</li>
+            <li>Sitting while participants struggle</li>
+            <li>Missing the piano cue and staying seated</li>
+            <li>Not listening to speaker so you don't know what your table should do</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Post-Event</div>
+      <div class="card">
+        <ul>
+          <li>Join debrief call with Kingsley and Huda</li>
+          <li>Share what your table struggled with most</li>
+          <li>Note common blockers to improve next session</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       UPSELL TEAM
+  ════════════════════════════════════════ -->
+  <div id="tab-upsell" class="tab-panel">
+    <div class="role-badge">Upsell Team</div>
+    <div class="role-title">Back Table Sales</div>
+    <div class="role-desc">You close. Your job is to be at the back table during and after the upsell, handle final objections, and walk people to sign up. Be warm, be human, be confident.</div>
+
+    <div class="section">
+      <div class="section-title">Team</div>
+      <div class="card">
+        <div class="team-slot"><div class="slot-num">1</div><div class="slot-name">Steven</div></div>
+        <div class="team-slot"><div class="slot-num">2</div><div class="slot-name">Ginn Chow</div></div>
+        <div class="team-slot"><div class="slot-num">3</div><div class="slot-tbd">TBD</div></div>
+        <div class="team-slot"><div class="slot-num">4</div><div class="slot-tbd">TBD</div></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Your Role at the Back Table</div>
+      <div class="card">
+        <ul>
+          <li><strong>Be in position at 12:30pm</strong> when Kingsley starts the upsell — back tables ready with QR codes, pen and paper</li>
+          <li><strong>Final objection handling</strong> — address hesitations calmly and confidently</li>
+          <li><strong>CTA: shake hands, sign up</strong> — make it feel like a commitment, not a transaction</li>
+          <li><strong>Guide them to the QR code</strong> and stay with them until checkout is complete</li>
+          <li>Be present again at <strong>2pm for the 2nd close</strong></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Important — Deposit Policy</div>
+      <div class="warning-box">
+        <strong>⚠️ Non-Refundable RM500 Deposit</strong>
+        If their card gets stuck for whatever reason, they bank transfer the deposit directly. The deposit is non-refundable regardless of method. Communicate this clearly and kindly before they pay.
+      </div>
+      <div class="card" style="padding:0; overflow:hidden;">
+        <table class="pricing-table">
+          <thead><tr><th colspan="2">Bank Transfer Details</th></tr></thead>
+          <tbody>
+            <tr><td style="color:#888; width:40%">Account No.</td><td><strong>5142 8090 1848</strong></td></tr>
+            <tr><td style="color:#888">Name</td><td><strong>Kingsley Low Yean Wee</strong></td></tr>
+            <tr><td style="color:#888">Bank</td><td><strong>Maybank — SME Biz Account</strong></td></tr>
+            <tr><td style="color:#888">Amount</td><td><strong>RM 500 (non-refundable)</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Pricing Tiers</div>
+      <div class="seat-counter">
+        <div>
+          <div class="sc-label">Total Seats Available</div>
+          <div class="sc-num">25</div>
+        </div>
+        <div style="text-align:right">
+          <div class="sc-label">Once sold out</div>
+          <div style="font-size:13px; font-weight:600; margin-top:4px">Link is disabled</div>
+        </div>
+      </div>
+      <div class="card pricing-table-wrap" style="padding:0; overflow:hidden;">
+        <table class="pricing-table">
+          <thead>
+            <tr>
+              <th>Tier</th>
+              <th>General</th>
+              <th>VIP</th>
+              <th>Qty</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="tier-label">Tier 1</span></td>
+              <td>RM 1,997</td>
+              <td>RM 2,497</td>
+              <td>3 Gen · 2 VIP</td>
+            </tr>
+            <tr>
+              <td><span class="tier-label">Tier 2</span></td>
+              <td>RM 2,197</td>
+              <td>RM 2,697</td>
+              <td>6 Gen · 4 VIP</td>
+            </tr>
+            <tr>
+              <td><span class="tier-label">Tier 3</span></td>
+              <td>RM 2,297</td>
+              <td>RM 2,897</td>
+              <td>6 Gen · 4 VIP</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:12px; color:#888; margin-top:8px; padding-left:4px">Tiers unlock in order. Price increases as earlier tiers sell out.</p>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Common Objections — How to Handle</div>
+
+      <div class="q-block">
+        <div class="q-text">"It's too expensive / I need to think about it"</div>
+        <div class="q-prompt">→ "I understand. What I can tell you is — the earlier tier closes once it fills up and price goes up. What specifically are you unsure about? Let's work through it now." Then listen. After addressing — extend your hand: "Let's lock it in at this price today."</div>
+      </div>
+
+      <div class="q-block">
+        <div class="q-text">"I'm not tech-savvy enough"</div>
+        <div class="q-prompt">→ "You just spent the whole morning building something you didn't know how to build. That's the proof. This programme is designed exactly for people who feel that way."</div>
+      </div>
+
+      <div class="q-block">
+        <div class="q-text">"I need to check with my spouse / partner"</div>
+        <div class="q-prompt">→ "Totally fair. Can you call them now? I'll give you 5 minutes and I'll be right here. The tier won't last long." Stay nearby — don't disappear.</div>
+      </div>
+
+      <div class="q-block">
+        <div class="q-text">"I don't have time to implement"</div>
+        <div class="q-prompt">→ "The whole point is to save you time. What you built today took 3 hours. Imagine doing that in your business every week. The time investment is the shortcut."</div>
+      </div>
+
+      <div class="q-block" style="margin-bottom:0">
+        <div class="q-text">"Can I join next time instead?"</div>
+        <div class="q-prompt">→ "The next run will be at a higher price. The best time to lock in is today. We have limited seats and this tier won't be available again." Then extend your hand and walk them to the QR code.</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">The Close — Shake Hands, Sign Up</div>
+      <div class="card">
+        <p style="font-size:14px; color:#333; margin-bottom:10px">Once objections are handled, don't ask — lead. Extend your hand, make eye contact, and say:</p>
+        <div class="alert" style="margin-bottom:0">
+          <em>"Let's do this together. Scan here, put in your details, and we'll get you set up right now."</em><br><br>
+          Then stand next to them while they complete checkout. Don't walk away until payment is confirmed.
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Good vs Poor</div>
+      <div class="good-poor">
+        <div class="good-box">
+          <div class="gp-label">✓ Good</div>
+          <ul>
+            <li>In position at 12:30pm before Kingsley finishes the pitch</li>
+            <li>Warm, confident, not pushy</li>
+            <li>You stay with the person until payment is complete</li>
+            <li>Deposit policy and bank account shared clearly upfront</li>
+            <li>Back in position for the 2nd close at 2pm</li>
+          </ul>
+        </div>
+        <div class="poor-box">
+          <div class="gp-label">✗ Poor</div>
+          <ul>
+            <li>Not at the table when Kingsley points to the back</li>
+            <li>Letting people walk away with "I'll think about it"</li>
+            <li>Rushing or pressuring — kills trust</li>
+            <li>Forgetting to share deposit / bank account details</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       MUSIC / AV
+  ════════════════════════════════════════ -->
+  <div id="tab-music" class="tab-panel">
+    <div class="role-badge">Music / AV</div>
+    <div class="role-title">Room Energy Controller</div>
+    <div class="role-desc">You control the energy of the room. The right music at the right moment makes the whole event feel alive.</div>
+
+    <div class="section">
+      <div class="section-title">Playlists</div>
+      <a class="link-btn" href="https://open.spotify.com/playlist/2ce30IBwPrc0ZsEB5RWFop" target="_blank">
+        <span class="link-icon">🎉</span>
+        <div class="link-text">
+          <div class="link-label">Energy Songs Playlist</div>
+          <div class="link-sub">Welcome · Breaks · Ending — Open in Spotify</div>
+        </div>
+        <span class="link-arrow">↗</span>
+      </a>
+      <a class="link-btn secondary" href="https://open.spotify.com/playlist/6qIj3jfhQXuV0WpUedGlaV" target="_blank">
+        <span class="link-icon">🎹</span>
+        <div class="link-text">
+          <div class="link-label">Piano Focus Playlist</div>
+          <div class="link-sub">Exercise time only — Open in Spotify</div>
+        </div>
+        <span class="link-arrow">↗</span>
+      </a>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Music Cues</div>
+      <div class="card" style="padding:0; overflow:hidden;">
+        <table class="cue-table">
+          <thead><tr><th>Cue</th><th>Music</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Doors open / welcome / breaks / ending</td>
+              <td><span class="pill energy">🎉 Energy Songs</span></td>
+            </tr>
+            <tr>
+              <td>Kingsley: <em>"X minute exercise begins now…"</em></td>
+              <td><span class="pill piano">🎹 Piano Focus</span></td>
+            </tr>
+            <tr>
+              <td>Kingsley: <em>"Begin finishing up the exercise…"</em></td>
+              <td><span class="pill silence">🔇 No music</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Good vs Poor</div>
+      <div class="good-poor">
+        <div class="good-box">
+          <div class="gp-label">✓ Good</div>
+          <ul>
+            <li>Piano switches within 3 seconds of Kingsley's cue</li>
+            <li>Energy songs queued and ready before each break</li>
+            <li>Volume is right — felt but not overwhelming</li>
+            <li>Eyes on the room at all times, not on your phone</li>
+          </ul>
+        </div>
+        <div class="poor-box">
+          <div class="gp-label">✗ Poor</div>
+          <ul>
+            <li>Piano still playing after exercise ends</li>
+            <li>Dead silence during transitions</li>
+            <li>Wrong playlist at the wrong moment</li>
+            <li>Scrambling to find a song while the room waits</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       MIC RUNNER
+  ════════════════════════════════════════ -->
+  <div id="tab-mic" class="tab-panel">
+    <div class="role-badge">Mic Runner</div>
+    <div class="role-title">Mic Runner</div>
+    <div class="role-desc">Get the mic to the right person fast. Dead air kills energy.</div>
+
+    <div class="section">
+      <div class="section-title">Rules</div>
+      <div class="card">
+        <ul>
+          <li><strong>Stay on HIGH alert</strong> whenever you're holding the mic — always watching the room</li>
+          <li><strong>Check battery level</strong> before the event starts. Ask Huda for backup AA / AAA if needed.</li>
+          <li><strong>Return mic to the same designated spot</strong> every time it's not in use</li>
+          <li><strong>Anticipate who's next</strong> — don't wait for Kingsley to point, read the room</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Good vs Poor</div>
+      <div class="good-poor">
+        <div class="good-box">
+          <div class="gp-label">✓ Good</div>
+          <ul>
+            <li>Mic reaches the person before Kingsley finishes asking</li>
+            <li>Battery never dies mid-event</li>
+            <li>You always know where the mic is</li>
+            <li>Positioned smartly — not stuck at the back</li>
+          </ul>
+        </div>
+        <div class="poor-box">
+          <div class="gp-label">✗ Poor</div>
+          <ul>
+            <li>Slow to move — awkward silence while mic travels</li>
+            <li>Battery dies during Q&A</li>
+            <li>Mic left on a random table between uses</li>
+            <li>Standing in one spot the whole event</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       UGC CREATORS
+  ════════════════════════════════════════ -->
+  <div id="tab-ugc" class="tab-panel">
+    <div class="role-badge">UGC Creators</div>
+    <div class="role-title">Content Creators</div>
+    <div class="role-desc">Create authentic, personal content in your own style. You're a participant first — the best content comes from genuine experience, not scripted shots.</div>
+
+    <div class="section">
+      <div class="section-title">Reference Videos from Previous Events</div>
+      <div class="card" style="padding:12px; display:flex; flex-direction:column; gap:0">
+        <a class="link-btn" href="https://www.instagram.com/reel/DYa6qBFyiYS/" target="_blank">
+          <span class="link-icon">📱</span>
+          <div class="link-text"><div class="link-label">Chloe's Reel</div><div class="link-sub">Watch on Instagram</div></div>
+          <span class="link-arrow">↗</span>
+        </a>
+        <a class="link-btn secondary" href="https://www.instagram.com/reel/DYjOpd0Bnxh/" target="_blank" style="margin-top:8px">
+          <span class="link-icon">📱</span>
+          <div class="link-text"><div class="link-label">Queenie's Reel</div><div class="link-sub">Watch on Instagram</div></div>
+          <span class="link-arrow">↗</span>
+        </a>
+        <a class="link-btn secondary" href="https://www.instagram.com/reel/DYwG1XCR2Hp/" target="_blank" style="margin-top:8px">
+          <span class="link-icon">📱</span>
+          <div class="link-text"><div class="link-label">Yong's Reel</div><div class="link-sub">Watch on Instagram</div></div>
+          <span class="link-arrow">↗</span>
+        </a>
+        <a class="link-btn secondary" href="https://www.instagram.com/reel/DYm10Y4jbYO/" target="_blank" style="margin-top:8px">
+          <span class="link-icon">📱</span>
+          <div class="link-text"><div class="link-label">Kingsley's Reel</div><div class="link-sub">Watch on Instagram</div></div>
+          <span class="link-arrow">↗</span>
+        </a>
+        <a class="link-btn secondary" href="https://www.instagram.com/reel/DYb5yD5BVug/" target="_blank" style="margin-top:8px">
+          <span class="link-icon">📱</span>
+          <div class="link-text"><div class="link-label">Angel's Reel</div><div class="link-sub">Watch on Instagram</div></div>
+          <span class="link-arrow">↗</span>
+        </a>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Content Directions — Pick What Feels Natural</div>
+      <div class="card">
+        <ul>
+          <li><strong>Your honest thoughts</strong> — real, unfiltered reaction to the workshop</li>
+          <li><strong>Before vs after transformation</strong> — what you couldn't do before, what you can now</li>
+          <li><strong>Problems you were stuck on</strong> — what was blocking you before this</li>
+          <li><strong>Biggest takeaway or aha moment</strong> — that one thing that changed how you see things</li>
+          <li><strong>Short reveal</strong> — what you actually built or did after the class</li>
+          <li><strong>Interview Kingsley or other members</strong> — short, punchy, real</li>
+          <li><strong>POV learning</strong> — first-person, you as a student in the room</li>
+        </ul>
+        <div class="alert" style="margin-top:14px; margin-bottom:0">
+          Vertical video, IG Reel format. Authentic over polished. Do it in YOUR voice and style.
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">During Event</div>
+      <div class="card">
+        <ul>
+          <li>Capture moments that genuinely surprise or excite you</li>
+          <li>If something clicks — film your reaction right then</li>
+          <li>B-roll: your screen, hands typing, room energy</li>
+          <li>Messy and real beats clean and fake</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Good vs Poor</div>
+      <div class="good-poor">
+        <div class="good-box">
+          <div class="gp-label">✓ Good</div>
+          <ul>
+            <li>Content feels real — not like an ad</li>
+            <li>You filmed it because something genuinely moved you</li>
+            <li>Posted within 3 days while energy is fresh</li>
+            <li>ManyChat + affiliate link set up before you post</li>
+          </ul>
+        </div>
+        <div class="poor-box">
+          <div class="gp-label">✗ Poor</div>
+          <ul>
+            <li>Scripted, stiff — sounds like you were asked to say it</li>
+            <li>Posted 2 weeks later with no energy</li>
+            <li>No collab invite, no ManyChat, no affiliate — leaving money on the table</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Post-Event Checklist</div>
+      <div class="card" style="margin-bottom:14px">
+        <ul class="checklist">
+          <li><input type="checkbox" id="u1"><label for="u1">Edit and post within 3 days</label></li>
+          <li><input type="checkbox" id="u2"><label for="u2">Invite 5 collaborators: @claudemalaysiaofficial, @kingsleylow.ai + 3 creators from the event</label></li>
+          <li><input type="checkbox" id="u3"><label for="u3">Set up ManyChat — comment "claude" → auto DM ($29/month)</label></li>
+          <li><input type="checkbox" id="u4"><label for="u4">Create your affiliate link</label></li>
+          <li><input type="checkbox" id="u5"><label for="u5">Share your post in the WhatsApp group main chat</label></li>
+        </ul>
+      </div>
+      <a class="link-btn" href="https://www.instagram.com/reel/DXwKUA0Fcw2/" target="_blank">
+        <span class="link-icon">📲</span>
+        <div class="link-text"><div class="link-label">ManyChat Mini Tutorial</div><div class="link-sub">Watch on Instagram</div></div>
+        <span class="link-arrow">↗</span>
+      </a>
+      <a class="link-btn secondary" href="https://www.loom.com/share/05bf9b29bc5c44479468087f5666c63b" target="_blank">
+        <span class="link-icon">🎬</span>
+        <div class="link-text"><div class="link-label">ManyChat Full Setup Guide</div><div class="link-sub">Watch on Loom</div></div>
+        <span class="link-arrow">↗</span>
+      </a>
+      <a class="link-btn secondary" href="https://docs.google.com/document/d/1cjvDSdH7-OIb2YfoKMHe-KV2_VIbgXw2uD_6HOAVheY/edit" target="_blank">
+        <span class="link-icon">💰</span>
+        <div class="link-text"><div class="link-label">Affiliate Programme Guide</div><div class="link-sub">10% workshop · 4% done-for-you &gt;RM10k</div></div>
+        <span class="link-arrow">↗</span>
+      </a>
+      <a class="link-btn secondary" href="https://link.msgsndr.com/l/gwGr2IDXs" target="_blank">
+        <span class="link-icon">📊</span>
+        <div class="link-text"><div class="link-label">Affiliate Dashboard</div><div class="link-sub">View your earnings</div></div>
+        <span class="link-arrow">↗</span>
+      </a>
+      <a class="link-btn secondary" href="https://claudechallenge.com/affiliate-page" target="_blank">
+        <span class="link-icon">✍️</span>
+        <div class="link-text"><div class="link-label">Create Affiliate Account</div><div class="link-sub">claudechallenge.com</div></div>
+        <span class="link-arrow">↗</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       VIDEOGRAPHER
+  ════════════════════════════════════════ -->
+  <div id="tab-video" class="tab-panel">
+    <div class="role-badge">Videographer</div>
+    <div class="role-title">Testimonial Capture</div>
+    <div class="role-desc">Your one job is testimonials. Quality over quantity — 5 great clips beats 20 mediocre ones.</div>
+
+    <div class="section">
+      <div class="section-title">Pre-Event</div>
+      <div class="card">
+        <ul class="checklist">
+          <li><input type="checkbox" id="v1"><label for="v1">Sync with Kingsley on testimonial questions</label></li>
+          <li><input type="checkbox" id="v2"><label for="v2">Equipment check: DJI Mic, storage, battery fully charged</label></li>
+          <li><input type="checkbox" id="v3"><label for="v3">Scout venue for best lighting spots</label></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">During Event</div>
+      <div class="card">
+        <div class="agenda-item"><div class="agenda-time">8–10am</div><div class="agenda-text">Setup and arrival B-roll. Registration energy.</div></div>
+        <div class="agenda-item"><div class="agenda-time">12pm</div><div class="agenda-text"><strong>Module 5 — HIGH ALERT</strong>Participants seeing dashboards for the first time. Screen + face reaction in same frame. Capture WOW moments as they happen.</div></div>
+        <div class="agenda-item"><div class="agenda-time">1pm</div><div class="agenda-text"><strong>Testimonial Window 1</strong>Target 3–4 clips. See questions below.</div></div>
+        <div class="agenda-item"><div class="agenda-time">1:30–4pm</div><div class="agenda-text">Tom and Benjamin sessions. Audience reactions, key moments.</div></div>
+        <div class="agenda-item"><div class="agenda-time">4pm</div><div class="agenda-text"><strong>Testimonial Window 2</strong>Position near exit. Catch people before they leave. Prioritise anyone with a visible breakthrough. Target 3–4 more clips — 8 total.</div></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Before Every Interview — Brief the Participant</div>
+      <div class="card">
+        <div class="alert" style="margin-bottom:0">
+          <em>"Before we start — when I ask you a question, begin your answer by repeating part of it back. If I ask 'What were you struggling with before today?' start with 'Before today, I was struggling with…' This makes it much easier to edit."</em>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Testimonial Questions</div>
+      <div class="q-block"><div class="q-text">1. What were you struggling with before today?</div><div class="q-prompt">→ "Before today, I was struggling with…"</div></div>
+      <div class="q-block"><div class="q-text">2. What was it like after?</div><div class="q-prompt">→ "After the workshop, I…"</div></div>
+      <div class="q-block"><div class="q-text">3. What did you build today?</div><div class="q-prompt">→ "Today I built…"</div></div>
+      <div class="q-block"><div class="q-text">4. What surprised you most?</div><div class="q-prompt">→ "What surprised me most was…"</div></div>
+      <div class="q-block" style="margin-bottom:0"><div class="q-text">5. What would you say to someone thinking about joining?</div><div class="q-prompt">→ "If you're thinking about joining, I would say…"</div></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Good vs Poor</div>
+      <div class="good-poor">
+        <div class="good-box">
+          <div class="gp-label">✓ Good</div>
+          <ul>
+            <li>Participants briefed before every clip — answers are clean and self-contained</li>
+            <li>8+ usable clips across both windows</li>
+            <li>Clean audio — DJI Mic clipped on</li>
+            <li>Positioned near exit at 4pm — no one slips out</li>
+          </ul>
+        </div>
+        <div class="poor-box">
+          <div class="gp-label">✗ Poor</div>
+          <ul>
+            <li>Participants answer without repeating — unusable for editing</li>
+            <li>Only 2–3 clips because lunch window was wasted</li>
+            <li>Shaky footage or bad audio</li>
+            <li>Missed 4pm window because you were packing up</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Post-Event</div>
+      <div class="card">
+        <ul>
+          <li><strong>Same day:</strong> Upload raw footage to shared folder</li>
+          <li><strong>Within 24hrs:</strong> Flag top 5 clips to Kingsley</li>
+          <li><strong>Within 48hrs:</strong> Short edited testimonial cut ready for review</li>
+          <li><strong>Within 72hrs:</strong> Final clips handed over for GHL and marketing</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  function switchTab(btn, name) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    btn.classList.add('active');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+</script>
+
+</body>
+</html>
