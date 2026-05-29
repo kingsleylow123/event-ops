@@ -27,14 +27,29 @@
   header h1 { font-size: 16px; font-weight: 700; letter-spacing: 0.3px; }
   header p { font-size: 12px; opacity: 0.55; margin-top: 2px; }
 
-  .tab-bar {
-    display: flex;
-    overflow-x: auto;
-    background: #fff;
-    border-bottom: 1px solid #e5e5e5;
+  /* Tab bar wrapper — handles sticky + right-fade cue */
+  .tab-bar-wrap {
     position: sticky;
     top: 62px;
     z-index: 99;
+    background: #fff;
+    border-bottom: 1px solid #e5e5e5;
+  }
+  .tab-bar-wrap::after {
+    content: '';
+    position: absolute;
+    top: 0; right: 0; bottom: 0;
+    width: 60px;
+    background: linear-gradient(to right, rgba(255,255,255,0), #fff 75%);
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+  .tab-bar-wrap.at-end::after { opacity: 0; }
+
+  .tab-bar {
+    display: flex;
+    overflow-x: auto;
+    background: transparent;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
   }
@@ -364,7 +379,7 @@
     header { padding: 12px 14px 10px; }
     header h1 { font-size: 14px; }
 
-    .tab-bar { top: 52px; }
+    .tab-bar-wrap { top: 52px; }
     .tab-btn { padding: 10px 12px; font-size: 12px; }
 
     .content { padding: 16px 12px 60px; }
@@ -419,15 +434,17 @@
   </div>
 </header>
 
-<div class="tab-bar">
-  <button class="tab-btn active" onclick="switchTab(this,'agenda')">📋 Agenda</button>
-  <button class="tab-btn" onclick="switchTab(this,'organisers')">Organisers</button>
-  <button class="tab-btn" onclick="switchTab(this,'ugc')">UGC Creators</button>
-  <button class="tab-btn" onclick="switchTab(this,'video')">Videographer</button>
-  <button class="tab-btn" onclick="switchTab(this,'facilitators')">Facilitators</button>
-  <button class="tab-btn" onclick="switchTab(this,'music')">Music / AV</button>
-  <button class="tab-btn" onclick="switchTab(this,'mic')">Mic Runner</button>
-  <button class="tab-btn" onclick="switchTab(this,'upsell')">Upsell Team</button>
+<div class="tab-bar-wrap" id="tbw">
+  <div class="tab-bar" id="tab-bar" onscroll="tbScroll(this)">
+    <button class="tab-btn active" onclick="switchTab(this,'agenda')">📋 Agenda</button>
+    <button class="tab-btn" onclick="switchTab(this,'organisers')">Organisers</button>
+    <button class="tab-btn" onclick="switchTab(this,'ugc')">UGC Creators</button>
+    <button class="tab-btn" onclick="switchTab(this,'video')">Videographer</button>
+    <button class="tab-btn" onclick="switchTab(this,'facilitators')">Facilitators</button>
+    <button class="tab-btn" onclick="switchTab(this,'music')">Music / AV</button>
+    <button class="tab-btn" onclick="switchTab(this,'mic')">Mic Runner</button>
+    <button class="tab-btn" onclick="switchTab(this,'upsell')">Upsell Team</button>
+  </div>
 </div>
 
 <div class="content">
@@ -1232,6 +1249,19 @@
     btn.classList.add('active');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
+
+  function tbScroll(el) {
+    var wrap = document.getElementById('tbw');
+    var atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 8;
+    if (atEnd) wrap.classList.add('at-end');
+    else wrap.classList.remove('at-end');
+  }
+
+  // Check on load — if all tabs already fit, hide the fade
+  window.addEventListener('DOMContentLoaded', function () {
+    var tb = document.getElementById('tab-bar');
+    if (tb) tbScroll(tb);
+  });
 </script>
 
 
