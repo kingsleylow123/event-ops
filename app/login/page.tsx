@@ -33,7 +33,7 @@ function LoginForm() {
     if (mode === 'reset') {
       const supabase = createSupabaseBrowserClient()
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: 'https://event-ops-six.vercel.app/auth/callback?next=/profile',
+        redirectTo: 'https://event-ops-six.vercel.app/auth/callback?next=/reset-password',
       })
       if (error) {
         setMessage({ kind: 'error', text: error.message })
