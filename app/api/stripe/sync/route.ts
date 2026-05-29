@@ -35,14 +35,10 @@ const EVENT_PRICE_MAP: Record<string, PriceConfig> = {
     },
   },
   'june-7': {
-    amounts: [249, 297, 347, 497, 597, 697],
+    amounts: [297, 547],
     ticketTypeByAmount: {
-      249: 'super_early_bird_general',
-      297: 'early_bird_general',
-      347: 'standard_general',
-      497: 'super_early_bird_vip',
-      597: 'early_bird_vip',
-      697: 'standard_vip',
+      297: 'super_early_bird_general',
+      547: 'super_early_bird_vip',
     },
   },
 }
