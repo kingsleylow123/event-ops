@@ -410,8 +410,13 @@
 <body>
 
 <header>
-  <h1>Claude Malaysia — Event Briefing</h1>
-  <p>Select your role below</p>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <img src="/claude-my-logo.svg" alt="Claude Malaysia" style="width:36px;height:36px;border-radius:50%;flex-shrink:0;">
+    <div>
+      <h1>Claude Malaysia — Event Briefing</h1>
+      <p>Select your role below</p>
+    </div>
+  </div>
 </header>
 
 <div class="tab-bar">
@@ -1232,26 +1237,24 @@
 
 <script>
 (function () {
+  // Dark theme colours matching EventOps floor plan
   const COLORS = {
-    vip:      { bg: '#dbeafe', border: '#93c5fd', text: '#1e40af' },
-    general:  { bg: '#e2e8f0', border: '#94a3b8', text: '#334155' },
-    creator:  { bg: '#ffedd5', border: '#fdba74', text: '#9a3412' },
-    overflow: { bg: '#fef3c7', border: '#fcd34d', text: '#92400e' },
-    camera:   { bg: '#f3e8ff', border: '#c4b5fd', text: '#6b21a8' },
-    other:    { bg: '#f4f4f5', border: '#d4d4d8', text: '#52525b' },
+    vip:      { bg: '#1e3a8a', border: '#3b82f6', text: '#93c5fd' },
+    general:  { bg: '#475569', border: '#64748b', text: '#cbd5e1' },
+    creator:  { bg: '#ea580c', border: '#f97316', text: '#fed7aa' },
+    overflow: { bg: '#92400e', border: '#d97706', text: '#fde68a' },
+    camera:   { bg: '#7e22ce', border: '#a855f7', text: '#e9d5ff' },
+    other:    { bg: '#3f3f46', border: '#52525b', text: '#a1a1aa' },
   };
   const TYPE_LABELS = { vip: 'VIPs', general: 'pax', creator: 'creators', overflow: 'overflow', camera: 'camera', other: 'pax' };
   function c(type) { return COLORS[type] || COLORS.other; }
 
-  async function loadFloorPlan() {
+  function loadFloorPlan() {
     const picWrap    = document.getElementById('fp-pic-wrap');
     const layoutWrap = document.getElementById('fp-layout-wrap');
     const errHtml    = '<div class="card" style="color:#aaa;text-align:center;padding:16px;font-size:13px;">No floor plan set for this event.</div>';
     try {
-      const res    = await fetch('/api/events');
-      if (!res.ok) throw new Error();
-      const events = await res.json();
-      const active = events.find(e => e.is_active) || events[0];
+      const active = window.__ACTIVE_EVENT__;
       if (!active || !active.floor_plan) { picWrap.innerHTML = errHtml; layoutWrap.innerHTML = errHtml; return; }
       const fp       = active.floor_plan;
       const sections = fp.sections || [];
@@ -1281,7 +1284,7 @@
       picHtml += '</tbody></table></div>';
       picWrap.innerHTML = picHtml;
 
-      /* ── Venue Layout ── */
+      /* ── Venue Layout — dark theme matching EventOps ── */
       const totals = {};
       sections.forEach(s => { totals[s.type] = (totals[s.type] || 0) + (Number(s.pax) || 0); });
       const grand  = Object.values(totals).reduce((a, b) => a + b, 0);
@@ -1290,52 +1293,77 @@
       if (totals.overflow) totStr += ` · OVERFLOW ${totals.overflow}`;
       totStr += ` = ${grand} PAX`;
 
-      let html = '<div class="fp-card">';
+      let html = '<div style="background:#0d0d0d;border:1px solid #27272a;border-radius:12px;padding:20px 16px;">';
 
-      // Stage
-      html += `<div class="fp-stage"><div class="fp-stage-box"><div class="fp-stage-label">★ STAGE ★</div><div class="fp-stage-name">${fp.stage_speaker || '—'}</div></div></div>`;
+      // Stage (centered)
+      html += `<div style="display:flex;justify-content:center;margin-bottom:16px;">
+        <div style="background:#1e3a8a;border:1px solid #1d4ed8;border-radius:10px;padding:14px 50px;text-align:center;min-width:240px;">
+          <div style="font-size:9px;letter-spacing:2px;color:#93c5fd;opacity:.8;">★ STAGE ★</div>
+          <div style="font-size:17px;font-weight:800;text-transform:uppercase;color:#fff;margin-top:4px;">${fp.stage_speaker || '—'}</div>
+        </div>
+      </div>`;
 
       // Speaker needs
       const needs = (fp.speaker_needs || []).filter(n => n);
       if (needs.length) {
-        html += `<div class="fp-needs"><div class="fp-needs-title">🎤 Speaker needs</div><ul style="list-style:none;padding:0;margin:0;">`;
-        needs.forEach(n => { html += `<li style="font-size:13px;color:#1e40af;padding:1px 0;">• ${n}</li>`; });
-        html += '</ul></div>';
+        html += `<div style="background:#0f172a;border:1px solid #1e40af;border-radius:8px;padding:10px 14px;margin-bottom:14px;max-width:320px;margin-left:auto;margin-right:auto;">
+          <div style="font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#60a5fa;margin-bottom:6px;">🎤 Speaker needs</div>`;
+        needs.forEach(n => { html += `<div style="font-size:12px;color:#93c5fd;padding:1px 0;">• ${n}</div>`; });
+        html += `</div>`;
       }
 
-      // Totals
-      html += `<div class="fp-totals"><span>${totStr}</span></div>`;
+      // Totals pill
+      html += `<div style="text-align:center;margin-bottom:18px;">
+        <span style="display:inline-block;border:1.5px solid #ea580c;color:#f97316;font-size:11px;font-weight:700;border-radius:20px;padding:4px 14px;text-transform:uppercase;letter-spacing:.5px;">◆ ${totStr}</span>
+      </div>`;
 
-      // Sections grid
+      // Sections — 3-column grid
       if (sections.length) {
-        html += '<div class="fp-grid">';
+        html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px;">';
         sections.forEach(s => {
           const col  = c(s.type);
           const desc = s.pax ? `${s.pax} ${TYPE_LABELS[s.type] || 'pax'}` : '—';
-          const note = s.note ? `<div class="fp-section-note">${s.note.split('•')[0].trim()}</div>` : '';
-          html += `<div class="fp-section">
-            <div class="fp-section-name">${s.label}</div>
-            <div class="fp-bars">
-              <div class="fp-bar" style="background:${col.bg};border:1.5px solid ${col.border};"></div>
-              <div class="fp-bar" style="background:${col.bg};border:1.5px solid ${col.border};"></div>
+          const note = s.note ? `<div style="font-size:9px;color:#71717a;margin-top:3px;line-height:1.3;">${s.note.split('•')[0].trim()}</div>` : '';
+          html += `<div style="text-align:center;">
+            <div style="font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#f97316;margin-bottom:7px;">${s.label}</div>
+            <div style="display:flex;justify-content:center;gap:6px;height:90px;">
+              <div style="flex:1;max-width:36px;background:${col.bg};border-radius:4px;"></div>
+              <div style="flex:1;max-width:36px;background:${col.bg};border-radius:4px;"></div>
             </div>
-            <div class="fp-section-desc" style="color:${col.text};">${desc}</div>
+            <div style="font-size:12px;color:${col.text};font-weight:600;margin-top:5px;">${desc}</div>
             ${note}
           </div>`;
         });
         html += '</div>';
       }
 
-      // Videographer
+      // Videographer strip
       if (fp.videographer) {
-        html += `<div class="fp-vid"><div class="fp-vid-box"><span style="font-size:20px;">📹</span><div><div class="fp-vid-label">Videographer</div><div class="fp-vid-name">${fp.videographer}</div></div></div></div>`;
+        html += `<div style="display:flex;justify-content:center;margin-bottom:16px;">
+          <div style="background:#2e1065;border:1px solid #7e22ce;border-radius:10px;padding:10px 24px;display:flex;align-items:center;gap:12px;min-width:220px;">
+            <span style="font-size:18px;">📹</span>
+            <div style="text-align:center;">
+              <div style="font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#c084fc;">Videographer</div>
+              <div style="font-size:14px;font-weight:700;color:#f5f3ff;margin-top:2px;">${fp.videographer}</div>
+            </div>
+          </div>
+        </div>`;
       }
 
-      // Bottom row
-      html += `<div class="fp-bottom">
-        <div class="fp-cell amber"><div class="fp-cell-label">📋 Registration</div><div class="fp-cell-value">${fp.registration || '—'}</div></div>
-        <div class="fp-cell neutral"><div class="fp-cell-label">▼ Main Door ▼</div><div class="fp-cell-value">${fp.main_door || '— entrance —'}</div></div>
-        <div class="fp-cell amber"><div class="fp-cell-label">🍱 F&amp;B Station</div><div class="fp-cell-value">${fp.fnb || '—'}</div></div>
+      // Bottom row: Registration | Main Door | F&B
+      html += `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;border-top:1px solid #27272a;padding-top:14px;">
+        <div style="background:#1c1400;border:1px solid #78350f;border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#d97706;">📋 Registration</div>
+          <div style="font-size:12px;font-weight:600;margin-top:4px;color:#fef3c7;">${fp.registration || '—'}</div>
+        </div>
+        <div style="background:#111;border:1px solid #3f3f46;border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#71717a;">▼ Main Door ▼</div>
+          <div style="font-size:11px;color:#71717a;font-style:italic;margin-top:4px;">${fp.main_door || '— entrance —'}</div>
+        </div>
+        <div style="background:#1c1400;border:1px solid #78350f;border-radius:8px;padding:10px;text-align:center;">
+          <div style="font-size:9px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#d97706;">🍱 F&amp;B Station</div>
+          <div style="font-size:12px;font-weight:600;margin-top:4px;color:#fef3c7;">${fp.fnb || '—'}</div>
+        </div>
       </div>`;
 
       html += '</div>';

@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <!-- Background circle (orange) -->
+  <circle cx="100" cy="100" r="100" fill="#D4684A"/>
+
+  <!-- Crescent moon -->
+  <path d="M85 40 A65 65 0 0 0 85 160 A45 45 0 0 1 85 40 Z" fill="white"/>
+
+  <!-- Starburst rays from center ~(105,100) -->
+  <g fill="white" transform="translate(108,100)">
+    <!-- 12 rays in a fan (right semicircle) -->
+    <polygon points="0,-3 55,-8 55,8 0,3" transform="rotate(-75)"/>
+    <polygon points="0,-3 55,-8 55,8 0,3" transform="rotate(-55)"/>
+    <polygon points="0,-3 55,-8 55,8 0,3" transform="rotate(-35)"/>
+    <polygon points="0,-3 55,-8 55,8 0,3" transform="rotate(-15)"/>
+    <polygon points="0,-3 55,-8 55,8 0,3" transform="rotate(5)"/>
+    <polygon points="0,-3 55,-8 55,8 0,3" transform="rotate(25)"/>
+    <polygon points="0,-3 55,-8 55,8 0,3" transform="rotate(45)"/>
+    <polygon points="0,-3 55,-8 55,8 0,3" transform="rotate(65)"/>
+    <polygon points="0,-3 55,-8 55,8 0,3" transform="rotate(85)"/>
+    <!-- Left side shorter rays (peeking through crescent) -->
+    <polygon points="0,-2 30,-5 30,5 0,2" transform="rotate(-95)"/>
+    <polygon points="0,-2 25,-4 25,4 0,2" transform="rotate(-115)"/>
+    <polygon points="0,-2 20,-3 20,3 0,2" transform="rotate(-135)"/>
+    <!-- Center dot -->
+    <circle cx="0" cy="0" r="4"/>
+  </g>
+
+  <!-- Small 8-pointed star near crescent top -->
+  <g fill="white" transform="translate(80,58)">
+    <polygon points="0,-9 2,-2 9,0 2,2 0,9 -2,2 -9,0 -2,-2"/>
+  </g>
+</svg>
