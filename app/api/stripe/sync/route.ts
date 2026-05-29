@@ -34,15 +34,31 @@ const EVENT_PRICE_MAP: Record<string, PriceConfig> = {
       697: 'standard_vip',
     },
   },
+  'june-7': {
+    amounts: [249, 297, 347, 497, 597, 697],
+    ticketTypeByAmount: {
+      249: 'super_early_bird_general',
+      297: 'early_bird_general',
+      347: 'standard_general',
+      497: 'super_early_bird_vip',
+      597: 'early_bird_vip',
+      697: 'standard_vip',
+    },
+  },
 }
+
+// Cutoff: payments after this date go to June 7th+, not June 1st
+const JUNE1_CUTOFF = new Date('2026-05-30T00:00:00Z').getTime() / 1000
 
 function slugForEvent(event: Event): string | null {
   if (!event.date) return null
   const d = new Date(event.date)
   const year = d.getUTCFullYear()
   const month = d.getUTCMonth()
+  const day = d.getUTCDate()
   if (year === 2026 && month === 4) return 'may-16'
-  if (year === 2026 && month === 5) return 'june-1'
+  if (year === 2026 && month === 5 && day <= 1) return 'june-1'
+  if (year === 2026 && month === 5 && day >= 7) return 'june-7'
   return null
 }
 
@@ -54,6 +70,14 @@ function resolveEvent(
   events: EventWithSlug[],
 ): EventWithSlug | null {
   const sessionDate = new Date(sessionCreatedSec * 1000)
+
+  // Hard cutoff: payments after May 29 belong to June 7th or later, not June 1st
+  const june1Event = events.find(e => e.slug === 'june-1')
+  const june7Event = events.find(e => e.slug === 'june-7')
+  if (june1Event && june7Event && sessionCreatedSec >= JUNE1_CUTOFF) {
+    // Force assign to June 7th if price matches
+    if (june7Event.priceConfig.amounts.includes(amountRm)) return june7Event
+  }
 
   const matchesByPrice = events.filter(e => e.priceConfig.amounts.includes(amountRm))
 
