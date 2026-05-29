@@ -220,12 +220,12 @@ export default function AttendeesPage() {
       {/* Totals bar */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {[
-          { label: 'Total Participants', value: attendees.length, color: 'text-white', border: 'border-amber-500/50' },
-          { label: 'Paid', value: totalPaid, color: 'text-green-400', border: 'border-zinc-800' },
-          { label: 'Pending', value: totalPending, color: 'text-yellow-400', border: 'border-zinc-800' },
-          { label: 'Free', value: totalFree, color: 'text-blue-400', border: 'border-zinc-800' },
-          { label: 'Revenue', value: `RM ${totalRevenue.toLocaleString()}`, color: 'text-amber-400', border: 'border-zinc-800' },
-        ].map(s => (
+          { label: 'Total Participants', value: attendees.length, color: 'text-white', border: 'border-amber-500/50', adminOnly: false },
+          { label: 'Paid', value: totalPaid, color: 'text-green-400', border: 'border-zinc-800', adminOnly: false },
+          { label: 'Pending', value: totalPending, color: 'text-yellow-400', border: 'border-zinc-800', adminOnly: true },
+          { label: 'Free', value: totalFree, color: 'text-blue-400', border: 'border-zinc-800', adminOnly: true },
+          { label: 'Revenue', value: `RM ${totalRevenue.toLocaleString()}`, color: 'text-amber-400', border: 'border-zinc-800', adminOnly: true },
+        ].filter(s => !s.adminOnly || isAdmin).map(s => (
           <div key={s.label} className={`bg-[#111] border ${s.border} rounded-xl px-4 py-3`}>
             <p className="text-xs text-zinc-500 mb-0.5">{s.label}</p>
             <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
