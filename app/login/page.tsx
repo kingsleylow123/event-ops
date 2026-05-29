@@ -31,20 +31,20 @@ function LoginForm() {
     const supabase = createSupabaseBrowserClient()
 
     if (mode === 'signup') {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
-      })
+      const { error } = await supabase.auth.signUp({ email, password })
       if (error) {
         setMessage({ kind: 'error', text: error.message })
-      } else {
-        setMessage({
-          kind: 'info',
-          text: 'Check your email and click the confirmation link to finish creating your account.',
-        })
+        setLoading(false)
+        return
       }
-      setLoading(false)
+      // Notify admin via email
+      await fetch('/api/notify-signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      }).catch(() => {})
+      // Redirect to pending page
+      router.push('/pending')
       return
     }
 
