@@ -35,24 +35,48 @@
     background: #fff;
     border-bottom: 1px solid #e5e5e5;
   }
+  /* Fade gradient — always visible when not at end */
   .tab-bar-wrap::after {
     content: '';
     position: absolute;
-    top: 0; right: 0; bottom: 0;
-    width: 60px;
-    background: linear-gradient(to right, rgba(255,255,255,0), #fff 75%);
+    top: 0; right: 44px; bottom: 0;
+    width: 48px;
+    background: linear-gradient(to right, rgba(255,255,255,0), #fff 90%);
     pointer-events: none;
     transition: opacity 0.2s;
   }
   .tab-bar-wrap.at-end::after { opacity: 0; }
 
+  /* Arrow button */
+  .tab-scroll-btn {
+    position: absolute;
+    top: 0; right: 0; bottom: 0;
+    width: 44px;
+    background: #fff;
+    border: none;
+    border-left: 1px solid #e5e5e5;
+    color: #1a1a1a;
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.2s, background 0.15s;
+    flex-shrink: 0;
+  }
+  .tab-scroll-btn:active { background: #f5f5f7; }
+  .tab-bar-wrap.at-end .tab-scroll-btn { opacity: 0; pointer-events: none; }
+
   .tab-bar {
     display: flex;
     overflow-x: auto;
     background: transparent;
+    /* leave room for the arrow button */
+    padding-right: 44px;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
   }
+  .tab-bar-wrap.at-end .tab-bar { padding-right: 0; }
   .tab-bar::-webkit-scrollbar { display: none; }
 
   .tab-btn {
@@ -445,6 +469,7 @@
     <button class="tab-btn" onclick="switchTab(this,'mic')">Mic Runner</button>
     <button class="tab-btn" onclick="switchTab(this,'upsell')">Upsell Team</button>
   </div>
+  <button class="tab-scroll-btn" id="tab-arrow" onclick="tbArrow()" aria-label="Scroll tabs">›</button>
 </div>
 
 <div class="content">
@@ -1253,14 +1278,29 @@
   function tbScroll(el) {
     var wrap = document.getElementById('tbw');
     var atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 8;
-    if (atEnd) wrap.classList.add('at-end');
-    else wrap.classList.remove('at-end');
+    wrap.classList.toggle('at-end', atEnd);
   }
 
-  // Check on load — if all tabs already fit, hide the fade
+  // Tap arrow — scroll right by ~200px
+  function tbArrow() {
+    var tb = document.getElementById('tab-bar');
+    tb.scrollBy({ left: 200, behavior: 'smooth' });
+  }
+
   window.addEventListener('DOMContentLoaded', function () {
     var tb = document.getElementById('tab-bar');
-    if (tb) tbScroll(tb);
+    if (!tb) return;
+    tbScroll(tb);
+
+    // Bounce animation — only on mobile (scrollWidth > clientWidth)
+    if (tb.scrollWidth > tb.clientWidth + 8) {
+      setTimeout(function () {
+        tb.scrollTo({ left: 80, behavior: 'smooth' });
+        setTimeout(function () {
+          tb.scrollTo({ left: 0, behavior: 'smooth' });
+        }, 600);
+      }, 800);
+    }
   });
 </script>
 
