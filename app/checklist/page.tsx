@@ -243,47 +243,39 @@ export default function ChecklistPage() {
             {catItems.length === 0 ? (
               <p className="text-zinc-600 text-sm px-5 py-4">No items yet.</p>
             ) : (
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-zinc-600 text-xs border-b border-zinc-900">
-                    <th className="px-5 py-2">Task</th>
-                    <th className="px-5 py-2">PIC</th>
-                    <th className="px-5 py-2">Due</th>
-                    <th className="px-5 py-2">Status</th>
-                    <th className="px-5 py-2 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <div className="divide-y divide-zinc-900">
                   {catItems.map(it => {
                     const waUrl = toWhatsApp(it.pic_phone)
                     return (
-                      <tr key={it.id} className="border-b border-zinc-900 hover:bg-zinc-900/30">
-                        <td className="px-5 py-3">
-                          <span className={it.status === 'done' ? 'line-through text-zinc-500' : ''}>{it.item}</span>
-                          {it.notes && <div className="text-xs text-zinc-600 mt-0.5">{it.notes}</div>}
-                        </td>
-                        <td className="px-5 py-3">
-                          {it.pic_name ? (
-                            <div className="flex items-center gap-2">
-                              <span className="text-zinc-300">{it.pic_name}</span>
-                              {waUrl && (
-                                <a href={waUrl} target="_blank" rel="noopener noreferrer"
-                                  className="text-green-400 hover:text-green-300" title="WhatsApp PIC">💬</a>
-                              )}
-                            </div>
-                          ) : <span className="text-zinc-600">—</span>}
-                        </td>
-                        <td className="px-5 py-3 text-zinc-400 text-xs">
-                          {it.due_date ? new Date(it.due_date).toLocaleDateString('en-MY', { dateStyle: 'medium' }) : '—'}
-                        </td>
-                        <td className="px-5 py-3">
+                      <div key={it.id} className="px-4 py-3 hover:bg-zinc-900/30">
+                        {/* Task name + status */}
+                        <div className="flex items-start justify-between gap-2 mb-1.5">
+                          <span className={`text-sm font-medium flex-1 ${it.status === 'done' ? 'line-through text-zinc-500' : 'text-white'}`}>
+                            {it.item}
+                          </span>
                           <button onClick={() => cycleStatus(it)}
-                            className={`text-xs px-2 py-1 rounded-full font-medium cursor-pointer hover:opacity-80 ${STATUS_STYLES[it.status]}`}>
+                            className={`text-xs px-2 py-0.5 rounded-full font-medium cursor-pointer hover:opacity-80 flex-shrink-0 ${STATUS_STYLES[it.status]}`}>
                             {it.status.replace('_', ' ')}
                           </button>
-                        </td>
-                        <td className="px-5 py-3 text-right">
-                          <div className="flex justify-end gap-2">
+                        </div>
+                        {it.notes && <p className="text-xs text-zinc-600 mb-1.5">{it.notes}</p>}
+                        {/* Meta row: PIC + Due + Actions */}
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-3 text-xs text-zinc-400">
+                            {it.pic_name && (
+                              <span className="flex items-center gap-1">
+                                👤 {it.pic_name}
+                                {waUrl && (
+                                  <a href={waUrl} target="_blank" rel="noopener noreferrer"
+                                    className="text-green-400 hover:text-green-300">💬</a>
+                                )}
+                              </span>
+                            )}
+                            {it.due_date && (
+                              <span>📅 {new Date(it.due_date).toLocaleDateString('en-MY', { dateStyle: 'medium' })}</span>
+                            )}
+                          </div>
+                          <div className="flex gap-1.5">
                             <button onClick={() => openEdit(it)}
                               className="text-xs text-zinc-400 hover:text-amber-400 border border-zinc-700 hover:border-amber-500/50 px-2 py-1 rounded">
                               Edit
@@ -293,12 +285,11 @@ export default function ChecklistPage() {
                               ✕
                             </button>
                           </div>
-                        </td>
-                      </tr>
+                        </div>
+                      </div>
                     )
                   })}
-                </tbody>
-              </table>
+                </div>
             )}
           </div>
         )
