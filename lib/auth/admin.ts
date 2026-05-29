@@ -1,9 +1,12 @@
-// The single admin who can approve / reject user signups.
-export const ADMIN_EMAIL = 'wowo.vs.wawa@gmail.com'
+// Admins/founders who can approve / reject user signups.
+export const ADMIN_EMAILS = [
+  'wowo.vs.wawa@gmail.com',
+  'kingsleylow99@gmail.com',
+]
 
 export function isAdminEmail(email: string | null | undefined): boolean {
   if (!email) return false
-  return email.toLowerCase() === ADMIN_EMAIL.toLowerCase()
+  return ADMIN_EMAILS.some(a => a.toLowerCase() === email.toLowerCase())
 }
 
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected'
