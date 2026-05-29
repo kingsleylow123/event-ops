@@ -17,6 +17,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Link href="/attendees" className="text-sm text-zinc-400 hover:text-white transition-colors">Attendees</Link>
           <Link href="/checklist" className="text-sm text-zinc-400 hover:text-white transition-colors">Checklist</Link>
           <Link href="/events" className="text-sm text-zinc-400 hover:text-white transition-colors">Events</Link>
+          <Link href="/insights" className="text-sm text-zinc-400 hover:text-white transition-colors">Insights</Link>
         </nav>
         <main className="p-6 max-w-7xl mx-auto">{children}</main>
       </body>

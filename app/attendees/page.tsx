@@ -100,6 +100,13 @@ export default function AttendeesPage() {
     setAttendees(prev => prev.filter(a => a.id !== id))
   }
 
+  function copySurveyLink(a: Attendee) {
+    if (!event) return
+    const base = typeof window !== 'undefined' ? window.location.origin : ''
+    const url = `${base}/survey?event=${event.id}&a=${a.id}&name=${encodeURIComponent(a.name)}`
+    navigator.clipboard.writeText(url)
+  }
+
   async function addAttendee(e: React.FormEvent) {
     e.preventDefault()
     if (!event) return
@@ -250,6 +257,10 @@ export default function AttendeesPage() {
                           💬
                         </a>
                       )}
+                      <button onClick={() => copySurveyLink(a)}
+                        className="text-zinc-400 hover:text-amber-400 text-sm" title="Copy survey link">
+                        📋
+                      </button>
                       <button onClick={() => deleteAttendee(a.id)}
                         className="text-zinc-600 hover:text-red-400 text-xs">✕</button>
                     </div>
