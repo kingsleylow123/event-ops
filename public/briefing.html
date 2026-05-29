@@ -329,6 +329,36 @@
   }
   .warning-box strong { display: block; margin-bottom: 4px; font-size: 13px; letter-spacing: 0.5px; text-transform: uppercase; }
 
+  /* ── Floor plan (dynamic) ── */
+  .fp-card { background: #fff; border-radius: 10px; border: 1px solid #ebebeb; padding: 16px; }
+  .fp-stage { display: flex; justify-content: center; margin-bottom: 14px; }
+  .fp-stage-box { background: #1e3a8a; color: #fff; border-radius: 10px; padding: 14px 40px; text-align: center; min-width: 220px; }
+  .fp-stage-label { font-size: 9px; letter-spacing: 2px; opacity: 0.7; text-transform: uppercase; }
+  .fp-stage-name { font-size: 16px; font-weight: 800; text-transform: uppercase; margin-top: 4px; }
+  .fp-needs { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; }
+  .fp-needs-title { font-size: 10px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: #1d4ed8; margin-bottom: 6px; }
+  .fp-totals { text-align: center; margin-bottom: 14px; }
+  .fp-totals span { display: inline-block; border: 1.5px solid #f97316; color: #ea580c; font-size: 11px; font-weight: 600; border-radius: 20px; padding: 3px 14px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .fp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+  .fp-section { text-align: center; }
+  .fp-section-name { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #555; margin-bottom: 6px; }
+  .fp-bars { display: flex; justify-content: center; gap: 5px; height: 70px; }
+  .fp-bar { flex: 1; max-width: 36px; border-radius: 4px; }
+  .fp-section-desc { font-size: 11px; font-weight: 600; margin-top: 5px; }
+  .fp-section-note { font-size: 10px; color: #888; margin-top: 2px; line-height: 1.4; }
+  .fp-vid { display: flex; justify-content: center; margin-bottom: 14px; }
+  .fp-vid-box { background: #faf5ff; border: 1px solid #c4b5fd; border-radius: 10px; padding: 10px 24px; display: flex; align-items: center; gap: 10px; }
+  .fp-vid-label { font-size: 10px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: #7c3aed; }
+  .fp-vid-name { font-size: 14px; font-weight: 700; color: #4c1d95; margin-top: 2px; }
+  .fp-bottom { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; border-top: 1px solid #e5e5e5; padding-top: 14px; }
+  .fp-cell { border-radius: 8px; padding: 10px; text-align: center; }
+  .fp-cell.amber { background: #fffbeb; border: 1px solid #fcd34d; }
+  .fp-cell.neutral { background: #f5f5f7; border: 1px solid #e5e5e5; }
+  .fp-cell-label { font-size: 10px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase; color: #d97706; }
+  .fp-cell.neutral .fp-cell-label { color: #888; }
+  .fp-cell-value { font-size: 12px; font-weight: 600; margin-top: 4px; color: #1a1a1a; }
+  .fp-cell.neutral .fp-cell-value { color: #888; font-style: italic; font-weight: 400; }
+
   /* ── Mobile optimisation ── */
   @media (max-width: 600px) {
     header { padding: 12px 14px 10px; }
@@ -420,6 +450,20 @@
             <tr><td><strong>Upsell Team</strong></td><td>Back table close — objection handling + sign up</td></tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Team Positions</div>
+      <div id="fp-pic-wrap">
+        <div class="card" style="color:#aaa;font-style:italic;text-align:center;padding:20px;font-size:13px;">Loading from EventOps…</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Venue Layout</div>
+      <div id="fp-layout-wrap">
+        <div class="card" style="color:#aaa;font-style:italic;text-align:center;padding:20px;font-size:13px;">Loading from EventOps…</div>
       </div>
     </div>
 
@@ -1185,5 +1229,127 @@
   }
 </script>
 
+
+<script>
+(function () {
+  const COLORS = {
+    vip:      { bg: '#dbeafe', border: '#93c5fd', text: '#1e40af' },
+    general:  { bg: '#e2e8f0', border: '#94a3b8', text: '#334155' },
+    creator:  { bg: '#ffedd5', border: '#fdba74', text: '#9a3412' },
+    overflow: { bg: '#fef3c7', border: '#fcd34d', text: '#92400e' },
+    camera:   { bg: '#f3e8ff', border: '#c4b5fd', text: '#6b21a8' },
+    other:    { bg: '#f4f4f5', border: '#d4d4d8', text: '#52525b' },
+  };
+  const TYPE_LABELS = { vip: 'VIPs', general: 'pax', creator: 'creators', overflow: 'overflow', camera: 'camera', other: 'pax' };
+  function c(type) { return COLORS[type] || COLORS.other; }
+
+  async function loadFloorPlan() {
+    const picWrap    = document.getElementById('fp-pic-wrap');
+    const layoutWrap = document.getElementById('fp-layout-wrap');
+    const errHtml    = '<div class="card" style="color:#aaa;text-align:center;padding:16px;font-size:13px;">No floor plan set for this event.</div>';
+    try {
+      const res    = await fetch('/api/events');
+      if (!res.ok) throw new Error();
+      const events = await res.json();
+      const active = events.find(e => e.is_active) || events[0];
+      if (!active || !active.floor_plan) { picWrap.innerHTML = errHtml; layoutWrap.innerHTML = errHtml; return; }
+      const fp       = active.floor_plan;
+      const sections = fp.sections || [];
+
+      /* ── Team Positions table ── */
+      const rows = [
+        fp.stage_speaker && ['★ Speaker',       fp.stage_speaker],
+        fp.registration  && ['📋 Registration', fp.registration],
+        fp.fnb           && ['🍱 F&B Station',  fp.fnb],
+        fp.videographer  && ['📹 Videographer', fp.videographer],
+      ].filter(Boolean);
+
+      let picHtml = '<div class="card" style="padding:0;overflow:hidden;"><table class="cue-table"><thead><tr><th>Name</th><th>Role / Position</th></tr></thead><tbody>';
+      rows.forEach(([pos, val]) => {
+        picHtml += `<tr><td><strong>${val}</strong></td><td>${pos}</td></tr>`;
+      });
+      if (sections.length) {
+        picHtml += '<tr><td colspan="2" style="background:#f5f5f7;font-size:11px;font-weight:700;letter-spacing:0.8px;text-transform:uppercase;color:#888;padding:6px 12px;">Seating Sections</td></tr>';
+        sections.forEach(s => {
+          const col   = c(s.type);
+          const dot   = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${col.bg};border:1.5px solid ${col.border};margin-right:6px;vertical-align:middle;"></span>`;
+          const desc  = s.pax ? `${s.pax} ${TYPE_LABELS[s.type] || 'pax'}` : '';
+          const note  = s.note ? `<span style="color:#888;font-size:12px;"> — ${s.note}</span>` : '';
+          picHtml += `<tr><td>${dot}<strong>${s.label}</strong></td><td>${desc}${note}</td></tr>`;
+        });
+      }
+      picHtml += '</tbody></table></div>';
+      picWrap.innerHTML = picHtml;
+
+      /* ── Venue Layout ── */
+      const totals = {};
+      sections.forEach(s => { totals[s.type] = (totals[s.type] || 0) + (Number(s.pax) || 0); });
+      const grand  = Object.values(totals).reduce((a, b) => a + b, 0);
+      let totStr   = `VIP ${totals.vip || 0} · GENERAL ${totals.general || 0}`;
+      if (totals.creator)  totStr += ` · CREATORS ${totals.creator}`;
+      if (totals.overflow) totStr += ` · OVERFLOW ${totals.overflow}`;
+      totStr += ` = ${grand} PAX`;
+
+      let html = '<div class="fp-card">';
+
+      // Stage
+      html += `<div class="fp-stage"><div class="fp-stage-box"><div class="fp-stage-label">★ STAGE ★</div><div class="fp-stage-name">${fp.stage_speaker || '—'}</div></div></div>`;
+
+      // Speaker needs
+      const needs = (fp.speaker_needs || []).filter(n => n);
+      if (needs.length) {
+        html += `<div class="fp-needs"><div class="fp-needs-title">🎤 Speaker needs</div><ul style="list-style:none;padding:0;margin:0;">`;
+        needs.forEach(n => { html += `<li style="font-size:13px;color:#1e40af;padding:1px 0;">• ${n}</li>`; });
+        html += '</ul></div>';
+      }
+
+      // Totals
+      html += `<div class="fp-totals"><span>${totStr}</span></div>`;
+
+      // Sections grid
+      if (sections.length) {
+        html += '<div class="fp-grid">';
+        sections.forEach(s => {
+          const col  = c(s.type);
+          const desc = s.pax ? `${s.pax} ${TYPE_LABELS[s.type] || 'pax'}` : '—';
+          const note = s.note ? `<div class="fp-section-note">${s.note.split('•')[0].trim()}</div>` : '';
+          html += `<div class="fp-section">
+            <div class="fp-section-name">${s.label}</div>
+            <div class="fp-bars">
+              <div class="fp-bar" style="background:${col.bg};border:1.5px solid ${col.border};"></div>
+              <div class="fp-bar" style="background:${col.bg};border:1.5px solid ${col.border};"></div>
+            </div>
+            <div class="fp-section-desc" style="color:${col.text};">${desc}</div>
+            ${note}
+          </div>`;
+        });
+        html += '</div>';
+      }
+
+      // Videographer
+      if (fp.videographer) {
+        html += `<div class="fp-vid"><div class="fp-vid-box"><span style="font-size:20px;">📹</span><div><div class="fp-vid-label">Videographer</div><div class="fp-vid-name">${fp.videographer}</div></div></div></div>`;
+      }
+
+      // Bottom row
+      html += `<div class="fp-bottom">
+        <div class="fp-cell amber"><div class="fp-cell-label">📋 Registration</div><div class="fp-cell-value">${fp.registration || '—'}</div></div>
+        <div class="fp-cell neutral"><div class="fp-cell-label">▼ Main Door ▼</div><div class="fp-cell-value">${fp.main_door || '— entrance —'}</div></div>
+        <div class="fp-cell amber"><div class="fp-cell-label">🍱 F&amp;B Station</div><div class="fp-cell-value">${fp.fnb || '—'}</div></div>
+      </div>`;
+
+      html += '</div>';
+      layoutWrap.innerHTML = html;
+
+    } catch {
+      const errFail = '<div class="card" style="color:#aaa;text-align:center;padding:16px;font-size:13px;">Could not load floor plan.</div>';
+      picWrap.innerHTML = errFail;
+      layoutWrap.innerHTML = errFail;
+    }
+  }
+
+  loadFloorPlan();
+})();
+</script>
 </body>
 </html>
