@@ -44,7 +44,7 @@ const EVENT_PRICE_MAP: Record<string, PriceConfig> = {
 }
 
 // Cutoff: payments after this date go to June 7th+, not June 1st
-const JUNE1_CUTOFF = new Date('2026-05-30T00:00:00Z').getTime() / 1000
+const JUNE1_CUTOFF = new Date('2026-05-29T00:00:00Z').getTime() / 1000
 
 function slugForEvent(event: Event): string | null {
   if (!event.date) return null
