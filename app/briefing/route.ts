@@ -8,11 +8,15 @@ export const dynamic = 'force-dynamic'
 export async function GET() {
   let html = readFileSync(join(process.cwd(), 'public/briefing.html'), 'utf-8')
 
-  // Fetch active event's floor plan server-side — no auth needed
+  // Fetch the next upcoming event (soonest date >= now) — no auth needed.
+  // Prefer is_active=true if it has floor plan sections; otherwise fall back
+  // to the nearest future event with sections populated.
+  const now = new Date().toISOString()
   const { data: events } = await supabase
     .from('events')
     .select('id, name, date, floor_plan')
-    .eq('is_active', true)
+    .gte('date', now)
+    .order('date', { ascending: true })
     .limit(1)
 
   const ev = events?.[0] ?? null
