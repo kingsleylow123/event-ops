@@ -107,11 +107,36 @@ export default function InsightsPage() {
         </div>
       </div>
 
-      {/* Survey link display */}
-      <div className="bg-[#111] border border-zinc-800 rounded-xl px-4 py-3 flex items-center gap-3">
-        <span className="text-xs text-zinc-500 shrink-0">Survey URL:</span>
-        <span className="text-xs text-amber-400 flex-1 truncate">{surveyLink}</span>
-        <button onClick={copyLink} className="text-xs text-zinc-400 hover:text-white shrink-0">Copy</button>
+      {/* Survey link + QR */}
+      <div className="bg-[#111] border border-zinc-800 rounded-xl p-4 flex flex-col sm:flex-row gap-4 items-center sm:items-start">
+        {/* QR Code */}
+        {surveyLink && (
+          <div className="flex-shrink-0 flex flex-col items-center gap-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(surveyLink)}`}
+              alt="Survey QR Code"
+              width={140}
+              height={140}
+              style={{ background: '#fff', padding: 6, borderRadius: 8 }}
+            />
+            <button
+              onClick={() => {
+                const w = window.open('', '_blank', 'width=500,height=600')
+                if (!w) return
+                w.document.write(`<!DOCTYPE html><html><head><title>Survey QR</title><style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:-apple-system,sans-serif;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:40px;}img{width:280px;height:280px;}h1{font-size:22px;font-weight:800;color:#111;margin-top:20px;text-align:center;}p{font-size:13px;color:#666;margin-top:8px;text-align:center;}.badge{margin-top:14px;background:#fff4e6;border:2px solid #e8563a;color:#e8563a;font-weight:700;font-size:12px;padding:5px 16px;border-radius:999px;}</style></head><body><img src="https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(surveyLink)}" /><h1>📋 Pre-Event Survey</h1><p>Please scan and fill in before the session</p><div class="badge">Claude Malaysia Workshop</div><script>window.onload=()=>window.print()</script></body></html>`)
+                w.document.close()
+              }}
+              className="text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded-lg px-3 py-1.5"
+            >🖨 Print</button>
+          </div>
+        )}
+        {/* URL */}
+        <div className="flex-1 flex flex-col gap-2 justify-center">
+          <span className="text-xs text-zinc-500">Survey URL:</span>
+          <span className="text-xs text-amber-400 break-all">{surveyLink}</span>
+          <button onClick={copyLink} className="text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded-lg px-3 py-1.5 w-fit">📋 Copy Link</button>
+        </div>
       </div>
 
       {loadingResponses ? (
