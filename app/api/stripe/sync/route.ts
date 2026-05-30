@@ -184,9 +184,24 @@ export async function POST(req: NextRequest) {
           paid_at: new Date(session.created * 1000).toISOString(),
         }
 
+        // Check if record exists — preserve manually-set phone/name
+        const { data: existing } = await supabase
+          .from('attendees')
+          .select('phone, name')
+          .eq('stripe_session_id', session.id)
+          .maybeSingle()
+
+        const finalAttendee = {
+          ...attendee,
+          // Keep manually set phone if Stripe doesn't have one
+          phone: attendee.phone ?? existing?.phone ?? null,
+          // Keep manually set name if Stripe returns empty/whitespace
+          name: (attendee.name && attendee.name.trim()) ? attendee.name : (existing?.name ?? 'Unknown'),
+        }
+
         const { error } = await supabase
           .from('attendees')
-          .upsert(attendee, { onConflict: 'stripe_session_id' })
+          .upsert(finalAttendee, { onConflict: 'stripe_session_id' })
 
         if (error) {
           skipped++
