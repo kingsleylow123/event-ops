@@ -48,9 +48,10 @@ function SurveyForm() {
     company_size: '',
     biggest_challenge: '',
     workshop_goal: '',
+    social_link: '',
   })
 
-  const TOTAL_STEPS = 6
+  const TOTAL_STEPS = 7
 
   useEffect(() => {
     if (localStorage.getItem(`survey_done_${eventId}_${attendeeId}`)) {
@@ -118,6 +119,7 @@ function SurveyForm() {
     4: form.company_size.length > 0,
     5: form.biggest_challenge.trim().length > 0,
     6: form.workshop_goal.trim().length > 0,
+    7: true, // optional
   }
 
   return (
@@ -229,6 +231,22 @@ function SurveyForm() {
                 className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-amber-500 resize-none"
                 autoFocus
               />
+              <Nav canNext={canNext[6]} onNext={next} showBack onBack={back} />
+            </Q>
+          )}
+
+          {/* Q7: Social / Website */}
+          {step === 7 && (
+            <Q title="Your social media or company website" subtitle="Optional — helps us stay connected after the workshop.">
+              <input
+                type="text"
+                value={form.social_link}
+                onChange={e => set('social_link', e.target.value)}
+                placeholder="e.g. instagram.com/yourhandle or yourcompany.com"
+                autoFocus
+                className="w-full px-4 py-3 rounded-xl text-sm border outline-none"
+                style={{ background: '#111', color: '#fff', borderColor: form.social_link ? '#f59e0b' : '#3f3f46' }}
+              />
               <div className="mt-6 flex justify-between items-center">
                 <button onClick={back}
                   className="text-sm px-4 py-2 rounded-lg text-zinc-400 bg-zinc-900 border border-zinc-700">
@@ -236,7 +254,7 @@ function SurveyForm() {
                 </button>
                 <button
                   onClick={submit}
-                  disabled={!canNext[6] || submitting}
+                  disabled={submitting}
                   className="px-8 py-3 rounded-xl font-semibold text-sm transition-all bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed text-black">
                   {submitting ? 'Submitting...' : 'Submit →'}
                 </button>
