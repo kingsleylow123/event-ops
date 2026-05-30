@@ -119,7 +119,7 @@ function SurveyForm() {
     4: form.company_size.length > 0,
     5: form.biggest_challenge.trim().length > 0,
     6: form.workshop_goal.trim().length > 0,
-    7: true, // optional
+    7: form.social_link.trim().length > 0,
   }
 
   return (
@@ -237,7 +237,7 @@ function SurveyForm() {
 
           {/* Q7: Social / Website */}
           {step === 7 && (
-            <Q title="Your social media or company website" subtitle="Optional — helps us stay connected after the workshop.">
+            <Q title="Your social media or company website" subtitle="Share your Instagram, LinkedIn, or website so we can stay connected.">
               <input
                 type="text"
                 value={form.social_link}
@@ -254,7 +254,7 @@ function SurveyForm() {
                 </button>
                 <button
                   onClick={submit}
-                  disabled={submitting}
+                  disabled={!canNext[7] || submitting}
                   className="px-8 py-3 rounded-xl font-semibold text-sm transition-all bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed text-black">
                   {submitting ? 'Submitting...' : 'Submit →'}
                 </button>
