@@ -170,19 +170,15 @@ function SurveyForm() {
           {/* Q3: Industry */}
           {step === 3 && (
             <Q title="What industry are you in?">
-              <div className="grid grid-cols-1 gap-2 max-h-96 overflow-y-auto pr-1">
-                {INDUSTRIES.map(ind => (
-                  <button key={ind} onClick={() => set('industry', ind)}
-                    className="w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all border"
-                    style={{
-                      background: form.industry === ind ? '#f59e0b' : '#111',
-                      color: form.industry === ind ? '#000' : '#fff',
-                      borderColor: form.industry === ind ? '#f59e0b' : '#3f3f46',
-                    }}>
-                    {ind}
-                  </button>
-                ))}
-              </div>
+              <input
+                type="text"
+                value={form.industry}
+                onChange={e => set('industry', e.target.value)}
+                placeholder="e.g. Marketing, Finance, Tech..."
+                autoFocus
+                className="w-full px-4 py-3 rounded-xl text-sm border outline-none"
+                style={{ background: '#111', color: '#fff', borderColor: form.industry ? '#f59e0b' : '#3f3f46' }}
+              />
               <Nav canNext={canNext[3]} onNext={next} showBack onBack={back} />
             </Q>
           )}
