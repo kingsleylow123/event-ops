@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import OpenAI from 'openai'
 import { supabase } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -10,6 +11,26 @@ const WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET!
 const ALLOWED_IDS = (process.env.TELEGRAM_ALLOWED_USER_IDS || '').split(',').map(s => s.trim()).filter(Boolean)
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+// ── Voice transcription (Telegram voice note → text via Whisper) ───────────────
+async function transcribeVoice(fileId: string): Promise<string> {
+  // 1. Resolve the file path on Telegram's servers
+  const fileRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/getFile?file_id=${fileId}`)
+  const fileJson = await fileRes.json()
+  const filePath = fileJson?.result?.file_path
+  if (!filePath) throw new Error('voice: could not resolve file path')
+
+  // 2. Download the audio bytes
+  const audioRes = await fetch(`https://api.telegram.org/file/bot${BOT_TOKEN}/${filePath}`)
+  if (!audioRes.ok) throw new Error('voice: download failed')
+  const buf = Buffer.from(await audioRes.arrayBuffer())
+
+  // 3. Transcribe with Whisper (opus/ogg in → text out)
+  const file = new File([buf], 'voice.oga', { type: 'audio/ogg' })
+  const tr = await openai.audio.transcriptions.create({ file, model: 'whisper-1' })
+  return tr.text.trim()
+}
 
 type Row = Record<string, unknown>
 
@@ -380,15 +401,36 @@ export async function POST(req: NextRequest) {
 
     const update = await req.json()
     const message = update.message // ignore edited_message to avoid duplicate replies
-    if (!message?.text) return NextResponse.json({ ok: true })
+    const voice = message?.voice || message?.audio
+    if (!message?.text && !voice) return NextResponse.json({ ok: true })
 
     const userId = String(message.from?.id ?? '')
     const chatId = message.chat.id as number
-    const text = (message.text as string).trim()
 
+    // Auth BEFORE transcription so Whisper credits are never spent on strangers
     if (ALLOWED_IDS.length && !ALLOWED_IDS.includes(userId)) {
       await sendMessage(chatId, `🚫 Not authorised.\n\nYour Telegram ID: <code>${esc(userId)}</code>`)
       return NextResponse.json({ ok: true })
+    }
+
+    // Resolve the text — typed, or transcribed from a voice note
+    let text: string
+    if (voice) {
+      await sendTyping(chatId)
+      try {
+        text = await transcribeVoice(voice.file_id as string)
+      } catch (e) {
+        console.error('[telegram] transcribe failed', e)
+        await sendMessage(chatId, '⚠️ Could not transcribe that voice note. Try again or type it.')
+        return NextResponse.json({ ok: true })
+      }
+      if (!text) {
+        await sendMessage(chatId, '🤔 I could not hear anything in that voice note.')
+        return NextResponse.json({ ok: true })
+      }
+      await sendMessage(chatId, `🎙 <i>Heard:</i> "${esc(text)}"`)
+    } else {
+      text = (message.text as string).trim()
     }
 
     const ev = await getActiveEvent()
