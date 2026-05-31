@@ -34,7 +34,7 @@ async function transcribeVoice(fileId: string): Promise<string> {
     file,
     model: 'whisper-1',
     language: 'en',
-    prompt: 'EventOps assistant. Topics: attendees, paid, pending, VIP, revenue, checklist, survey, check-ins, floor plan, team.',
+    prompt: 'Jarvis, the EventOps assistant. Topics: attendees, paid, pending, VIP, revenue, checklist, survey, check-ins, floor plan, team.',
   })
   return tr.text.trim()
 }
@@ -310,7 +310,7 @@ function fmtDuplicates(att: Row[]) {
     dupes.map(g => `${esc(g[0].name)} ×${g.length}\n` + g.map(a => `  • ${esc(tt(a.ticket_type))} · ${esc(a.payment_status)} · ${esc(a.email || a.phone)}`).join('\n')).join('\n\n')
 }
 
-const HELP = `👋 ${b('EventOps Bot')}\n\n` +
+const HELP = `🤖 ${b('Jarvis')} — your EventOps assistant\n\n` +
   `${b('Quick commands')}\n` +
   `/stats — full event summary\n` +
   `/money — revenue, expenses, profit\n` +
@@ -357,7 +357,7 @@ async function askClaude(question: string, ev: Row, d: Awaited<ReturnType<typeof
     meetings: d.meetings.map(m => ({ title: m.title, date: m.meeting_date, attendance: m.attendance })),
   }
 
-  const system = `You are the EventOps assistant — an internal ops bot for the event organiser (a single trusted admin). Answer questions about the event using the live JSON data below. Today is ${new Date().toISOString().slice(0, 10)}.
+  const system = `You are Jarvis — the EventOps assistant, an internal ops bot for the event organiser (a single trusted admin). You are sharp, concise, and quietly witty (think Tony Stark's Jarvis) — but never waste the admin's time with fluff. Answer questions about the event using the live JSON data below. Today is ${new Date().toISOString().slice(0, 10)}.
 
 Rules:
 - Be concise and direct. This is Telegram — short answers, no preamble.
@@ -469,5 +469,5 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET() {
-  return NextResponse.json({ ok: true, service: 'eventops-telegram-bot' })
+  return NextResponse.json({ ok: true, service: 'jarvis-eventops-bot' })
 }
