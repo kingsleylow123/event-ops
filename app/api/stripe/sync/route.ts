@@ -54,8 +54,8 @@ function slugForEvent(event: Event): string | null {
   const month = d.getUTCMonth()
   const day = d.getUTCDate()
   if (year === 2026 && month === 4) return 'may-16'
-  if (year === 2026 && month === 5 && day <= 1) return 'june-1'
-  if (year === 2026 && month === 5 && day >= 7) return 'june-7'
+  if (year === 2026 && month === 5 && day === 1) return 'june-1'
+  if (year === 2026 && month === 5 && day === 7) return 'june-7'
   return null
 }
 
@@ -184,12 +184,16 @@ export async function POST(req: NextRequest) {
           paid_at: new Date(session.created * 1000).toISOString(),
         }
 
-        // Check if record exists — preserve manually-set phone/name
+        // Check if record exists — preserve manually-set phone/name/event_id
         const { data: existing } = await supabase
           .from('attendees')
-          .select('phone, name')
+          .select('phone, name, event_id, ticket_type')
           .eq('stripe_session_id', session.id)
           .maybeSingle()
+
+        const june7Id = events.find(e => e.slug === 'june-7')?.id
+        // If record was manually assigned to June 7th, keep it there
+        const preserveJune7 = existing?.event_id && june7Id && existing.event_id === june7Id
 
         const finalAttendee = {
           ...attendee,
@@ -197,6 +201,9 @@ export async function POST(req: NextRequest) {
           phone: attendee.phone ?? existing?.phone ?? null,
           // Keep manually set name if Stripe returns empty/whitespace
           name: (attendee.name && attendee.name.trim()) ? attendee.name : (existing?.name ?? 'Unknown'),
+          // Preserve manual June 7th assignment — don't let sync move it back to June 1st
+          event_id: preserveJune7 ? existing!.event_id : attendee.event_id,
+          ticket_type: preserveJune7 ? (existing!.ticket_type ?? attendee.ticket_type) : attendee.ticket_type,
         }
 
         const { error } = await supabase
