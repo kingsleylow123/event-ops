@@ -26,9 +26,16 @@ async function transcribeVoice(fileId: string): Promise<string> {
   if (!audioRes.ok) throw new Error('voice: download failed')
   const buf = Buffer.from(await audioRes.arrayBuffer())
 
-  // 3. Transcribe with Whisper (opus/ogg in → text out)
+  // 3. Transcribe with Whisper (opus/ogg in → text out).
+  // Force English — auto-detect was mis-tagging English speech as Malay.
+  // A prompt nudges Whisper toward the event-ops domain vocabulary.
   const file = new File([buf], 'voice.oga', { type: 'audio/ogg' })
-  const tr = await openai.audio.transcriptions.create({ file, model: 'whisper-1' })
+  const tr = await openai.audio.transcriptions.create({
+    file,
+    model: 'whisper-1',
+    language: 'en',
+    prompt: 'EventOps assistant. Topics: attendees, paid, pending, VIP, revenue, checklist, survey, check-ins, floor plan, team.',
+  })
   return tr.text.trim()
 }
 
