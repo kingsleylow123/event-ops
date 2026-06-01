@@ -428,15 +428,17 @@ export default function AttendeesPage() {
                 onChange={e => {
                   const tt = e.target.value as TicketType
                   const isF = tt === 'free_general' || tt === 'free_vip'
+                  const isCustom = (tt as string) === 'custom'
                   setForm(f => ({
                     ...f, ticket_type: tt,
-                    payment_amount: TICKET_PRICES[tt],
+                    payment_amount: isCustom ? 0 : (TICKET_PRICES[tt] ?? 0),
                     payment_method: isF ? 'free' : 'bank_transfer',
                     payment_status: isF ? 'free' : 'pending',
                   }))
                 }}
                 className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm">
                 {Object.entries(TICKET_LABELS).map(([k, v]) => <option key={k} value={k}>{v} {TICKET_PRICES[k as TicketType] > 0 ? `(RM${TICKET_PRICES[k as TicketType]})` : '(Free)'}</option>)}
+                <option value="custom">Custom (enter amount below)</option>
               </select>
               {form.ticket_type !== 'free_general' && form.ticket_type !== 'free_vip' && (
                 <>
