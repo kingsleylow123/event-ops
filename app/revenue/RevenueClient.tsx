@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Event, Attendee, Expense, ExpenseCategory } from '@/lib/supabase'
 import { EXPENSE_CATEGORIES } from '@/lib/supabase'
 
@@ -33,6 +33,185 @@ interface EventRevenue {
   totalExpenses: number
   profit: number
 }
+
+// ─── Payment Template ────────────────────────────────────────────────────────
+
+interface PaymentTemplateProps {
+  events: Event[]
+  attendees: Attendee[]
+}
+
+function PaymentTemplate({ events, attendees }: PaymentTemplateProps) {
+  const [open, setOpen] = useState(false)
+  const [selectedEventId, setSelectedEventId] = useState<string>('')
+  const [depositText, setDepositText] = useState<string>('')
+  const [copied, setCopied] = useState(false)
+
+  // Initialise selectedEventId to the first event
+  useEffect(() => {
+    if (events.length > 0 && !selectedEventId) {
+      setSelectedEventId(events[0].id)
+    }
+  }, [events, selectedEventId])
+
+  // Load / save deposit text in localStorage keyed by event id
+  useEffect(() => {
+    if (!selectedEventId) return
+    const saved = localStorage.getItem(`deposit_text_${selectedEventId}`)
+    setDepositText(saved ?? '')
+  }, [selectedEventId])
+
+  const handleDepositChange = useCallback((val: string) => {
+    setDepositText(val)
+    if (selectedEventId) {
+      localStorage.setItem(`deposit_text_${selectedEventId}`, val)
+    }
+  }, [selectedEventId])
+
+  const selectedEvent = useMemo(
+    () => events.find(ev => ev.id === selectedEventId),
+    [events, selectedEventId],
+  )
+
+  const { vipAttendees, generalAttendees } = useMemo(() => {
+    if (!selectedEventId) return { vipAttendees: [], generalAttendees: [] }
+
+    const paid = attendees.filter(
+      a =>
+        a.event_id === selectedEventId &&
+        a.payment_status === 'paid' &&
+        a.notes !== 'upgrade_payment' &&
+        // Exclude free tickets (payment_method === 'free' or payment_amount === 0)
+        a.payment_method !== 'free' &&
+        Number(a.payment_amount) > 0,
+    )
+
+    const vip = paid.filter(a => a.ticket_type.toLowerCase().includes('vip'))
+    const general = paid.filter(a => !a.ticket_type.toLowerCase().includes('vip'))
+
+    return { vipAttendees: vip, generalAttendees: general }
+  }, [selectedEventId, attendees])
+
+  function paymentMethodLabel(a: Attendee): string {
+    return a.payment_method === 'stripe' ? 'Stripe' : 'Bank Transfer'
+  }
+
+  function buildTemplateText(): string {
+    const eventName = selectedEvent?.name ?? '[Event Name]'
+    const lines: string[] = []
+
+    lines.push(`Claude Malaysia Workshop — ${eventName}`)
+    lines.push('Payment Status')
+    lines.push('')
+    lines.push('✅ Pay in Full')
+    lines.push('')
+
+    lines.push('VIP (Name + Payment Method)')
+    if (vipAttendees.length === 0) {
+      lines.push('(none)')
+    } else {
+      vipAttendees.forEach((a, i) => {
+        lines.push(`${i + 1}. ${a.name} — ${paymentMethodLabel(a)}`)
+      })
+    }
+
+    lines.push('')
+    lines.push('General (Name + Payment Method)')
+    if (generalAttendees.length === 0) {
+      lines.push('(none)')
+    } else {
+      generalAttendees.forEach((a, i) => {
+        lines.push(`${i + 1}. ${a.name} — ${paymentMethodLabel(a)}`)
+      })
+    }
+
+    lines.push('')
+    lines.push('👉 Pay Deposit (Name + Action Item)')
+    if (depositText.trim()) {
+      const depositLines = depositText.trim().split('\n')
+      depositLines.forEach((line, i) => {
+        lines.push(`${i + 1}. ${line}`)
+      })
+    } else {
+      lines.push('(none)')
+    }
+
+    return lines.join('\n')
+  }
+
+  async function handleCopy() {
+    const text = buildTemplateText()
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // fallback: select a textarea
+    }
+  }
+
+  const templatePreview = useMemo(() => buildTemplateText(), [selectedEventId, vipAttendees, generalAttendees, depositText]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div className="bg-[#111] border border-zinc-800 rounded-xl overflow-hidden">
+      {/* Header / toggle */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 sm:px-5 py-3 text-left hover:bg-zinc-900/50 transition-colors"
+      >
+        <span className="font-semibold text-sm">📋 Payment Template</span>
+        <span className="text-zinc-500 text-xs">{open ? '▲ Collapse' : '▼ Expand'}</span>
+      </button>
+
+      {open && (
+        <div className="px-4 sm:px-5 pb-5 pt-1 space-y-4 border-t border-zinc-800">
+          {/* Event selector */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <label className="text-xs text-zinc-500 uppercase tracking-wider flex-shrink-0">Event</label>
+            <select
+              value={selectedEventId}
+              onChange={e => setSelectedEventId(e.target.value)}
+              className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-white text-sm flex-1 sm:flex-none"
+            >
+              {events.map(ev => (
+                <option key={ev.id} value={ev.id}>{ev.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Template preview */}
+          <div className="bg-zinc-950/60 border border-zinc-800 rounded-lg p-4 font-mono text-xs text-zinc-300 whitespace-pre-wrap leading-relaxed">
+            {templatePreview}
+          </div>
+
+          {/* Deposit textarea */}
+          <div>
+            <label className="text-xs text-zinc-500 uppercase tracking-wider block mb-1.5">
+              👉 Deposit entries <span className="normal-case text-zinc-600">(one per line — manually entered)</span>
+            </label>
+            <textarea
+              value={depositText}
+              onChange={e => handleDepositChange(e.target.value)}
+              rows={4}
+              placeholder={'Ralph — RM 500 deposit, flying from Netherlands\nAmy — RM 300 deposit'}
+              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm font-mono resize-y"
+            />
+          </div>
+
+          {/* Copy button */}
+          <button
+            onClick={handleCopy}
+            className="bg-amber-500 hover:bg-amber-400 text-black font-semibold px-4 py-2 rounded-lg text-sm transition-colors"
+          >
+            {copied ? '✅ Copied!' : '📋 Copy to clipboard'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
 
 export default function RevenueClient() {
   const [events, setEvents] = useState<Event[]>([])
@@ -202,6 +381,9 @@ export default function RevenueClient() {
           </div>
         </div>
       </div>
+
+      {/* Payment Template */}
+      <PaymentTemplate events={events} attendees={attendees} />
 
       {/* Per-event breakdown */}
       <div className="space-y-4">
