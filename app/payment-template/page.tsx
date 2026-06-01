@@ -1,14 +1,15 @@
 'use client'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { Event, Attendee } from '@/lib/supabase'
 
 export default function PaymentTemplatePage() {
   const [events, setEvents] = useState<Event[]>([])
   const [attendees, setAttendees] = useState<Attendee[]>([])
   const [selectedEventId, setSelectedEventId] = useState<string>('')
-  const [depositText, setDepositText] = useState<string>('')
+  const [text, setText] = useState<string>('')
   const [copied, setCopied] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [initialized, setInitialized] = useState<string>('')
 
   useEffect(() => {
     async function load() {
@@ -34,40 +35,19 @@ export default function PaymentTemplatePage() {
       .then(setAttendees)
   }, [selectedEventId])
 
-  useEffect(() => {
-    if (!selectedEventId) return
-    const saved = localStorage.getItem(`deposit_text_${selectedEventId}`)
-    setDepositText(saved ?? '')
-  }, [selectedEventId])
-
-  const handleDepositChange = useCallback((val: string) => {
-    setDepositText(val)
-    if (selectedEventId) localStorage.setItem(`deposit_text_${selectedEventId}`, val)
-  }, [selectedEventId])
-
   const selectedEvent = events.find(ev => ev.id === selectedEventId)
 
-  const { vipAttendees, generalAttendees } = useMemo(() => {
+  const initialTemplate = useMemo(() => {
+    if (!selectedEventId) return ''
     const paid = attendees.filter(a =>
       a.payment_status === 'paid' &&
       (a.notes as string | null) !== 'upgrade_payment' &&
       a.payment_method !== 'free' &&
       Number(a.payment_amount) > 0
     )
-    return {
-      vipAttendees: paid.filter(a => a.ticket_type.includes('vip')),
-      generalAttendees: paid.filter(a => !a.ticket_type.includes('vip')),
-    }
-  }, [attendees])
-
-  function paymentLabel(a: Attendee) {
-    return a.payment_method === 'stripe' ? 'Stripe' : 'Bank Transfer'
-  }
-
-  function buildText() {
+    const vipCount = Math.max(paid.filter(a => a.ticket_type.includes('vip')).length, 5)
+    const genCount = Math.max(paid.filter(a => !a.ticket_type.includes('vip')).length, 10)
     const name = selectedEvent?.name ?? '[Event Name]'
-    const vipCount = Math.max(vipAttendees.length, 5)
-    const genCount = Math.max(generalAttendees.length, 10)
     const lines = [
       `Claude Malaysia Workshop — ${name}`,
       'Payment Status', '',
@@ -79,56 +59,69 @@ export default function PaymentTemplatePage() {
       ...Array.from({ length: genCount }, (_, i) => `${i + 1}.`),
       '',
       '👉 Pay Deposit (Name + Action Item)',
-      ...(depositText.trim()
-        ? depositText.trim().split('\n').map((l, i) => `${i + 1}. ${l}`)
-        : ['1.', '2.', '3.']),
+      '1.', '2.', '3.',
     ]
     return lines.join('\n')
+  }, [selectedEventId, attendees, selectedEvent])
+
+  // Only reset text when event changes or template first loads
+  useEffect(() => {
+    if (initialTemplate && initialized !== selectedEventId) {
+      const saved = localStorage.getItem(`payment_template_${selectedEventId}`)
+      setText(saved ?? initialTemplate)
+      setInitialized(selectedEventId)
+    }
+  }, [initialTemplate, selectedEventId, initialized])
+
+  // Auto-save as user types
+  function handleChange(val: string) {
+    setText(val)
+    if (selectedEventId) localStorage.setItem(`payment_template_${selectedEventId}`, val)
   }
 
-  const preview = useMemo(buildText, [selectedEventId, vipAttendees, generalAttendees, depositText]) // eslint-disable-line react-hooks/exhaustive-deps
-
   async function handleCopy() {
-    await navigator.clipboard.writeText(buildText())
+    await navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  function handleReset() {
+    setText(initialTemplate)
+    if (selectedEventId) localStorage.setItem(`payment_template_${selectedEventId}`, initialTemplate)
   }
 
   if (loading) return <div className="text-zinc-500 mt-20 text-center">Loading…</div>
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-xl font-bold">📋 Payment Template</h1>
-        <select
-          value={selectedEventId}
-          onChange={e => setSelectedEventId(e.target.value)}
-          className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm"
-        >
-          {events.map(ev => (
-            <option key={ev.id} value={ev.id}>{ev.name}</option>
-          ))}
-        </select>
+        <div className="flex gap-2 flex-wrap">
+          <select
+            value={selectedEventId}
+            onChange={e => { setSelectedEventId(e.target.value); setInitialized('') }}
+            className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm"
+          >
+            {events.map(ev => (
+              <option key={ev.id} value={ev.id}>{ev.name}</option>
+            ))}
+          </select>
+          <button onClick={handleReset}
+            className="text-xs text-zinc-500 hover:text-zinc-300 border border-zinc-700 rounded-lg px-3 py-2">
+            Reset
+          </button>
+        </div>
       </div>
 
-      {/* Template preview */}
-      <div className="bg-[#111] border border-zinc-800 rounded-xl p-5 font-mono text-xs text-zinc-300 whitespace-pre-wrap leading-relaxed">
-        {preview}
-      </div>
-
-      {/* Deposit entries */}
-      <div>
-        <label className="text-xs text-zinc-500 uppercase tracking-wider block mb-1.5">
-          👉 Deposit entries <span className="normal-case text-zinc-600">(one per line)</span>
-        </label>
-        <textarea
-          value={depositText}
-          onChange={e => handleDepositChange(e.target.value)}
-          rows={5}
-          placeholder={'Ralph — RM 500 deposit, flying from Netherlands\nAmy — RM 300 deposit'}
-          className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm font-mono resize-y focus:outline-none focus:border-amber-500"
-        />
-      </div>
+      {/* Plain editable text — no box styling */}
+      <textarea
+        value={text}
+        onChange={e => handleChange(e.target.value)}
+        rows={Math.max(25, text.split('\n').length + 3)}
+        className="w-full bg-transparent text-white text-sm leading-7 resize-none focus:outline-none"
+        style={{ fontFamily: 'inherit' }}
+        spellCheck={false}
+      />
 
       <button
         onClick={handleCopy}
