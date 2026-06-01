@@ -140,6 +140,7 @@ export default function AttendeesPage() {
   async function addAttendee(e: React.FormEvent) {
     e.preventDefault()
     if (!event) return
+    if (!form.name.trim()) { alert('Please enter a name.'); return }
     const isFreeTier = form.ticket_type === 'free_general' || form.ticket_type === 'free_vip'
     const payload = {
       ...form,
