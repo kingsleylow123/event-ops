@@ -72,12 +72,12 @@ export default function PaymentTemplatePage() {
 
   // Only reset text when event changes or template first loads
   useEffect(() => {
-    if (initialTemplate && initialized !== selectedEventId) {
-      const saved = localStorage.getItem(`payment_template_${selectedEventId}`)
-      setText(saved ?? initialTemplate)
-      setInitialized(selectedEventId)
-    }
-  }, [initialTemplate, selectedEventId, initialized])
+    if (!selectedEventId) return
+    if (initialized === selectedEventId) return
+    const saved = localStorage.getItem(`payment_template_${selectedEventId}`)
+    setText(saved && saved.trim() ? saved : BLANK_TEMPLATE)
+    setInitialized(selectedEventId)
+  }, [selectedEventId, initialized, BLANK_TEMPLATE])
 
   // Auto-save as user types
   function handleChange(val: string) {
@@ -91,30 +91,50 @@ export default function PaymentTemplatePage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const BLANK_TEMPLATE = `Event Payment Template
+
+[Event Name]
+
+Pay in Full
+
+VIP (name + payment method)
+1.
+2.
+3.
+4.
+5.
+6.
+7.
+8.
+9.
+10.
+
+General (name + payment method)
+1.
+2.
+3.
+4.
+5.
+6.
+7.
+8.
+9.
+10.
+11.
+12.
+13.
+14.
+15.
+
+👉 Pay deposit (name + action item)
+
+1.
+2.
+3.`
+
   function handleReset() {
-    const name = selectedEvent?.name ?? '[Event Name]'
-    const paid = attendees.filter(a =>
-      a.payment_status === 'paid' &&
-      a.payment_method !== 'free' &&
-      Number(a.payment_amount) > 0
-    )
-    const vipCount = Math.max(paid.filter(a => a.ticket_type.includes('vip')).length, 5)
-    const genCount = Math.max(paid.filter(a => !a.ticket_type.includes('vip')).length, 10)
-    const fresh = [
-      'Event Payment Template', '',
-      name, '',
-      'Pay in Full', '',
-      'VIP (name + payment method)',
-      ...Array.from({ length: vipCount }, (_, i) => `${i + 1}.`),
-      '',
-      'General (name + payment method)',
-      ...Array.from({ length: genCount }, (_, i) => `${i + 1}.`),
-      '',
-      '👉 Pay deposit (name + action item)', '',
-      '1.', '2.', '3.',
-    ].join('\n')
-    setText(fresh)
-    if (selectedEventId) localStorage.setItem(`payment_template_${selectedEventId}`, fresh)
+    setText(BLANK_TEMPLATE)
+    if (selectedEventId) localStorage.setItem(`payment_template_${selectedEventId}`, BLANK_TEMPLATE)
   }
 
   if (loading) return <div className="text-zinc-500 mt-20 text-center">Loading…</div>
