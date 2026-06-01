@@ -4,26 +4,21 @@ import type { Event, Attendee } from '@/lib/supabase'
 
 const BLANK_TEMPLATE = `Event Payment Template
 
-[Event Name]
+Claude Malaysia Workshop — 1st June
 
 Pay in Full
 
 VIP (name + payment method)
-1.
-2.
-3.
+1. Ethan (Stripe RM2899)
+2. Nick (Stripe RM2899)
+3. Melanie (Bank transfer RM2899)
 4.
 5.
-6.
-7.
-8.
-9.
-10.
 
 General (name + payment method)
-1.
-2.
-3.
+1. Steve Wong (Stripe RM2299)
+2. Melanie (Bank transfer RM2299)
+3. Jeremy | Daphne (TnG RM2299)
 4.
 5.
 6.
@@ -31,16 +26,11 @@ General (name + payment method)
 8.
 9.
 10.
-11.
-12.
-13.
-14.
-15.
 
 👉 Pay deposit (name + action item)
 
-1.
-2.
+1. Ralph - RM500 deposit, hold for next event after September, flying Netherlands summer
+2. Jeremy | Daphne (TnG RM1799)(RM2000) 1 VIP, 3 General
 3.`
 
 export default function PaymentTemplatePage() {
