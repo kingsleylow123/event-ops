@@ -2,6 +2,47 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Event, Attendee } from '@/lib/supabase'
 
+const BLANK_TEMPLATE = `Event Payment Template
+
+[Event Name]
+
+Pay in Full
+
+VIP (name + payment method)
+1.
+2.
+3.
+4.
+5.
+6.
+7.
+8.
+9.
+10.
+
+General (name + payment method)
+1.
+2.
+3.
+4.
+5.
+6.
+7.
+8.
+9.
+10.
+11.
+12.
+13.
+14.
+15.
+
+👉 Pay deposit (name + action item)
+
+1.
+2.
+3.`
+
 export default function PaymentTemplatePage() {
   const [events, setEvents] = useState<Event[]>([])
   const [attendees, setAttendees] = useState<Attendee[]>([])
@@ -90,47 +131,6 @@ export default function PaymentTemplatePage() {
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
-
-  const BLANK_TEMPLATE = `Event Payment Template
-
-[Event Name]
-
-Pay in Full
-
-VIP (name + payment method)
-1.
-2.
-3.
-4.
-5.
-6.
-7.
-8.
-9.
-10.
-
-General (name + payment method)
-1.
-2.
-3.
-4.
-5.
-6.
-7.
-8.
-9.
-10.
-11.
-12.
-13.
-14.
-15.
-
-👉 Pay deposit (name + action item)
-
-1.
-2.
-3.`
 
   function handleReset() {
     setText(BLANK_TEMPLATE)
