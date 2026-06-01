@@ -92,8 +92,29 @@ export default function PaymentTemplatePage() {
   }
 
   function handleReset() {
-    setText(initialTemplate)
-    if (selectedEventId) localStorage.setItem(`payment_template_${selectedEventId}`, initialTemplate)
+    const name = selectedEvent?.name ?? '[Event Name]'
+    const paid = attendees.filter(a =>
+      a.payment_status === 'paid' &&
+      a.payment_method !== 'free' &&
+      Number(a.payment_amount) > 0
+    )
+    const vipCount = Math.max(paid.filter(a => a.ticket_type.includes('vip')).length, 5)
+    const genCount = Math.max(paid.filter(a => !a.ticket_type.includes('vip')).length, 10)
+    const fresh = [
+      'Event Payment Template', '',
+      name, '',
+      'Pay in Full', '',
+      'VIP (name + payment method)',
+      ...Array.from({ length: vipCount }, (_, i) => `${i + 1}.`),
+      '',
+      'General (name + payment method)',
+      ...Array.from({ length: genCount }, (_, i) => `${i + 1}.`),
+      '',
+      '👉 Pay deposit (name + action item)', '',
+      '1.', '2.', '3.',
+    ].join('\n')
+    setText(fresh)
+    if (selectedEventId) localStorage.setItem(`payment_template_${selectedEventId}`, fresh)
   }
 
   if (loading) return <div className="text-zinc-500 mt-20 text-center">Loading…</div>
