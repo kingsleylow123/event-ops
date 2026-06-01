@@ -37,7 +37,7 @@ export default function PaymentTemplatePage() {
   const [events, setEvents] = useState<Event[]>([])
   const [attendees, setAttendees] = useState<Attendee[]>([])
   const [selectedEventId, setSelectedEventId] = useState<string>('')
-  const [text, setText] = useState<string>('')
+  const [text, setText] = useState<string>(BLANK_TEMPLATE)
   const [copied, setCopied] = useState(false)
   const [loading, setLoading] = useState(true)
   const [initialized, setInitialized] = useState<string>('')
@@ -101,14 +101,20 @@ export default function PaymentTemplatePage() {
     return lines.join('\n')
   }, [selectedEventId, attendees, selectedEvent])
 
-  // Only reset text when event changes or template first loads
+  // Load from localStorage — clear bad empty values
   useEffect(() => {
     if (!selectedEventId) return
     if (initialized === selectedEventId) return
     const saved = localStorage.getItem(`payment_template_${selectedEventId}`)
-    setText(saved && saved.trim() ? saved : BLANK_TEMPLATE)
+    if (saved && saved.trim().length > 10) {
+      setText(saved)
+    } else {
+      // Clear any bad empty/short cached value and use fresh template
+      localStorage.removeItem(`payment_template_${selectedEventId}`)
+      setText(BLANK_TEMPLATE)
+    }
     setInitialized(selectedEventId)
-  }, [selectedEventId, initialized, BLANK_TEMPLATE])
+  }, [selectedEventId, initialized])
 
   // Auto-save as user types
   function handleChange(val: string) {
