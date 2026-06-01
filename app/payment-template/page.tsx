@@ -66,20 +66,22 @@ export default function PaymentTemplatePage() {
 
   function buildText() {
     const name = selectedEvent?.name ?? '[Event Name]'
+    const vipCount = Math.max(vipAttendees.length, 5)
+    const genCount = Math.max(generalAttendees.length, 10)
     const lines = [
       `Claude Malaysia Workshop — ${name}`,
       'Payment Status', '',
       '✅ Pay in Full', '',
       'VIP (Name + Payment Method)',
-      ...(vipAttendees.length ? vipAttendees.map((a, i) => `${i + 1}. ${a.name} — ${paymentLabel(a)}`) : ['(none)']),
+      ...Array.from({ length: vipCount }, (_, i) => `${i + 1}.`),
       '',
       'General (Name + Payment Method)',
-      ...(generalAttendees.length ? generalAttendees.map((a, i) => `${i + 1}. ${a.name} — ${paymentLabel(a)}`) : ['(none)']),
+      ...Array.from({ length: genCount }, (_, i) => `${i + 1}.`),
       '',
       '👉 Pay Deposit (Name + Action Item)',
       ...(depositText.trim()
         ? depositText.trim().split('\n').map((l, i) => `${i + 1}. ${l}`)
-        : ['(none)']),
+        : ['1.', '2.', '3.']),
     ]
     return lines.join('\n')
   }
