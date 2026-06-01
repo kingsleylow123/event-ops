@@ -1,66 +1,13 @@
 'use client'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Event, Attendee } from '@/lib/supabase'
-
-const BLANK_TEMPLATE = `================================
-  Claude Malaysia Workshop
-         1st June
-================================
-
-✅ PAID IN FULL
-
-[ VIP ]
-1. Ethan
-   Stripe | RM 2,899
-
-2. Nick
-   Stripe | RM 2,899
-
-3. Melanie
-   Bank Transfer | RM 2,899
-
-VIP Total: RM 8,697
---------------------------------
-
-[ General ]
-1. Steve Wong
-   Stripe | RM 2,299
-
-2. Melanie
-   Bank Transfer | RM 2,299
-
-3. Jeremy | Daphne
-   TnG | RM 2,299
-
-General Total: RM 6,897
---------------------------------
-PAID IN FULL: RM 15,594
-================================
-
-👉 DEPOSIT
-
-1. Ralph
-   RM 500 paid
-   (Next event after Sep, flying Netherlands)
-
-2. Jeremy | Daphne
-   RM 1,799 paid | Balance RM 2,000
-   1 VIP + 3 General
-
-Deposit Collected: RM 2,299
-================================
-TOTAL COLLECTED:   RM 17,893
-BALANCE OWED:      RM  2,000
-================================`
+import { TICKET_LABELS } from '@/lib/supabase'
 
 export default function PaymentTemplatePage() {
   const [events, setEvents] = useState<Event[]>([])
   const [attendees, setAttendees] = useState<Attendee[]>([])
   const [selectedEventId, setSelectedEventId] = useState<string>('')
-  const [text, setText] = useState<string>(BLANK_TEMPLATE)
-  const [copied, setCopied] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [initialized, setInitialized] = useState<string>('')
 
   useEffect(() => {
     async function load() {
@@ -72,9 +19,7 @@ export default function PaymentTemplatePage() {
           const active = list.find(e => e.is_active) ?? list[0]
           if (active) setSelectedEventId(active.id)
         }
-      } finally {
-        setLoading(false)
-      }
+      } finally { setLoading(false) }
     }
     load()
   }, [])
@@ -86,112 +31,94 @@ export default function PaymentTemplatePage() {
       .then(setAttendees)
   }, [selectedEventId])
 
-  const selectedEvent = events.find(ev => ev.id === selectedEventId)
+  const paid = attendees.filter(a =>
+    a.payment_status === 'paid' &&
+    (a.notes as string | null) !== 'upgrade_payment' &&
+    a.payment_method !== 'free' &&
+    Number(a.payment_amount) > 0
+  )
 
-  const initialTemplate = useMemo(() => {
-    if (!selectedEventId) return ''
-    const paid = attendees.filter(a =>
-      a.payment_status === 'paid' &&
-      (a.notes as string | null) !== 'upgrade_payment' &&
-      a.payment_method !== 'free' &&
-      Number(a.payment_amount) > 0
+  const vip = paid.filter(a => a.ticket_type.includes('vip'))
+  const general = paid.filter(a => !a.ticket_type.includes('vip'))
+  const vipTotal = vip.reduce((s, a) => s + Number(a.payment_amount), 0)
+  const genTotal = general.reduce((s, a) => s + Number(a.payment_amount), 0)
+  const grandTotal = vipTotal + genTotal
+
+  function methodLabel(m: string) {
+    if (m === 'stripe') return 'Stripe'
+    if (m === 'bank_transfer') return 'Bank Transfer'
+    return m
+  }
+
+  function AttendeeTable({ rows }: { rows: Attendee[] }) {
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-zinc-500 text-xs border-b border-zinc-800">
+              <th className="pb-2 pr-4">#</th>
+              <th className="pb-2 pr-4">Name</th>
+              <th className="pb-2 pr-4">Phone</th>
+              <th className="pb-2 pr-4">Ticket</th>
+              <th className="pb-2 pr-4 text-right">Amount</th>
+              <th className="pb-2">Method</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((a, i) => (
+              <tr key={a.id} className="border-b border-zinc-900">
+                <td className="py-2.5 pr-4 text-zinc-600">{i + 1}</td>
+                <td className="py-2.5 pr-4 font-medium text-white">{a.name}</td>
+                <td className="py-2.5 pr-4 text-zinc-400">{a.phone || '—'}</td>
+                <td className="py-2.5 pr-4 text-zinc-400 text-xs">{TICKET_LABELS[a.ticket_type as keyof typeof TICKET_LABELS] ?? a.ticket_type}</td>
+                <td className="py-2.5 pr-4 text-right font-semibold text-amber-400">RM {Number(a.payment_amount).toLocaleString()}</td>
+                <td className="py-2.5 text-zinc-400">{methodLabel(a.payment_method)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     )
-    const vipCount = Math.max(paid.filter(a => a.ticket_type.includes('vip')).length, 5)
-    const genCount = Math.max(paid.filter(a => !a.ticket_type.includes('vip')).length, 10)
-    const name = selectedEvent?.name ?? '[Event Name]'
-    const lines = [
-      `Event Payment Template`,
-      '',
-      `${name}`,
-      '',
-      'Pay in Full',
-      '',
-      'VIP (name + payment method)',
-      ...Array.from({ length: vipCount }, (_, i) => `${i + 1}.`),
-      '',
-      'General (name + payment method)',
-      ...Array.from({ length: genCount }, (_, i) => `${i + 1}.`),
-      '',
-      '👉 Pay deposit (name + action item)',
-      '',
-      '1.',
-      '2.',
-      '3.',
-    ]
-    return lines.join('\n')
-  }, [selectedEventId, attendees, selectedEvent])
-
-  // Load from localStorage — clear bad empty values
-  useEffect(() => {
-    if (!selectedEventId) return
-    if (initialized === selectedEventId) return
-    const saved = localStorage.getItem(`payment_template_${selectedEventId}`)
-    if (saved && saved.trim().length > 10) {
-      setText(saved)
-    } else {
-      // Clear any bad empty/short cached value and use fresh template
-      localStorage.removeItem(`payment_template_${selectedEventId}`)
-      setText(BLANK_TEMPLATE)
-    }
-    setInitialized(selectedEventId)
-  }, [selectedEventId, initialized])
-
-  // Auto-save as user types
-  function handleChange(val: string) {
-    setText(val)
-    if (selectedEventId) localStorage.setItem(`payment_template_${selectedEventId}`, val)
-  }
-
-  async function handleCopy() {
-    await navigator.clipboard.writeText(text)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  function handleReset() {
-    setText(BLANK_TEMPLATE)
-    if (selectedEventId) localStorage.setItem(`payment_template_${selectedEventId}`, BLANK_TEMPLATE)
   }
 
   if (loading) return <div className="text-zinc-500 mt-20 text-center">Loading…</div>
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-xl font-bold">📋 Payment Template</h1>
-        <div className="flex gap-2 flex-wrap">
-          <select
-            value={selectedEventId}
-            onChange={e => { setSelectedEventId(e.target.value); setInitialized('') }}
-            className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm"
-          >
-            {events.map(ev => (
-              <option key={ev.id} value={ev.id}>{ev.name}</option>
-            ))}
-          </select>
-          <button onClick={handleReset}
-            className="text-xs text-zinc-500 hover:text-zinc-300 border border-zinc-700 rounded-lg px-3 py-2">
-            Reset
-          </button>
-        </div>
+        <select
+          value={selectedEventId}
+          onChange={e => setSelectedEventId(e.target.value)}
+          className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm"
+        >
+          {events.map(ev => <option key={ev.id} value={ev.id}>{ev.name}</option>)}
+        </select>
       </div>
 
-      {/* Plain editable text — no box styling */}
-      <textarea
-        value={text}
-        onChange={e => handleChange(e.target.value)}
-        rows={Math.max(25, text.split('\n').length + 3)}
-        className="w-full bg-transparent text-white text-sm leading-7 resize-none focus:outline-none"
-        style={{ fontFamily: 'inherit' }}
-        spellCheck={false}
-      />
+      {/* VIP */}
+      <div className="bg-[#111] border border-zinc-800 rounded-xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold text-blue-400 uppercase tracking-wider">🔵 VIP</p>
+          <p className="text-sm font-bold text-amber-400">RM {vipTotal.toLocaleString()}</p>
+        </div>
+        {vip.length ? <AttendeeTable rows={vip} /> : <p className="text-zinc-600 text-sm">No VIP paid yet.</p>}
+      </div>
 
-      <button
-        onClick={handleCopy}
-        className="bg-amber-500 hover:bg-amber-400 text-black font-bold px-6 py-2.5 rounded-lg text-sm"
-      >
-        {copied ? '✅ Copied!' : '📋 Copy to clipboard'}
-      </button>
+      {/* General */}
+      <div className="bg-[#111] border border-zinc-800 rounded-xl p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold text-green-400 uppercase tracking-wider">🟢 General</p>
+          <p className="text-sm font-bold text-amber-400">RM {genTotal.toLocaleString()}</p>
+        </div>
+        {general.length ? <AttendeeTable rows={general} /> : <p className="text-zinc-600 text-sm">No General paid yet.</p>}
+      </div>
+
+      {/* Total */}
+      <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex items-center justify-between">
+        <p className="font-bold text-amber-400">💰 TOTAL COLLECTED</p>
+        <p className="text-2xl font-black text-amber-400">RM {grandTotal.toLocaleString()}</p>
+      </div>
     </div>
   )
 }
