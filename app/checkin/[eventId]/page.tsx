@@ -24,7 +24,7 @@ export default function CheckinPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!name.trim()) return
+    if (!phone.trim()) return
     setState({ status: 'loading' })
     try {
       const res = await fetch('/api/checkin', {
@@ -98,7 +98,7 @@ export default function CheckinPage() {
           Check-in
         </div>
         <h1 className="text-3xl font-bold text-white leading-tight">Thanks for coming!</h1>
-        <p className="text-zinc-500 text-sm mt-2">Enter your name <span className="text-zinc-600">or</span> phone number to check in</p>
+        <p className="text-zinc-500 text-sm mt-2">Enter your phone number to check in</p>
       </div>
 
       {/* Card */}
@@ -108,27 +108,9 @@ export default function CheckinPage() {
         {(state.status === 'idle' || state.status === 'loading') && (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs text-zinc-500 mb-1.5 uppercase tracking-wider">Your Name</label>
-              <input
-                autoFocus
-                type="text"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                placeholder="e.g. Sarah"
-                disabled={state.status === 'loading'}
-                className="w-full rounded-xl px-4 py-3.5 text-white text-base outline-none disabled:opacity-50"
-                style={{ background: '#1a1a1a', border: '1px solid #333' }}
-              />
-            </div>
-            {/* OR divider */}
-            <div className="flex items-center gap-3">
-              <div className="flex-1 h-px" style={{ background: '#2a2a2a' }} />
-              <span className="text-zinc-600 text-xs uppercase tracking-widest">or</span>
-              <div className="flex-1 h-px" style={{ background: '#2a2a2a' }} />
-            </div>
-            <div>
               <label className="block text-xs text-zinc-500 mb-1.5 uppercase tracking-wider">Phone Number</label>
               <input
+                autoFocus
                 type="tel"
                 value={phone}
                 onChange={e => setPhone(e.target.value)}
@@ -140,7 +122,7 @@ export default function CheckinPage() {
             </div>
             <button
               type="submit"
-              disabled={state.status === 'loading' || (!name.trim() && !phone.trim())}
+              disabled={state.status === 'loading' || !phone.trim()}
               className="w-full py-3.5 rounded-xl font-bold text-base text-white disabled:opacity-50 transition-opacity"
               style={{ background: state.status === 'loading' ? '#a33c29' : '#e8563a' }}
             >
@@ -206,7 +188,7 @@ export default function CheckinPage() {
           <div className="text-center py-4 space-y-4">
             <div className="text-5xl">🔍</div>
             <h2 className="text-xl font-bold text-white">Name not found</h2>
-            <p className="text-zinc-400 text-sm">No paid ticket found for &quot;{name}&quot;. Please check your spelling or see the registration desk.</p>
+            <p className="text-zinc-400 text-sm">No paid ticket found for this phone number. Please see the registration desk.</p>
             <button onClick={reset} className="w-full py-3.5 rounded-xl font-bold text-white text-base" style={{ background: '#e8563a' }}>
               Try again
             </button>
