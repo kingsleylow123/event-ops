@@ -20,6 +20,7 @@ export default function MobileNav({ userEmail, isAdmin, pendingCount }: MobileNa
     { href: '/briefing', label: 'Briefing' },
     { href: '/floorplan', label: 'Floor Plan' },
     ...(isAdmin ? [{ href: '/revenue', label: 'Revenue' }] : []),
+    ...(isAdmin ? [{ href: '/payment-template', label: 'Payment' }] : []),
     { href: '/insights', label: 'Insights' },
     { href: '/meetings', label: 'Activity' },
     { href: '/team', label: 'Claude Intern' },
