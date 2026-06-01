@@ -9,35 +9,48 @@ const BLANK_TEMPLATE = `================================
 
 ✅ PAID IN FULL
 
-[ VIP — RM2,899 ]
-1. Ethan          Stripe
-2. Nick           Stripe
-3. Melanie        Bank Transfer
-                  ----------
-                  RM 8,697
+[ VIP ]
+1. Ethan
+   Stripe | RM 2,899
 
-[ General — RM2,299 ]
-1. Steve Wong     Stripe
-2. Melanie        Bank Transfer
-3. Jeremy|Daphne  TnG
-                  ----------
-                  RM 6,897
+2. Nick
+   Stripe | RM 2,899
 
-================================
-  PAID IN FULL     RM 15,594
+3. Melanie
+   Bank Transfer | RM 2,899
+
+VIP Total: RM 8,697
+--------------------------------
+
+[ General ]
+1. Steve Wong
+   Stripe | RM 2,299
+
+2. Melanie
+   Bank Transfer | RM 2,299
+
+3. Jeremy | Daphne
+   TnG | RM 2,299
+
+General Total: RM 6,897
+--------------------------------
+PAID IN FULL: RM 15,594
 ================================
 
 👉 DEPOSIT
 
-1. Ralph          RM 500
-   (next event, flying Sep)
+1. Ralph
+   RM 500 paid
+   (Next event after Sep, flying Netherlands)
 
-2. Jeremy|Daphne  RM 1,799
-   1 VIP + 3 Gen  (bal RM 2,000)
+2. Jeremy | Daphne
+   RM 1,799 paid | Balance RM 2,000
+   1 VIP + 3 General
 
+Deposit Collected: RM 2,299
 ================================
-  COLLECTED        RM 17,893
-  OUTSTANDING      RM  2,000
+TOTAL COLLECTED:   RM 17,893
+BALANCE OWED:      RM  2,000
 ================================`
 
 export default function PaymentTemplatePage() {
