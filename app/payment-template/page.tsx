@@ -2,46 +2,43 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Event, Attendee } from '@/lib/supabase'
 
-const BLANK_TEMPLATE = `Event Payment Template
-Claude Malaysia Workshop — 1st June
+const BLANK_TEMPLATE = `================================
+  Claude Malaysia Workshop
+         1st June
+================================
 
-━━━━━━━━━━━━━━━━━━━━━━━
-✅ PAY IN FULL
-━━━━━━━━━━━━━━━━━━━━━━━
+✅ PAID IN FULL
 
-🔵 VIP (RM2899)
-1. Ethan — Stripe
-2. Nick — Stripe
-3. Melanie — Bank Transfer
-──────────────────────
-VIP Subtotal: 3 pax × RM2899 = RM8,697
+[ VIP — RM2,899 ]
+1. Ethan          Stripe
+2. Nick           Stripe
+3. Melanie        Bank Transfer
+                  ----------
+                  RM 8,697
 
-🟢 General (RM2299)
-1. Steve Wong — Stripe
-2. Melanie — Bank Transfer
-3. Jeremy | Daphne — TnG
-──────────────────────
-General Subtotal: 3 pax × RM2299 = RM6,897
+[ General — RM2,299 ]
+1. Steve Wong     Stripe
+2. Melanie        Bank Transfer
+3. Jeremy|Daphne  TnG
+                  ----------
+                  RM 6,897
 
-💰 PAY IN FULL TOTAL: RM15,594
-━━━━━━━━━━━━━━━━━━━━━━━
+================================
+  PAID IN FULL     RM 15,594
+================================
 
-👉 PAY DEPOSIT
-━━━━━━━━━━━━━━━━━━━━━━━
+👉 DEPOSIT
 
-1. Ralph — RM500 deposit
-   (Hold for next event after Sep, flying Netherlands)
+1. Ralph          RM 500
+   (next event, flying Sep)
 
-2. Jeremy | Daphne — RM1,799 paid (balance RM2,000)
-   1 VIP + 3 General
+2. Jeremy|Daphne  RM 1,799
+   1 VIP + 3 Gen  (bal RM 2,000)
 
-──────────────────────
-Deposit Collected: RM2,299
-Balance Outstanding: RM2,000
-━━━━━━━━━━━━━━━━━━━━━━━
-
-💵 GRAND TOTAL COLLECTED: RM17,893
-⏳ BALANCE STILL OWED: RM2,000`
+================================
+  COLLECTED        RM 17,893
+  OUTSTANDING      RM  2,000
+================================`
 
 export default function PaymentTemplatePage() {
   const [events, setEvents] = useState<Event[]>([])
