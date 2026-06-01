@@ -49,17 +49,23 @@ export default function PaymentTemplatePage() {
     const genCount = Math.max(paid.filter(a => !a.ticket_type.includes('vip')).length, 10)
     const name = selectedEvent?.name ?? '[Event Name]'
     const lines = [
-      `Claude Malaysia Workshop — ${name}`,
-      'Payment Status', '',
-      '✅ Pay in Full', '',
-      'VIP (Name + Payment Method)',
+      `Event Payment Template`,
+      '',
+      `${name}`,
+      '',
+      'Pay in Full',
+      '',
+      'VIP (name + payment method)',
       ...Array.from({ length: vipCount }, (_, i) => `${i + 1}.`),
       '',
-      'General (Name + Payment Method)',
+      'General (name + payment method)',
       ...Array.from({ length: genCount }, (_, i) => `${i + 1}.`),
       '',
-      '👉 Pay Deposit (Name + Action Item)',
-      '1.', '2.', '3.',
+      '👉 Pay deposit (name + action item)',
+      '',
+      '1.',
+      '2.',
+      '3.',
     ]
     return lines.join('\n')
   }, [selectedEventId, attendees, selectedEvent])
