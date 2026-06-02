@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
 import { supabase } from '@/lib/supabase'
+import { buildReport } from '@/lib/affiliates'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -11,7 +12,14 @@ const WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET!
 const ALLOWED_IDS = (process.env.TELEGRAM_ALLOWED_USER_IDS || '').split(',').map(s => s.trim()).filter(Boolean)
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+// Lazy OpenAI client — the SDK throws at construction if the key is missing,
+// which would break `next build` page-data collection where the env isn't set.
+let _openai: OpenAI | null = null
+function openaiClient(): OpenAI {
+  if (!_openai) _openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+  return _openai
+}
 
 // ── Voice transcription (Telegram voice note → text via Whisper) ───────────────
 async function transcribeVoice(fileId: string): Promise<string> {
@@ -30,7 +38,7 @@ async function transcribeVoice(fileId: string): Promise<string> {
   // Force English — auto-detect was mis-tagging English speech as Malay.
   // A prompt nudges Whisper toward the event-ops domain vocabulary.
   const file = new File([buf], 'voice.oga', { type: 'audio/ogg' })
-  const tr = await openai.audio.transcriptions.create({
+  const tr = await openaiClient().audio.transcriptions.create({
     file,
     model: 'whisper-1',
     language: 'en',
@@ -310,6 +318,19 @@ function fmtDuplicates(att: Row[]) {
     dupes.map(g => `${esc(g[0].name)} ×${g.length}\n` + g.map(a => `  • ${esc(tt(a.ticket_type))} · ${esc(a.payment_status)} · ${esc(a.email || a.phone)}`).join('\n')).join('\n\n')
 }
 
+async function fmtAffiliates(eventId: string) {
+  const rep = await buildReport(eventId)
+  const money = (n: number) => 'RM ' + n.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  if (!rep.summary.length) return `🤝 ${b('Affiliates')}\nNo attributions yet. Open the Affiliates page to auto-match or assign.`
+  let out = `🤝 ${b('Affiliate Payout (10%)')}\n`
+  rep.summary.forEach(s => {
+    out += `\n${b(s.handle)} — ${money(s.commission)}\n  <i>${s.buyers} buyer${s.buyers !== 1 ? 's' : ''} · ${money(s.revenue)} revenue</i>`
+  })
+  out += `\n\n${b('Total payout')}: ${money(rep.totals.total_commission)}`
+  out += `\n<i>Unattributed: ${money(rep.totals.unattributed_revenue)}</i>`
+  return out
+}
+
 const HELP = `🤖 ${b('Jarvis')} — your EventOps assistant\n\n` +
   `${b('Quick commands')}\n` +
   `/stats — full event summary\n` +
@@ -323,6 +344,7 @@ const HELP = `🤖 ${b('Jarvis')} — your EventOps assistant\n\n` +
   `/survey — audience insights\n` +
   `/meetings — meeting attendance\n` +
   `/duplicates — flag duplicate entries\n` +
+  `/affiliates — creator commission payout\n` +
   `/find &lt;name&gt; — look up an attendee\n\n` +
   `Or just ${b('ask anything')} in plain English 👇\n` +
   `<i>e.g. "who hasn't paid?", "how full are we vs capacity?", "which paid attendees skipped the survey?"</i>`
@@ -394,6 +416,7 @@ async function handle(text: string, ev: Row, d: Awaited<ReturnType<typeof loadAl
   if (cmd === '/survey') return fmtSurvey(d.survey, d.attendees)
   if (cmd === '/meetings') return fmtMeetings(d.meetings)
   if (cmd === '/duplicates') return fmtDuplicates(d.attendees)
+  if (cmd === '/affiliates') return await fmtAffiliates(ev.id as string)
   if (cmd.startsWith('/find ')) return fmtFind(d.attendees, text.slice(6).trim())
   return '' // signal: natural language
 }
