@@ -14,11 +14,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false }, { status: 401 })
   }
 
-  const now = new Date().toISOString()
+  // Process recent (last 30 days) + all upcoming events — a just-finished event
+  // still accrues affiliate sales that need matching, so "future only" misses them.
+  const cutoff = new Date(Date.now() - 30 * 86400000).toISOString()
   const { data: events, error } = await supabase
     .from('events')
     .select('id, name')
-    .gte('date', now)
+    .gte('date', cutoff)
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 
   const results: Array<{ event: string; matched: number }> = []
