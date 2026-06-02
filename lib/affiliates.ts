@@ -108,6 +108,7 @@ export async function loadBuyers(eventId: string): Promise<BuyerRow[]> {
     .select('id, name, phone, email, payment_amount, payment_status')
     .eq('event_id', eventId)
     .eq('payment_status', 'paid')
+    .order('id', { ascending: true }) // stable order → deterministic representative id
   if (error) throw new Error(error.message)
   const rows = data ?? []
 
