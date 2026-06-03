@@ -814,7 +814,8 @@ const INVOICE_CSS = `
     letter-spacing: 0;
     top: -0.6em;
     position: relative;
-    margin: 0 2px;
+    margin-left: -4px;
+    margin-right: 4px;
   }
 
   /* Quick mode table */
