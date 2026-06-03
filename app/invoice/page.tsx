@@ -867,13 +867,29 @@ const INVOICE_CSS = `
   .inv-desc-edit { width: 100%; min-height: 60px; resize: vertical; }
   .inv-line-desc {
     width: 100%;
-    min-height: 28px;
-    resize: vertical;
+    min-height: 60px;
+    resize: both;
     font-family: inherit;
     line-height: 1.4;
     white-space: pre-wrap;
     word-break: break-word;
     overflow-wrap: anywhere;
+    border: 1px dashed #bbb !important;
+    padding: 6px 8px !important;
+    background: #fff !important;
+  }
+  .inv-line-desc:focus {
+    border-color: #888 !important;
+    background: #fafafa !important;
+    outline: none;
+  }
+  @media print {
+    .inv-line-desc {
+      border: none !important;
+      padding: 0 !important;
+      background: transparent !important;
+      resize: none !important;
+    }
   }
 
   @media print {
