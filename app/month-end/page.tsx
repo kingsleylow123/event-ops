@@ -124,11 +124,16 @@ export default function MonthEndPage() {
     if (!iso) return false
     return iso.slice(0, 7) === yearMonth
   }
-  // event_id -> event date YYYY-MM
+  // event_id -> bucketing month (accounting_month override wins, else event date)
   const eventMonth = useMemo(() => {
     const m = new Map<string, string>()
     events.forEach(ev => {
-      if (ev.date) m.set(ev.id, String(ev.date).slice(0, 7))
+      const override = (ev as Event & { accounting_month?: string | null }).accounting_month
+      if (override && /^\d{4}-\d{2}$/.test(override)) {
+        m.set(ev.id, override)
+      } else if (ev.date) {
+        m.set(ev.id, String(ev.date).slice(0, 7))
+      }
     })
     return m
   }, [events])
