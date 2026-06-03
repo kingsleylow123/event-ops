@@ -195,12 +195,27 @@ function InvoiceContent() {
             </button>
           </div>
 
-          <button onClick={() => window.print()}>🖨 Print / Save as PDF</button>
+          <button onClick={async () => {
+            const el = document.getElementById('invoice-page-printable')
+            if (!el) return
+            const safeName = (name || 'Invoice').replace(/[^a-zA-Z0-9 _-]/g, '').trim().replace(/\s+/g, '-')
+            const html2pdf = (await import('html2pdf.js')).default
+            await html2pdf()
+              .set({
+                margin: 0,
+                filename: `Invoice-${safeName}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+              })
+              .from(el)
+              .save()
+          }}>📄 Save as PDF</button>
           <button className="secondary" onClick={() => window.close()}>Close</button>
         </div>
 
         {/* ── Invoice page (A4) ── */}
-        <div className="invoice-page">
+        <div id="invoice-page-printable" className="invoice-page">
           <div className="red-stripe">
             <div className="seg-top" />
             <div className="seg-gap" />
