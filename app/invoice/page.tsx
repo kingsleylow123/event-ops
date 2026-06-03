@@ -387,11 +387,11 @@ function InvoiceContent() {
                     {lineItems.map((li, i) => (
                       <tr key={i}>
                         <td className="col-desc">
-                          <input
-                            className="inv-edit"
+                          <textarea
+                            className="inv-edit inv-line-desc"
                             value={li.desc}
                             onChange={e => updateLine(i, { desc: e.target.value })}
-                            style={{ width: '100%' }}
+                            rows={1}
                           />
                         </td>
                         <td className="col-qty">
@@ -865,6 +865,16 @@ const INVOICE_CSS = `
   .inv-edit:hover { border-color: #cfcfcf; }
   .inv-edit:focus { outline: none; border-color: #888; background: #fafafa; }
   .inv-desc-edit { width: 100%; min-height: 60px; resize: vertical; }
+  .inv-line-desc {
+    width: 100%;
+    min-height: 28px;
+    resize: vertical;
+    font-family: inherit;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+  }
 
   @media print {
     body { background: #fff !important; }
