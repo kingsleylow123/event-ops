@@ -47,48 +47,6 @@ export default function AffiliatesPage() {
   }
   const display = (n: number) => revenueHidden ? 'RM ••••••' : rm(n)
 
-  // ── Affiliate bank-details edit modal ─────────────────────────────────
-  const [editing, setEditing] = useState<Affiliate | null>(null)
-  const [savingBank, setSavingBank] = useState(false)
-  const [bankForm, setBankForm] = useState({ bank_name: '', bank_account: '', bank_holder: '' })
-
-  function openEdit(affiliateId: string) {
-    const a = report?.affiliates.find(x => x.id === affiliateId)
-    if (!a) return
-    setEditing(a)
-    setBankForm({
-      bank_name: a.bank_name ?? '',
-      bank_account: a.bank_account ?? '',
-      bank_holder: a.bank_holder ?? '',
-    })
-  }
-
-  async function saveBank() {
-    if (!editing) return
-    setSavingBank(true)
-    try {
-      const res = await fetch('/api/affiliates', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: editing.id,
-          bank_name: bankForm.bank_name || null,
-          bank_account: bankForm.bank_account || null,
-          bank_holder: bankForm.bank_holder || null,
-        }),
-      })
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        setMsg(`⚠️ Failed to save bank: ${j.error || res.status}`)
-        return
-      }
-      setEditing(null)
-      loadReport()
-    } finally {
-      setSavingBank(false)
-    }
-  }
-
   useEffect(() => {
     fetch('/api/events')
       .then(r => r.json())
@@ -199,58 +157,6 @@ export default function AffiliatesPage() {
         <div className="text-zinc-500 text-center py-12">Loading payout…</div>
       ) : (
         <>
-          {/* Summary cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {report.summary.length === 0 && (
-              <div className="col-span-full text-zinc-500 text-sm bg-[#111] border border-zinc-800 rounded-xl p-5">
-                No attributions yet. Click <span className="text-amber-400">Auto-match from sheet</span> or assign affiliates below.
-              </div>
-            )}
-            {report.summary.map(s => (
-              <div key={s.affiliate_id} className="bg-[#111] border border-zinc-800 rounded-xl p-4 flex flex-col gap-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="text-sm font-semibold text-white">{s.handle}</div>
-                  <button
-                    onClick={() => openEdit(s.affiliate_id)}
-                    title="Edit bank details"
-                    className="text-zinc-500 hover:text-amber-400 text-xs"
-                  >
-                    ✎
-                  </button>
-                </div>
-                <div className="text-xs text-zinc-500">{s.buyers} buyer{s.buyers !== 1 ? 's' : ''} · {display(s.revenue)}</div>
-                <div className="text-lg font-bold text-amber-400">{display(s.commission)}</div>
-                <div className="text-[11px] leading-tight text-zinc-500 border-t border-zinc-800 pt-2 mt-1">
-                  {s.bank_name || s.bank_account || s.bank_holder ? (
-                    <>
-                      <div className="text-zinc-300">{s.bank_name || '—'}</div>
-                      <div className="font-mono">{s.bank_account || '—'}</div>
-                      <div>{s.bank_holder || '—'}</div>
-                    </>
-                  ) : (
-                    <button onClick={() => openEdit(s.affiliate_id)} className="text-zinc-600 hover:text-amber-400">
-                      + Add bank account
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Totals bar */}
-          <div className="bg-[#111] border border-zinc-800 rounded-xl p-4 flex flex-wrap gap-6 text-sm items-center">
-            <div><span className="text-zinc-500">Attributed revenue:</span> <span className="font-semibold">{display(report.totals.attributed_revenue)}</span></div>
-            <div><span className="text-zinc-500">Total payout (10%):</span> <span className="font-bold text-amber-400">{display(report.totals.total_commission)}</span></div>
-            <div><span className="text-zinc-500">Unattributed:</span> <span className="text-zinc-400">{display(report.totals.unattributed_revenue)}</span></div>
-            <button
-              onClick={toggleRevenue}
-              title={revenueHidden ? 'Show amounts' : 'Hide amounts'}
-              className="ml-auto text-zinc-500 hover:text-amber-400 text-base"
-            >
-              {revenueHidden ? '👁' : '🙈'}
-            </button>
-          </div>
-
           {/* Buyers table */}
           <div className="bg-[#111] border border-zinc-800 rounded-xl overflow-hidden">
             <div className="px-5 py-3 border-b border-zinc-800 flex justify-between items-center">
@@ -302,71 +208,6 @@ export default function AffiliatesPage() {
         </>
       )}
 
-      {/* ── Bank-details edit modal ───────────────────────────────── */}
-      {editing && (
-        <div
-          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4"
-          onClick={() => setEditing(null)}
-        >
-          <div
-            className="bg-[#111] border border-zinc-800 rounded-xl w-full max-w-md p-5 space-y-4"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-white">
-                Bank details · <span className="text-amber-400">{editing.handle}</span>
-              </h3>
-              <button onClick={() => setEditing(null)} className="text-zinc-500 hover:text-white text-lg">×</button>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs text-zinc-500 mb-1 uppercase tracking-wider">Bank name</label>
-                <input
-                  value={bankForm.bank_name}
-                  onChange={e => setBankForm({ ...bankForm, bank_name: e.target.value })}
-                  placeholder="Maybank, CIMB, Public Bank…"
-                  className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-zinc-500 mb-1 uppercase tracking-wider">Bank account</label>
-                <input
-                  value={bankForm.bank_account}
-                  onChange={e => setBankForm({ ...bankForm, bank_account: e.target.value })}
-                  placeholder="1234 5678 9012"
-                  className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm font-mono"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-zinc-500 mb-1 uppercase tracking-wider">Account holder</label>
-                <input
-                  value={bankForm.bank_holder}
-                  onChange={e => setBankForm({ ...bankForm, bank_holder: e.target.value })}
-                  placeholder="Full name as registered with bank"
-                  className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm"
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-2 justify-end pt-1">
-              <button
-                onClick={() => setEditing(null)}
-                className="text-sm text-zinc-400 hover:text-white px-4 py-2 rounded-lg border border-zinc-700"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveBank}
-                disabled={savingBank}
-                className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black text-sm font-semibold px-4 py-2 rounded-lg"
-              >
-                {savingBank ? 'Saving…' : 'Save'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
