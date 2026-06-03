@@ -114,12 +114,19 @@ function InvoiceContent() {
             scale: 2,
             useCORS: true,
             backgroundColor: '#ffffff',
+            width: 794,
+            height: 1123,
             windowWidth: 794,
             windowHeight: 1123,
             // Transform the cloned DOM html2canvas captures, replacing
             // form inputs with plain text spans — canvas renders them crisply.
-            onclone: (_doc: Document, root: HTMLElement) => {
-              const target = root.querySelector('#invoice-page-printable') as HTMLElement | null
+            onclone: (clonedDoc: Document, root?: HTMLElement) => {
+              // `root` may be the captured element itself, or undefined depending on html2canvas version.
+              // Resolve a target that we can definitely query.
+              const target: HTMLElement | null =
+                (root && root.querySelector('#invoice-page-printable') as HTMLElement | null) ||
+                (root && root.id === 'invoice-page-printable' ? root : null) ||
+                clonedDoc.getElementById('invoice-page-printable')
               if (!target) return
               target.querySelectorAll('input, textarea').forEach(node => {
                 const input = node as HTMLInputElement | HTMLTextAreaElement
