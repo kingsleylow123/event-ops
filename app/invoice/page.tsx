@@ -809,6 +809,13 @@ const INVOICE_CSS = `
     letter-spacing: 3px;
     color: #333;
   }
+  .inv-date-row sup {
+    font-size: 0.6em;
+    letter-spacing: 0;
+    top: -0.6em;
+    position: relative;
+    margin: 0 2px;
+  }
 
   /* Quick mode table */
   .inv-table { width: 100%; border-collapse: collapse; }
