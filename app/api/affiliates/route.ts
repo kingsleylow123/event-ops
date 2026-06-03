@@ -20,11 +20,70 @@ export async function GET(req: NextRequest) {
 }
 
 // POST ?action=import { event_id }  → run auto-match
-// POST { event_id, attendee_id, affiliate_id }  → manual assign
+// POST ?action=create { handle, name?, commission_rate?, bank_name?, bank_account?, bank_holder? }
+//   → create a new affiliate
+// POST ?action=mark_paid { event_id, affiliate_id, amount, notes? }
+//   → mark affiliate as paid for an event (idempotent upsert)
+// POST ?action=unmark_paid { event_id, affiliate_id }
+//   → remove the paid record (mark as unpaid again)
+// POST { event_id, attendee_id, affiliate_id }  → manual assign (default)
 export async function POST(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const action = searchParams.get('action')
   const body = await req.json().catch(() => ({}))
+
+  if (action === 'create') {
+    const { handle, name, commission_rate, bank_name, bank_account, bank_holder } = body as {
+      handle?: string; name?: string; commission_rate?: number
+      bank_name?: string; bank_account?: string; bank_holder?: string
+    }
+    if (!handle?.trim()) return NextResponse.json({ error: 'handle required' }, { status: 400, headers: NO_STORE_HEADERS })
+    const insert = {
+      handle: handle.trim(),
+      name: name?.trim() || null,
+      commission_rate: typeof commission_rate === 'number' ? commission_rate : 0.10,
+      active: true,
+      bank_name: bank_name?.trim() || null,
+      bank_account: bank_account?.trim() || null,
+      bank_holder: bank_holder?.trim() || null,
+    }
+    const { data, error } = await supabase.from('affiliates').insert(insert).select().single()
+    if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE_HEADERS })
+    return NextResponse.json(data, { headers: NO_STORE_HEADERS })
+  }
+
+  if (action === 'mark_paid') {
+    const { event_id, affiliate_id, amount, notes } = body as {
+      event_id?: string; affiliate_id?: string; amount?: number; notes?: string
+    }
+    if (!event_id || !affiliate_id || typeof amount !== 'number') {
+      return NextResponse.json({ error: 'event_id, affiliate_id, amount required' }, { status: 400, headers: NO_STORE_HEADERS })
+    }
+    const { data, error } = await supabase
+      .from('affiliate_payouts')
+      .upsert(
+        { event_id, affiliate_id, amount, notes: notes ?? null, paid_at: new Date().toISOString() },
+        { onConflict: 'affiliate_id,event_id' },
+      )
+      .select()
+      .single()
+    if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE_HEADERS })
+    return NextResponse.json(data, { headers: NO_STORE_HEADERS })
+  }
+
+  if (action === 'unmark_paid') {
+    const { event_id, affiliate_id } = body as { event_id?: string; affiliate_id?: string }
+    if (!event_id || !affiliate_id) {
+      return NextResponse.json({ error: 'event_id, affiliate_id required' }, { status: 400, headers: NO_STORE_HEADERS })
+    }
+    const { error } = await supabase
+      .from('affiliate_payouts')
+      .delete()
+      .eq('event_id', event_id)
+      .eq('affiliate_id', affiliate_id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE_HEADERS })
+    return NextResponse.json({ success: true }, { headers: NO_STORE_HEADERS })
+  }
 
   if (action === 'import') {
     const { event_id } = body as { event_id?: string }

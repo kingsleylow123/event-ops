@@ -103,12 +103,16 @@ export interface PayoutReport {
   summary: Array<{
     affiliate_id: string
     handle: string
+    name: string | null
     buyers: number
     revenue: number
     commission: number
     bank_name: string | null
     bank_account: string | null
     bank_holder: string | null
+    paid_at: string | null
+    paid_amount: number | null
+    buyer_list: Array<{ name: string; amount: number }>
   }>
   totals: { attributed_revenue: number; total_commission: number; unattributed_revenue: number }
 }
@@ -150,10 +154,11 @@ export async function loadBuyers(eventId: string): Promise<BuyerRow[]> {
 
 // ── Build the full payout report for an event ─────────────────────────────────
 export async function buildReport(eventId: string): Promise<PayoutReport> {
-  const [buyers, affRes, attrRes] = await Promise.all([
+  const [buyers, affRes, attrRes, paidRes] = await Promise.all([
     loadBuyers(eventId),
     supabase.from('affiliates').select('id, handle, name, commission_rate, active, bank_name, bank_account, bank_holder'),
     supabase.from('affiliate_attributions').select('id, attendee_id, affiliate_id, source').eq('event_id', eventId),
+    supabase.from('affiliate_payouts').select('affiliate_id, paid_at, amount').eq('event_id', eventId),
   ])
   if (affRes.error) throw new Error(affRes.error.message)
   if (attrRes.error) throw new Error(attrRes.error.message)
@@ -189,30 +194,50 @@ export async function buildReport(eventId: string): Promise<PayoutReport> {
     }
   }).sort((a, b) => b.total - a.total)
 
+  // Paid status per affiliate for this event
+  const paidByAff = new Map<string, { paid_at: string; amount: number }>()
+  for (const p of paidRes.data ?? []) {
+    paidByAff.set(p.affiliate_id as string, {
+      paid_at: p.paid_at as string,
+      amount: Number(p.amount),
+    })
+  }
+
   // Summary per affiliate (only active affiliates earn payouts)
-  const sumMap = new Map<string, { revenue: number; buyers: number }>()
+  const sumMap = new Map<string, { revenue: number; buyers: number; list: Array<{ name: string; amount: number }> }>()
   for (const b of buyerRows) {
     if (!b.affiliate_id) continue
     const aff = affById.get(b.affiliate_id)
     if (!aff || !aff.active) continue
-    const s = sumMap.get(b.affiliate_id) ?? { revenue: 0, buyers: 0 }
-    s.revenue += b.total; s.buyers += 1
+    const s = sumMap.get(b.affiliate_id) ?? { revenue: 0, buyers: 0, list: [] }
+    s.revenue += b.total
+    s.buyers += 1
+    s.list.push({ name: b.name, amount: b.total })
     sumMap.set(b.affiliate_id, s)
   }
 
   const summary = [...sumMap.entries()].map(([id, s]) => {
     const aff = affById.get(id)!
+    const paid = paidByAff.get(id)
     return {
       affiliate_id: id,
       handle: aff.handle,
+      name: aff.name,
       buyers: s.buyers,
       revenue: s.revenue,
       commission: s.revenue * aff.rate,
       bank_name: aff.bank_name,
       bank_account: aff.bank_account,
       bank_holder: aff.bank_holder,
+      paid_at: paid?.paid_at ?? null,
+      paid_amount: paid?.amount ?? null,
+      buyer_list: s.list.sort((a, b) => b.amount - a.amount),
     }
-  }).sort((a, b) => b.commission - a.commission)
+  }).sort((a, b) => {
+    // Unpaid first, then by commission desc
+    if ((a.paid_at == null) !== (b.paid_at == null)) return a.paid_at == null ? -1 : 1
+    return b.commission - a.commission
+  })
 
   const attributed_revenue = summary.reduce((t, s) => t + s.revenue, 0)
   const total_commission = summary.reduce((t, s) => t + s.commission, 0)
