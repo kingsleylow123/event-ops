@@ -237,18 +237,18 @@ export default function AffiliatesPage() {
             ))}
           </div>
 
-          {/* Totals bar */}
-          <div className="bg-[#111] border border-zinc-800 rounded-xl p-4 flex flex-wrap gap-6 text-sm items-center">
-            <div><span className="text-zinc-500">Attributed revenue:</span> <span className="font-semibold">{display(report.totals.attributed_revenue)}</span></div>
-            <div><span className="text-zinc-500">Total payout (10%):</span> <span className="font-bold text-amber-400">{display(report.totals.total_commission)}</span></div>
-            <div><span className="text-zinc-500">Unattributed:</span> <span className="text-zinc-400">{display(report.totals.unattributed_revenue)}</span></div>
+          {/* Totals bar — right-aligned */}
+          <div className="bg-[#111] border border-zinc-800 rounded-xl p-4 flex flex-wrap gap-6 text-sm items-center justify-end">
             <button
               onClick={toggleRevenue}
               title={revenueHidden ? 'Show amounts' : 'Hide amounts'}
-              className="ml-auto text-zinc-500 hover:text-amber-400 text-base"
+              className="text-zinc-500 hover:text-amber-400 text-base mr-auto"
             >
               {revenueHidden ? '👁' : '🙈'}
             </button>
+            <div><span className="text-zinc-500">Attributed revenue:</span> <span className="font-semibold">{display(report.totals.attributed_revenue)}</span></div>
+            <div><span className="text-zinc-500">Total payout (10%):</span> <span className="font-bold text-amber-400">{display(report.totals.total_commission)}</span></div>
+            <div><span className="text-zinc-500">Unattributed:</span> <span className="text-zinc-400">{display(report.totals.unattributed_revenue)}</span></div>
           </div>
 
           {/* Buyers table */}
