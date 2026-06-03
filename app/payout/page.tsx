@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { Fragment, useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import type { Event } from '@/lib/supabase'
 
@@ -248,99 +248,123 @@ export default function PayoutPage() {
             </div>
           </div>
 
-          {/* Affiliate payout cards */}
+          {/* Affiliate payout table */}
           {report.summary.length === 0 ? (
             <div className="text-zinc-500 text-sm bg-[#111] border border-zinc-800 rounded-xl p-5">
               No attributed affiliates yet. Go to <Link href="/affiliates" className="text-amber-400 hover:underline">Affiliates</Link> to assign buyers, or click <span className="text-amber-400">+ Add Affiliate</span> above to create new ones.
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {report.summary.map(s => {
-                const isPaid = !!s.paid_at
-                const isOpen = expanded.has(s.affiliate_id)
-                return (
-                  <div
-                    key={s.affiliate_id}
-                    className={`bg-[#111] border rounded-xl p-4 flex flex-col gap-2 transition-all ${
-                      isPaid ? 'border-emerald-600/40 opacity-70' : 'border-zinc-800'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="text-sm font-semibold text-white flex items-center gap-2">
-                          {s.handle}
-                          {isPaid && (
-                            <span className="text-[10px] bg-emerald-900/50 text-emerald-300 px-1.5 py-0.5 rounded">
-                              ✓ PAID {fmtDateShort(s.paid_at)}
-                            </span>
+            <div className="bg-[#111] border border-zinc-800 rounded-xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-zinc-500 uppercase tracking-wider border-b border-zinc-800">
+                      <th className="px-4 py-3 w-6"></th>
+                      <th className="px-4 py-3">Name</th>
+                      <th className="px-4 py-3">Buyers / Revenue</th>
+                      <th className="px-4 py-3 text-right">Commission</th>
+                      <th className="px-4 py-3">Bank Details</th>
+                      <th className="px-4 py-3 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {report.summary.map(s => {
+                      const isPaid = !!s.paid_at
+                      const isOpen = expanded.has(s.affiliate_id)
+                      return (
+                        <Fragment key={s.affiliate_id}>
+                          <tr
+                            className={`border-b border-zinc-900 hover:bg-zinc-900/40 ${isPaid ? 'opacity-60' : ''}`}
+                          >
+                            <td className="px-4 py-3 align-top">
+                              <button
+                                onClick={() => toggleExpand(s.affiliate_id)}
+                                title={isOpen ? 'Hide buyers' : 'Show buyers'}
+                                className="text-zinc-500 hover:text-amber-400 text-sm"
+                              >
+                                {isOpen ? '▾' : '▸'}
+                              </button>
+                            </td>
+                            <td className="px-4 py-3 align-top">
+                              <div className="font-semibold text-white flex items-center gap-2 flex-wrap">
+                                {s.handle}
+                                {isPaid && (
+                                  <span className="text-[10px] bg-emerald-900/50 text-emerald-300 px-1.5 py-0.5 rounded">
+                                    ✓ PAID {fmtDateShort(s.paid_at)}
+                                  </span>
+                                )}
+                              </div>
+                              {s.name && <div className="text-xs text-zinc-500">{s.name}</div>}
+                            </td>
+                            <td className="px-4 py-3 align-top">
+                              <div className="text-zinc-300">{s.buyers} buyer{s.buyers !== 1 ? 's' : ''}</div>
+                              <div className="text-xs text-zinc-500">{display(s.revenue)}</div>
+                            </td>
+                            <td className="px-4 py-3 align-top text-right whitespace-nowrap">
+                              <div className="font-bold text-amber-400 text-lg">{display(s.commission)}</div>
+                            </td>
+                            <td className="px-4 py-3 align-top text-xs">
+                              {s.bank_name || s.bank_account || s.bank_holder ? (
+                                <div className="leading-tight">
+                                  <div className="text-zinc-300 font-medium">{s.bank_name || '—'}</div>
+                                  <div className="font-mono text-zinc-400">{s.bank_account || '—'}</div>
+                                  <div className="text-zinc-500">{s.bank_holder || '—'}</div>
+                                </div>
+                              ) : (
+                                <button onClick={() => openEdit(s.affiliate_id)} className="text-zinc-600 hover:text-amber-400">
+                                  + Add bank account
+                                </button>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 align-top text-right whitespace-nowrap">
+                              <div className="flex flex-col gap-1 items-end">
+                                <button
+                                  onClick={() => togglePaid(s)}
+                                  disabled={markingPaid === s.affiliate_id}
+                                  className={`text-xs font-semibold px-3 py-1.5 rounded transition-colors ${
+                                    isPaid
+                                      ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+                                      : 'bg-emerald-600/80 hover:bg-emerald-500 text-white'
+                                  } disabled:opacity-50`}
+                                >
+                                  {markingPaid === s.affiliate_id
+                                    ? 'Saving…'
+                                    : isPaid
+                                      ? '↩ Unmark'
+                                      : '✓ Mark paid'}
+                                </button>
+                                <button
+                                  onClick={() => openEdit(s.affiliate_id)}
+                                  title="Edit bank details"
+                                  className="text-[10px] text-zinc-500 hover:text-amber-400"
+                                >
+                                  ✎ edit bank
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                          {isOpen && (
+                            <tr className="bg-[#0a0a0a] border-b border-zinc-900">
+                              <td className="px-4 py-3"></td>
+                              <td colSpan={5} className="px-4 py-3 text-xs">
+                                <div className="text-zinc-500 uppercase tracking-wider text-[10px] mb-1">Buyers attributed</div>
+                                <div className="space-y-0.5">
+                                  {s.buyer_list.map((b, i) => (
+                                    <div key={i} className="flex justify-between max-w-md text-zinc-400">
+                                      <span>{i + 1}. {b.name}</span>
+                                      <span className="font-mono">{display(b.amount)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
                           )}
-                        </div>
-                        {s.name && <div className="text-xs text-zinc-500">{s.name}</div>}
-                        <div className="text-xs text-zinc-500">{s.buyers} buyer{s.buyers !== 1 ? 's' : ''} · {display(s.revenue)}</div>
-                      </div>
-                      <button
-                        onClick={() => openEdit(s.affiliate_id)}
-                        title="Edit bank details"
-                        className="text-zinc-500 hover:text-amber-400 text-sm"
-                      >
-                        ✎
-                      </button>
-                    </div>
-
-                    <div className="text-2xl font-bold text-amber-400">{display(s.commission)}</div>
-
-                    {/* Buyer list (collapsible) */}
-                    <button
-                      onClick={() => toggleExpand(s.affiliate_id)}
-                      className="text-[11px] text-zinc-500 hover:text-amber-400 text-left -mt-1"
-                    >
-                      {isOpen ? '▾' : '▸'} Buyers ({s.buyer_list.length})
-                    </button>
-                    {isOpen && (
-                      <div className="bg-[#0a0a0a] border border-zinc-800 rounded-lg p-2 text-[11px] space-y-1 max-h-40 overflow-y-auto">
-                        {s.buyer_list.map((b, i) => (
-                          <div key={i} className="flex justify-between text-zinc-400">
-                            <span>{b.name}</span>
-                            <span className="font-mono">{display(b.amount)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Bank info */}
-                    <div className="text-xs leading-tight text-zinc-500 border-t border-zinc-800 pt-3 mt-1">
-                      {s.bank_name || s.bank_account || s.bank_holder ? (
-                        <>
-                          <div className="text-zinc-300 font-medium">{s.bank_name || '—'}</div>
-                          <div className="font-mono text-zinc-400">{s.bank_account || '—'}</div>
-                          <div className="text-zinc-500">{s.bank_holder || '—'}</div>
-                        </>
-                      ) : (
-                        <button onClick={() => openEdit(s.affiliate_id)} className="text-zinc-600 hover:text-amber-400">
-                          + Add bank account
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Mark paid */}
-                    <button
-                      onClick={() => togglePaid(s)}
-                      disabled={markingPaid === s.affiliate_id}
-                      className={`mt-1 text-xs font-semibold py-2 rounded-lg transition-colors ${
-                        isPaid
-                          ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
-                          : 'bg-emerald-600/80 hover:bg-emerald-500 text-white'
-                      } disabled:opacity-50`}
-                    >
-                      {markingPaid === s.affiliate_id
-                        ? 'Saving…'
-                        : isPaid
-                          ? '↩ Unmark as paid'
-                          : '✓ Mark as paid'}
-                    </button>
-                  </div>
-                )
-              })}
+                        </Fragment>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </>
