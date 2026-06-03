@@ -92,18 +92,71 @@ function InvoiceContent() {
   const [exporting, setExporting] = useState(false)
 
   async function exportPDF() {
-    // 1. Flip into export mode synchronously so inputs swap to plain text
-    flushSync(() => setExporting(true))
-    // 2. Wait two frames so React's DOM commit + browser layout are done
-    await new Promise(r => requestAnimationFrame(() => r(null)))
-    await new Promise(r => requestAnimationFrame(() => r(null)))
-
     const el = document.getElementById('invoice-page-printable')
-    if (!el) { setExporting(false); return }
+    if (!el) return
 
     const safeName = (name || 'Invoice').replace(/[^a-zA-Z0-9 _-]/g, '').trim().replace(/\s+/g, '-')
 
+    // ── DIRECT DOM MUTATION on the live element.
+    // html2pdf does its own pre-clone that strips/replaces things, so neither
+    // onclone callbacks nor CSS classes survive reliably. We mutate the live
+    // DOM, capture, then restore exactly. Wrapped in flushSync + try/finally
+    // so we never leave the page in a broken state.
+    flushSync(() => setExporting(true))
+
+    type Swap = { node: Node; parent: Node; next: Node | null; replacement: Node }
+    const swaps: Swap[] = []
+    type StyleRevert = { el: HTMLElement; prop: string; old: string }
+    const styleReverts: StyleRevert[] = []
+
+    function setStyle(elem: HTMLElement, prop: string, value: string) {
+      styleReverts.push({ el: elem, prop, old: elem.style.getPropertyValue(prop) })
+      elem.style.setProperty(prop, value, 'important')
+    }
+
     try {
+      // 1. Replace inputs/textareas with plain spans/divs containing their value
+      el.querySelectorAll('input, textarea').forEach(node => {
+        const input = node as HTMLInputElement | HTMLTextAreaElement
+        if (input.tagName === 'INPUT' && (input as HTMLInputElement).type === 'date') {
+          setStyle(input, 'display', 'none')
+          return
+        }
+        const cs = window.getComputedStyle(input)
+        const inlineDisplay = input.style.display
+        const isBlock = input.tagName === 'TEXTAREA' || inlineDisplay === 'block'
+        const tag = isBlock ? 'div' : 'span'
+        const replacement = document.createElement(tag) as HTMLElement
+        replacement.textContent = input.value || ''
+        const textAlign = input.style.textAlign || cs.textAlign
+        const width = input.tagName === 'TEXTAREA' ? '100%' : 'auto'
+        replacement.style.cssText =
+          `display:${isBlock ? 'block' : 'inline-block'};` +
+          `width:${width};` +
+          `text-align:${textAlign};` +
+          `font-family:${cs.fontFamily};` +
+          `font-size:${cs.fontSize};` +
+          `font-weight:${cs.fontWeight};` +
+          `color:${cs.color};` +
+          `letter-spacing:${cs.letterSpacing};` +
+          `line-height:1.45;` +
+          `white-space:pre-wrap;` +
+          `word-break:break-word;` +
+          `padding:0;margin:0;border:none;background:transparent;`
+        const parent = input.parentNode!
+        const next = input.nextSibling
+        parent.replaceChild(replacement, input)
+        swaps.push({ node: input, parent, next, replacement })
+      })
+
+      // 2. Hide every edit button + the X column
+      el.querySelectorAll('.add-btn, .add-btn-small, .x-btn, .col-x').forEach(b => {
+        setStyle(b as HTMLElement, 'display', 'none')
+      })
+
+      // 3. Wait one frame so layout settles before capture
+      await new Promise(r => requestAnimationFrame(() => r(null)))
+
       const html2pdf = (await import('html2pdf.js')).default
       await html2pdf()
         .set({
@@ -118,51 +171,6 @@ function InvoiceContent() {
             height: 1123,
             windowWidth: 794,
             windowHeight: 1123,
-            // Transform the cloned DOM html2canvas captures, replacing
-            // form inputs with plain text spans — canvas renders them crisply.
-            onclone: (clonedDoc: Document, root?: HTMLElement) => {
-              // `root` may be the captured element itself, or undefined depending on html2canvas version.
-              // Resolve a target that we can definitely query.
-              const target: HTMLElement | null =
-                (root && root.querySelector('#invoice-page-printable') as HTMLElement | null) ||
-                (root && root.id === 'invoice-page-printable' ? root : null) ||
-                clonedDoc.getElementById('invoice-page-printable')
-              if (!target) return
-              target.querySelectorAll('input, textarea').forEach(node => {
-                const input = node as HTMLInputElement | HTMLTextAreaElement
-                if ((input as HTMLInputElement).type === 'date') {
-                  input.remove(); return
-                }
-                const inlineDisplay = input.style.display
-                const isBlock = input.tagName === 'TEXTAREA' || inlineDisplay === 'block'
-                const tag = isBlock ? 'div' : 'span'
-                const replacement = document.createElement(tag)
-                replacement.textContent = input.value || ''
-                const ta = input.style.textAlign || 'left'
-                const w = input.tagName === 'TEXTAREA' ? '100%' : 'auto'
-                replacement.setAttribute('style',
-                  `display:${isBlock ? 'block' : 'inline-block'};` +
-                  `width:${w};` +
-                  `text-align:${ta};` +
-                  `white-space:pre-wrap;` +
-                  `word-break:break-word;` +
-                  `padding:0;margin:0;border:none;background:transparent;` +
-                  `font-family:inherit;font-size:inherit;font-weight:inherit;` +
-                  `color:inherit;letter-spacing:inherit;line-height:1.45;`)
-                input.parentNode?.replaceChild(replacement, input)
-              })
-              // Hide all action buttons + the X column
-              target.querySelectorAll('.add-btn, .add-btn-small, .x-btn, .col-x')
-                .forEach(b => { (b as HTMLElement).style.display = 'none' })
-              // Remove dashed borders from any remaining edit fields
-              target.querySelectorAll('.inv-edit, .inv-line-desc').forEach(e => {
-                const s = (e as HTMLElement).style
-                s.border = 'none'
-                s.background = 'transparent'
-                s.padding = '0'
-                s.resize = 'none'
-              })
-            },
           },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
           pagebreak: { mode: ['avoid-all'] },
@@ -170,6 +178,18 @@ function InvoiceContent() {
         .from(el)
         .save()
     } finally {
+      // Restore inputs/textareas — reverse order so siblings line up
+      for (let i = swaps.length - 1; i >= 0; i--) {
+        const { node, parent, replacement } = swaps[i]
+        if (replacement.parentNode === parent) {
+          parent.replaceChild(node, replacement)
+        }
+      }
+      // Restore inline styles we changed
+      styleReverts.forEach(({ el: e, prop, old }) => {
+        if (old) e.style.setProperty(prop, old)
+        else e.style.removeProperty(prop)
+      })
       flushSync(() => setExporting(false))
     }
   }
