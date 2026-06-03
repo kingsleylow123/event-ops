@@ -206,27 +206,57 @@ function InvoiceContent() {
             if (!original) return
             const safeName = (name || 'Invoice').replace(/[^a-zA-Z0-9 _-]/g, '').trim().replace(/\s+/g, '-')
 
-            // Clone and freeze for clean PDF render
+            // Collect original input styles BEFORE cloning (these elements are in the live DOM)
+            const originalInputs = Array.from(
+              original.querySelectorAll('input, textarea'),
+            ) as (HTMLInputElement | HTMLTextAreaElement)[]
+            const inputStyles = originalInputs.map(input => {
+              const cs = window.getComputedStyle(input)
+              return {
+                value: input.value || '',
+                tag: input.tagName,
+                type: (input as HTMLInputElement).type || '',
+                inlineDisplay: input.style.display,
+                fontFamily: cs.fontFamily,
+                fontSize: cs.fontSize,
+                fontWeight: cs.fontWeight,
+                color: cs.color,
+                textAlign: cs.textAlign,
+                letterSpacing: cs.letterSpacing,
+              }
+            })
+
+            // Clone for clean PDF render
             const clone = original.cloneNode(true) as HTMLElement
             clone.id = 'invoice-pdf-clone'
 
-            // Remove hidden date-picker inputs entirely (they overlay visible text)
-            clone.querySelectorAll('input[type="date"]').forEach(el => el.remove())
+            // Off-screen container — append BEFORE transforming so layout queries work
+            const wrap = document.createElement('div')
+            wrap.style.cssText = 'position:fixed;left:-10000px;top:0;width:794px;background:#fff;'
+            wrap.appendChild(clone)
+            document.body.appendChild(wrap)
 
-            // Replace remaining inputs/textareas with text so html2canvas renders crisply
-            clone.querySelectorAll('input, textarea').forEach(el => {
-              const input = el as HTMLInputElement | HTMLTextAreaElement
-              const cs = window.getComputedStyle(input)
-              const isBlock = cs.display === 'block' || input.tagName === 'TEXTAREA'
+            // Iterate clone's inputs in same order (cloneNode preserves order)
+            const cloneInputs = Array.from(
+              clone.querySelectorAll('input, textarea'),
+            ) as (HTMLInputElement | HTMLTextAreaElement)[]
+
+            cloneInputs.forEach((input, i) => {
+              const info = inputStyles[i]
+              if (!info) return
+              // Remove hidden date-picker inputs entirely
+              if (info.type === 'date') { input.remove(); return }
+
+              const isBlock = info.inlineDisplay === 'block' || info.tag === 'TEXTAREA'
               const span = document.createElement(isBlock ? 'div' : 'span')
-              span.textContent = input.value || ''
+              span.textContent = info.value
               span.style.cssText = `
-                font-family: ${cs.fontFamily};
-                font-size: ${cs.fontSize};
-                font-weight: ${cs.fontWeight};
-                color: ${cs.color};
-                text-align: ${cs.textAlign};
-                letter-spacing: ${cs.letterSpacing};
+                font-family: ${info.fontFamily};
+                font-size: ${info.fontSize};
+                font-weight: ${info.fontWeight};
+                color: ${info.color};
+                text-align: ${info.textAlign};
+                letter-spacing: ${info.letterSpacing};
                 line-height: 1.5;
                 white-space: pre-wrap;
                 word-break: break-word;
@@ -235,7 +265,7 @@ function InvoiceContent() {
                 background: transparent;
                 border: none;
                 display: ${isBlock ? 'block' : 'inline-block'};
-                width: ${input.tagName === 'TEXTAREA' ? '100%' : 'auto'};
+                width: ${info.tag === 'TEXTAREA' ? '100%' : 'auto'};
               `
               input.parentNode?.replaceChild(span, input)
             })
@@ -244,12 +274,6 @@ function InvoiceContent() {
             clone.querySelectorAll('.add-btn, .add-btn-small, .x-btn, .col-x').forEach(b => {
               (b as HTMLElement).style.display = 'none'
             })
-
-            // Off-screen container so it renders at full A4 size regardless of viewport
-            const wrap = document.createElement('div')
-            wrap.style.cssText = 'position:fixed;left:-10000px;top:0;width:794px;background:#fff;'
-            wrap.appendChild(clone)
-            document.body.appendChild(wrap)
 
             try {
               const html2pdf = (await import('html2pdf.js')).default
