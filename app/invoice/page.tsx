@@ -55,6 +55,12 @@ function InvoiceContent() {
   const [name, setName] = useState(params.get('name') || 'CLIENT NAME')
   const [date, setDate] = useState(params.get('date') || todayIso())
   const dateParts = useMemo(() => formatDateParts(date), [date])
+  const [companyName, setCompanyName] = useState('Oppa-Media')
+  const [companyEmail, setCompanyEmail] = useState('kingsley@oppa-media.com')
+  const [companyPhone, setCompanyPhone] = useState('6012 285 0125')
+  const [bankName, setBankName] = useState('Maybank SME Biz')
+  const [bankAccount, setBankAccount] = useState('5142 8090 1848')
+  const [bankHolder, setBankHolder] = useState('Kingsley Low Yean Wee')
 
   // ── Quick mode
   const [desc, setDesc] = useState(params.get('desc') || '[VIP] Claude Half Day Workshop')
@@ -245,10 +251,25 @@ function InvoiceContent() {
               </div>
               <div className="inv-company-right">
                 <div className="inv-lbl">Company:</div>
-                <div className="inv-company-name">Oppa-Media</div>
+                <input
+                  className="inv-edit inv-company-name"
+                  value={companyName}
+                  onChange={e => setCompanyName(e.target.value)}
+                  style={{ textAlign: 'right', minWidth: 180 }}
+                />
                 <div className="inv-company-contact">
-                  kingsley@oppa-media.com<br />
-                  6012 285 0125
+                  <input
+                    className="inv-edit"
+                    value={companyEmail}
+                    onChange={e => setCompanyEmail(e.target.value)}
+                    style={{ textAlign: 'right', minWidth: 200, display: 'block', marginLeft: 'auto' }}
+                  />
+                  <input
+                    className="inv-edit"
+                    value={companyPhone}
+                    onChange={e => setCompanyPhone(e.target.value)}
+                    style={{ textAlign: 'right', minWidth: 140, display: 'block', marginLeft: 'auto' }}
+                  />
                 </div>
               </div>
             </div>
@@ -315,9 +336,27 @@ function InvoiceContent() {
                   <div className="inv-payment">
                     <div className="inv-pay-title">PAYMENT METHOD</div>
                     <div className="inv-pay-details">
-                      Bank Name: Maybank SME Biz<br />
-                      Bank Account: 5142 8090 1848<br />
-                      Name: Kingsley Low Yean Wee
+                      Bank Name:{' '}
+                      <input
+                        className="inv-edit"
+                        value={bankName}
+                        onChange={e => setBankName(e.target.value)}
+                        style={{ minWidth: 140 }}
+                      /><br />
+                      Bank Account:{' '}
+                      <input
+                        className="inv-edit"
+                        value={bankAccount}
+                        onChange={e => setBankAccount(e.target.value)}
+                        style={{ minWidth: 140 }}
+                      /><br />
+                      Name:{' '}
+                      <input
+                        className="inv-edit"
+                        value={bankHolder}
+                        onChange={e => setBankHolder(e.target.value)}
+                        style={{ minWidth: 180 }}
+                      />
                     </div>
                     <div className="inv-pay-note">
                       Full payment should be made a minimum of 7 days to avoid termination of my services
@@ -430,9 +469,27 @@ function InvoiceContent() {
                   <div className="inv-payment">
                     <div className="inv-pay-title">PAYMENT METHOD</div>
                     <div className="inv-pay-details">
-                      Bank Name: Maybank SME Biz<br />
-                      Bank Account: 5142 8090 1848<br />
-                      Name: Kingsley Low Yean Wee
+                      Bank Name:{' '}
+                      <input
+                        className="inv-edit"
+                        value={bankName}
+                        onChange={e => setBankName(e.target.value)}
+                        style={{ minWidth: 140 }}
+                      /><br />
+                      Bank Account:{' '}
+                      <input
+                        className="inv-edit"
+                        value={bankAccount}
+                        onChange={e => setBankAccount(e.target.value)}
+                        style={{ minWidth: 140 }}
+                      /><br />
+                      Name:{' '}
+                      <input
+                        className="inv-edit"
+                        value={bankHolder}
+                        onChange={e => setBankHolder(e.target.value)}
+                        style={{ minWidth: 180 }}
+                      />
                     </div>
                     <div className="inv-pay-note">
                       Full payment should be made a minimum of 7 days to avoid termination of my services
