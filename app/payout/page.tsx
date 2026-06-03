@@ -262,7 +262,7 @@ export default function PayoutPage() {
                       <th className="px-4 py-3 w-6"></th>
                       <th className="px-4 py-3">Name</th>
                       <th className="px-4 py-3">Buyers / Revenue</th>
-                      <th className="px-4 py-3 text-right">Commission</th>
+                      <th className="px-4 py-3 text-right">Commission (10%)</th>
                       <th className="px-4 py-3">Bank Details</th>
                       <th className="px-4 py-3 text-right">Action</th>
                     </tr>
