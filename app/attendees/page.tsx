@@ -153,7 +153,7 @@ export default function AttendeesPage() {
 
   async function addAttendee(e: React.FormEvent) {
     e.preventDefault()
-    if (!event) return
+    if (!event) { alert('No event selected — please pick one from the dropdown first.'); return }
     if (!form.name.trim()) { alert('Please enter a name.'); return }
     const isFreeTier = form.ticket_type === 'free_general' || form.ticket_type === 'free_vip'
     const payload = {
@@ -163,15 +163,25 @@ export default function AttendeesPage() {
       payment_status: isFreeTier ? 'free' : form.payment_status,
       payment_amount: isFreeTier ? 0 : form.payment_amount,
     }
-    const res = await fetch('/api/attendees', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-    const newAtt = await res.json()
-    setAttendees(prev => [newAtt, ...prev])
-    setShowModal(false)
-    setForm({ name: '', phone: '', email: '', ticket_type: 'standard_general', payment_method: 'bank_transfer', payment_amount: 159, payment_status: 'pending', notes: '' })
+    try {
+      const res = await fetch('/api/attendees', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const newAtt = await res.json()
+      if (!res.ok || newAtt.error) {
+        alert(`Failed to add attendee: ${newAtt.error || res.status}`)
+        return
+      }
+      // Reload the full list to guarantee what we show matches the DB
+      setAttendees(prev => [newAtt, ...prev])
+      await loadAttendees(event.id)
+      setShowModal(false)
+      setForm({ name: '', phone: '', email: '', ticket_type: 'standard_general', payment_method: 'bank_transfer', payment_amount: 159, payment_status: 'pending', notes: '' })
+    } catch (err) {
+      alert(`Network/JS error: ${err instanceof Error ? err.message : String(err)}`)
+    }
   }
 
   const filtered = attendees.filter(a => {
