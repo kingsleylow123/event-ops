@@ -37,11 +37,25 @@ const DEFAULT_SECTIONS: Section[] = [
 
 const COLORS = ['text-blue-400', 'text-green-400', 'text-orange-400', 'text-pink-400', 'text-purple-400', 'text-sky-400']
 
-function EditableTable({ rows, setRows }: { rows: Row[], setRows: (r: Row[]) => void }) {
+function EditableTable({ rows, setRows, ticket }: { rows: Row[], setRows: (r: Row[]) => void, ticket: string }) {
   function update(i: number, key: keyof Row, val: string) {
     setRows(rows.map((r, idx) => idx === i ? { ...r, [key]: val } : r))
   }
   function removeRow(i: number) { setRows(rows.filter((_, idx) => idx !== i)) }
+  function openInvoice(r: Row) {
+    if (!r.name.trim()) {
+      alert('Add a name first.')
+      return
+    }
+    const amountNum = (r.amount.match(/[\d.]+/g) || []).join('') || '0'
+    const desc = `[${ticket || 'Ticket'}] Claude Workshop`
+    const url =
+      `/invoice?name=${encodeURIComponent(r.name)}` +
+      `&desc=${encodeURIComponent(desc)}` +
+      `&amount=${encodeURIComponent(amountNum)}` +
+      `&note=${encodeURIComponent(r.notes || '[non refundable')}`
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
   const inp = 'bg-transparent text-white text-sm w-full focus:outline-none border-b border-transparent focus:border-zinc-600'
   return (
     <table className="w-full text-sm">
@@ -52,7 +66,7 @@ function EditableTable({ rows, setRows }: { rows: Row[], setRows: (r: Row[]) => 
           <th className="pb-2 pr-3">Method</th>
           <th className="pb-2 pr-3">Amount</th>
           <th className="pb-2 pr-3">Notes</th>
-          <th className="pb-2 w-4"></th>
+          <th className="pb-2 w-16 text-right pr-2"></th>
         </tr>
       </thead>
       <tbody>
@@ -63,7 +77,14 @@ function EditableTable({ rows, setRows }: { rows: Row[], setRows: (r: Row[]) => 
             <td className="py-2 pr-3"><input value={r.method} onChange={e => update(i, 'method', e.target.value)} className={inp} /></td>
             <td className="py-2 pr-3"><input value={r.amount} onChange={e => update(i, 'amount', e.target.value)} className={`${inp} text-amber-400 font-semibold`} /></td>
             <td className="py-2 pr-3"><input value={r.notes} onChange={e => update(i, 'notes', e.target.value)} className={`${inp} text-zinc-400`} /></td>
-            <td className="py-2 text-center">
+            <td className="py-2 text-right pr-2 whitespace-nowrap">
+              <button
+                onClick={() => openInvoice(r)}
+                title="Generate invoice"
+                className="text-zinc-600 hover:text-amber-400 opacity-0 group-hover:opacity-100 text-xs mr-2"
+              >
+                📄
+              </button>
               <button onClick={() => removeRow(i)} className="text-zinc-700 hover:text-red-400 opacity-0 group-hover:opacity-100 text-xs">✕</button>
             </td>
           </tr>
@@ -157,6 +178,7 @@ export default function PaymentTemplatePage() {
           <EditableTable
             rows={sec.rows}
             setRows={rows => updateSection(sec.id, { rows })}
+            ticket={sec.ticket}
           />
         </div>
       ))}
