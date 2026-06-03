@@ -202,20 +202,74 @@ function InvoiceContent() {
           </div>
 
           <button onClick={async () => {
-            const el = document.getElementById('invoice-page-printable')
-            if (!el) return
+            const original = document.getElementById('invoice-page-printable')
+            if (!original) return
             const safeName = (name || 'Invoice').replace(/[^a-zA-Z0-9 _-]/g, '').trim().replace(/\s+/g, '-')
-            const html2pdf = (await import('html2pdf.js')).default
-            await html2pdf()
-              .set({
-                margin: 0,
-                filename: `Invoice-${safeName}.pdf`,
-                image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-              })
-              .from(el)
-              .save()
+
+            // Clone and freeze for clean PDF render
+            const clone = original.cloneNode(true) as HTMLElement
+            clone.id = 'invoice-pdf-clone'
+
+            // Replace inputs/textareas with spans so html2canvas renders text crisply
+            clone.querySelectorAll('input, textarea').forEach(el => {
+              const input = el as HTMLInputElement | HTMLTextAreaElement
+              const cs = window.getComputedStyle(input)
+              const span = document.createElement('div')
+              span.textContent = input.value || ''
+              span.style.cssText = `
+                font-family: ${cs.fontFamily};
+                font-size: ${cs.fontSize};
+                font-weight: ${cs.fontWeight};
+                color: ${cs.color};
+                text-align: ${cs.textAlign};
+                letter-spacing: ${cs.letterSpacing};
+                line-height: 1.4;
+                white-space: pre-wrap;
+                word-break: break-word;
+                padding: 0;
+                margin: 0;
+                background: transparent;
+                border: none;
+                display: ${input.tagName === 'TEXTAREA' ? 'block' : 'inline-block'};
+                min-width: ${input.tagName === 'INPUT' ? cs.width : 'auto'};
+                width: ${input.tagName === 'TEXTAREA' ? '100%' : 'auto'};
+              `
+              input.parentNode?.replaceChild(span, input)
+            })
+
+            // Hide action buttons + grow handles + tab bar
+            clone.querySelectorAll('.add-btn, .add-btn-small, .x-btn, .col-x').forEach(b => {
+              (b as HTMLElement).style.display = 'none'
+            })
+
+            // Off-screen container so it renders at full A4 size regardless of viewport
+            const wrap = document.createElement('div')
+            wrap.style.cssText = 'position:fixed;left:-10000px;top:0;width:794px;background:#fff;'
+            wrap.appendChild(clone)
+            document.body.appendChild(wrap)
+
+            try {
+              const html2pdf = (await import('html2pdf.js')).default
+              await html2pdf()
+                .set({
+                  margin: 0,
+                  filename: `Invoice-${safeName}.pdf`,
+                  image: { type: 'jpeg', quality: 0.98 },
+                  html2canvas: {
+                    scale: 2,
+                    useCORS: true,
+                    backgroundColor: '#ffffff',
+                    windowWidth: 794,
+                    windowHeight: 1123,
+                  },
+                  jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                  pagebreak: { mode: ['avoid-all'] },
+                })
+                .from(clone)
+                .save()
+            } finally {
+              document.body.removeChild(wrap)
+            }
           }}>📄 Save as PDF</button>
           <button className="secondary" onClick={() => window.close()}>Close</button>
         </div>
