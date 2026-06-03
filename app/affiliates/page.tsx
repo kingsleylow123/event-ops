@@ -25,6 +25,21 @@ export default function AffiliatesPage() {
   const [loadingReport, setLoadingReport] = useState(false)
   const [importing, setImporting] = useState(false)
   const [msg, setMsg] = useState('')
+  const [revenueHidden, setRevenueHidden] = useState(false)
+
+  // Shared 'revenue_hidden' key with Dashboard / Attendees / Revenue pages
+  useEffect(() => {
+    const saved = localStorage.getItem('revenue_hidden')
+    if (saved === '1') setRevenueHidden(true)
+  }, [])
+  function toggleRevenue() {
+    setRevenueHidden(v => {
+      const next = !v
+      localStorage.setItem('revenue_hidden', next ? '1' : '0')
+      return next
+    })
+  }
+  const display = (n: number) => revenueHidden ? 'RM ••••••' : rm(n)
 
   useEffect(() => {
     fetch('/api/events')
@@ -146,17 +161,24 @@ export default function AffiliatesPage() {
             {report.summary.map(s => (
               <div key={s.affiliate_id} className="bg-[#111] border border-zinc-800 rounded-xl p-4">
                 <div className="text-sm font-semibold text-white">{s.handle}</div>
-                <div className="text-xs text-zinc-500 mb-2">{s.buyers} buyer{s.buyers !== 1 ? 's' : ''} · {rm(s.revenue)}</div>
-                <div className="text-lg font-bold text-amber-400">{rm(s.commission)}</div>
+                <div className="text-xs text-zinc-500 mb-2">{s.buyers} buyer{s.buyers !== 1 ? 's' : ''} · {display(s.revenue)}</div>
+                <div className="text-lg font-bold text-amber-400">{display(s.commission)}</div>
               </div>
             ))}
           </div>
 
           {/* Totals bar */}
-          <div className="bg-[#111] border border-zinc-800 rounded-xl p-4 flex flex-wrap gap-6 text-sm">
-            <div><span className="text-zinc-500">Attributed revenue:</span> <span className="font-semibold">{rm(report.totals.attributed_revenue)}</span></div>
-            <div><span className="text-zinc-500">Total payout (10%):</span> <span className="font-bold text-amber-400">{rm(report.totals.total_commission)}</span></div>
-            <div><span className="text-zinc-500">Unattributed:</span> <span className="text-zinc-400">{rm(report.totals.unattributed_revenue)}</span></div>
+          <div className="bg-[#111] border border-zinc-800 rounded-xl p-4 flex flex-wrap gap-6 text-sm items-center">
+            <div><span className="text-zinc-500">Attributed revenue:</span> <span className="font-semibold">{display(report.totals.attributed_revenue)}</span></div>
+            <div><span className="text-zinc-500">Total payout (10%):</span> <span className="font-bold text-amber-400">{display(report.totals.total_commission)}</span></div>
+            <div><span className="text-zinc-500">Unattributed:</span> <span className="text-zinc-400">{display(report.totals.unattributed_revenue)}</span></div>
+            <button
+              onClick={toggleRevenue}
+              title={revenueHidden ? 'Show amounts' : 'Hide amounts'}
+              className="ml-auto text-zinc-500 hover:text-amber-400 text-base"
+            >
+              {revenueHidden ? '👁' : '🙈'}
+            </button>
           </div>
 
           {/* Buyers table */}
@@ -185,7 +207,7 @@ export default function AffiliatesPage() {
                           {b.name}
                           {b.source === 'auto' && <span className="ml-2 text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded">auto</span>}
                         </td>
-                        <td className="px-4 py-3 text-zinc-300 whitespace-nowrap">{rm(b.total)}</td>
+                        <td className="px-4 py-3 text-zinc-300 whitespace-nowrap">{display(b.total)}</td>
                         <td className="px-4 py-3">
                           <select
                             value={b.affiliate_id || ''}
@@ -198,7 +220,7 @@ export default function AffiliatesPage() {
                           </select>
                         </td>
                         <td className="px-4 py-3 font-semibold whitespace-nowrap">
-                          {comm > 0 ? <span className="text-amber-400">{rm(comm)}</span> : <span className="text-zinc-600">—</span>}
+                          {comm > 0 ? <span className="text-amber-400">{display(comm)}</span> : <span className="text-zinc-600">—</span>}
                         </td>
                       </tr>
                     )
