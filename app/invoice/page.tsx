@@ -705,6 +705,8 @@ const INVOICE_CSS = `
     display: inline-flex;
     align-items: stretch;
     border: 2px solid #111;
+    width: max-content;
+    flex: 0 0 auto;
   }
   .inv-logo-oppa {
     background: #ed1c24;
