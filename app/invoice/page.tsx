@@ -210,11 +210,15 @@ function InvoiceContent() {
             const clone = original.cloneNode(true) as HTMLElement
             clone.id = 'invoice-pdf-clone'
 
-            // Replace inputs/textareas with spans so html2canvas renders text crisply
+            // Remove hidden date-picker inputs entirely (they overlay visible text)
+            clone.querySelectorAll('input[type="date"]').forEach(el => el.remove())
+
+            // Replace remaining inputs/textareas with text so html2canvas renders crisply
             clone.querySelectorAll('input, textarea').forEach(el => {
               const input = el as HTMLInputElement | HTMLTextAreaElement
               const cs = window.getComputedStyle(input)
-              const span = document.createElement('div')
+              const isBlock = cs.display === 'block' || input.tagName === 'TEXTAREA'
+              const span = document.createElement(isBlock ? 'div' : 'span')
               span.textContent = input.value || ''
               span.style.cssText = `
                 font-family: ${cs.fontFamily};
@@ -223,15 +227,14 @@ function InvoiceContent() {
                 color: ${cs.color};
                 text-align: ${cs.textAlign};
                 letter-spacing: ${cs.letterSpacing};
-                line-height: 1.4;
+                line-height: 1.5;
                 white-space: pre-wrap;
                 word-break: break-word;
                 padding: 0;
                 margin: 0;
                 background: transparent;
                 border: none;
-                display: ${input.tagName === 'TEXTAREA' ? 'block' : 'inline-block'};
-                min-width: ${input.tagName === 'INPUT' ? cs.width : 'auto'};
+                display: ${isBlock ? 'block' : 'inline-block'};
                 width: ${input.tagName === 'TEXTAREA' ? '100%' : 'auto'};
               `
               input.parentNode?.replaceChild(span, input)
