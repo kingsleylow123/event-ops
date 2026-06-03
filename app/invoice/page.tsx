@@ -810,12 +810,12 @@ const INVOICE_CSS = `
     color: #333;
   }
   .inv-date-row sup {
-    font-size: 0.6em;
+    font-size: 0.55em;
     letter-spacing: 0;
-    top: -0.6em;
-    position: relative;
-    margin-left: -4px;
-    margin-right: 4px;
+    vertical-align: super;
+    top: 0;
+    margin-left: -1px;
+    margin-right: 6px;
   }
 
   /* Quick mode table */
