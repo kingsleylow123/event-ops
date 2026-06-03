@@ -369,7 +369,7 @@ function InvoiceContent() {
             <div className="inv-date-row">
               <label style={{ position: 'relative', display: 'inline-block', cursor: 'pointer' }}>
                 <span>
-                  DATE: {dateParts.day}
+                  {dateParts.day}
                   <sup>{dateParts.suffix}</sup> {dateParts.month} {dateParts.year}
                 </span>
                 <input
