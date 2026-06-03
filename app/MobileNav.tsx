@@ -22,6 +22,7 @@ export default function MobileNav({ userEmail, isAdmin, pendingCount }: MobileNa
     ...(isAdmin ? [{ href: '/revenue', label: 'Revenue' }] : []),
     ...(isAdmin ? [{ href: '/payment-template', label: 'Payment' }] : []),
     ...(isAdmin ? [{ href: '/invoice', label: 'Invoice' }] : []),
+    ...(isAdmin ? [{ href: '/payout', label: 'Payout' }] : []),
     { href: '/insights', label: 'Insights' },
     ...(isAdmin ? [{ href: '/affiliates', label: 'Affiliates' }] : []),
     { href: '/meetings', label: 'Activity' },
