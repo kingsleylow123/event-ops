@@ -119,18 +119,28 @@ export default function MonthEndPage() {
     load()
   }, [])
 
-  // ── Month filtering ──────────────────────────────────────────────────
+  // ── Month filtering (ACCRUAL basis: revenue tied to event date) ──
   function inMonth(iso: string | null | undefined): boolean {
     if (!iso) return false
     return iso.slice(0, 7) === yearMonth
   }
+  // event_id -> event date YYYY-MM
+  const eventMonth = useMemo(() => {
+    const m = new Map<string, string>()
+    events.forEach(ev => {
+      if (ev.date) m.set(ev.id, String(ev.date).slice(0, 7))
+    })
+    return m
+  }, [events])
 
   const monthSummary = useMemo(() => {
-    // Revenue: paid attendees whose paid_at OR created_at falls in the month
+    // Revenue: paid attendees whose EVENT falls in this month
+    // (accrual basis — revenue is recognised when the workshop is delivered,
+    // not when the money came in. Upsells move with their event too.)
     const paidInMonth = attendees.filter(a => {
       if (a.payment_status !== 'paid') return false
-      const dt = (a.paid_at as string | null) || (a.created_at as string | null)
-      return inMonth(dt)
+      const evm = a.event_id ? eventMonth.get(a.event_id as string) : null
+      return evm === yearMonth
     })
     const revenue = paidInMonth.reduce((s, a) => s + Number(a.payment_amount ?? 0), 0)
 
@@ -140,8 +150,13 @@ export default function MonthEndPage() {
     const bank = paidInMonth.filter(a => a.payment_method === 'bank_transfer')
       .reduce((s, a) => s + Number(a.payment_amount ?? 0), 0)
 
-    // Expenses
-    const expInMonth = expenses.filter(e => inMonth(e.created_at as unknown as string))
+    // Expenses: tied to an event → bucket by event month;
+    //           standalone (no event_id) → bucket by created_at month
+    const expInMonth = expenses.filter(e => {
+      const evm = e.event_id ? eventMonth.get(e.event_id as string) : null
+      if (evm) return evm === yearMonth
+      return inMonth(e.created_at as unknown as string)
+    })
     const expenseTotal = expInMonth.reduce((s, e) => s + Number(e.amount), 0)
     const expByCat: Record<string, number> = {}
     expInMonth.forEach(e => {
@@ -149,8 +164,8 @@ export default function MonthEndPage() {
       expByCat[c] = (expByCat[c] || 0) + Number(e.amount)
     })
 
-    // Affiliate payouts (cash paid out)
-    const payoutsInMonth = payouts.filter(p => inMonth(p.paid_at))
+    // Affiliate payouts: payout is for a specific event → bucket by event month
+    const payoutsInMonth = payouts.filter(p => eventMonth.get(p.event_id) === yearMonth)
     const payoutTotal = payoutsInMonth.reduce((s, p) => s + Number(p.amount), 0)
 
     // Outstanding
@@ -233,6 +248,9 @@ export default function MonthEndPage() {
             <h1 className="text-xl font-bold">📚 Month-End Close</h1>
             <p className="text-xs text-zinc-500">
               Lock the books — reconcile sales, expenses, payouts, and bank deposits.
+            </p>
+            <p className="text-[10px] text-zinc-600 mt-0.5">
+              Basis: <span className="text-zinc-400">accrual</span> — revenue is bucketed by the event&apos;s month, not when payment hit your bank.
             </p>
           </div>
           <button
