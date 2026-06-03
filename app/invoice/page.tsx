@@ -738,7 +738,11 @@ const INVOICE_CSS = `
     font-weight: 900;
     font-size: 18px;
     letter-spacing: 0.5px;
-    padding: 10px 12px;
+    padding: 0 12px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     line-height: 1;
   }
   .inv-logo-media {
@@ -746,11 +750,15 @@ const INVOICE_CSS = `
     font-weight: 800;
     font-size: 18px;
     letter-spacing: 3px;
-    padding: 10px 14px;
+    padding: 0 14px;
+    height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     line-height: 1;
   }
   .inv-title {
-    font-size: 56px;
+    font-size: 44px;
     font-weight: 400;
     letter-spacing: 4px;
     color: #111;
