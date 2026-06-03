@@ -716,12 +716,23 @@ const INVOICE_CSS = `
   .red-stripe {
     width: 14px;
     flex-shrink: 0;
-    display: flex;
-    flex-direction: column;
+    height: 100%;
+    align-self: stretch;
+    background:
+      linear-gradient(
+        to bottom,
+        #ed1c24 0,
+        #ed1c24 90px,
+        #ffffff 90px,
+        #ffffff 108px,
+        #ed1c24 108px,
+        #ed1c24 100%
+      );
   }
-  .red-stripe .seg-top    { background: #ed1c24; height: 90px; }
-  .red-stripe .seg-gap    { background: #fff; height: 18px; }
-  .red-stripe .seg-bottom { background: #ed1c24; flex: 1; }
+  /* legacy children retained but invisible — gradient draws the stripe */
+  .red-stripe .seg-top,
+  .red-stripe .seg-gap,
+  .red-stripe .seg-bottom { display: none; }
 
   .invoice-content {
     flex: 1;
