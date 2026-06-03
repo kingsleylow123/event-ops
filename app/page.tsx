@@ -9,6 +9,20 @@ export default function Dashboard() {
   const [attendees, setAttendees] = useState<Attendee[]>([])
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [revenueHidden, setRevenueHidden] = useState(false)
+
+  // Persist revenue visibility across reloads
+  useEffect(() => {
+    const saved = localStorage.getItem('revenue_hidden')
+    if (saved === '1') setRevenueHidden(true)
+  }, [])
+  function toggleRevenue() {
+    setRevenueHidden(v => {
+      const next = !v
+      localStorage.setItem('revenue_hidden', next ? '1' : '0')
+      return next
+    })
+  }
 
   useEffect(() => {
     fetch('/api/me', { cache: 'no-store' })
@@ -83,12 +97,27 @@ export default function Dashboard() {
           { label: 'Free', value: free.length, color: 'text-blue-400', adminOnly: true },
           { label: 'Attended', value: attended.length, color: 'text-purple-400', adminOnly: false },
           { label: 'Revenue', value: `RM ${revenue.toLocaleString()}`, color: 'text-amber-400', adminOnly: true },
-        ].filter(s => !s.adminOnly || isAdmin).map(s => (
-          <div key={s.label} className="bg-[#111] border border-zinc-800 rounded-xl p-3 sm:p-4">
-            <p className="text-xs text-zinc-500 mb-1">{s.label}</p>
-            <p className={`text-xl sm:text-2xl font-bold ${s.color}`}>{s.value}</p>
-          </div>
-        ))}
+        ].filter(s => !s.adminOnly || isAdmin).map(s => {
+          const isRevenue = s.label === 'Revenue'
+          const displayValue = isRevenue && revenueHidden ? 'RM ••••••' : s.value
+          return (
+            <div key={s.label} className="bg-[#111] border border-zinc-800 rounded-xl p-3 sm:p-4 relative">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-xs text-zinc-500">{s.label}</p>
+                {isRevenue && (
+                  <button
+                    onClick={toggleRevenue}
+                    title={revenueHidden ? 'Show revenue' : 'Hide revenue'}
+                    className="text-zinc-600 hover:text-amber-400 text-sm leading-none"
+                  >
+                    {revenueHidden ? '👁' : '🙈'}
+                  </button>
+                )}
+              </div>
+              <p className={`text-xl sm:text-2xl font-bold ${s.color}`}>{displayValue}</p>
+            </div>
+          )
+        })}
       </div>
 
       {isAdmin && byTicket.length > 0 && (
