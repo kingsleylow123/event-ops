@@ -32,6 +32,20 @@ export default function AttendeesPage() {
   const [filterAttendance, setFilterAttendance] = useState<string>('all')
   const [showQRModal, setShowQRModal] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [revenueHidden, setRevenueHidden] = useState(false)
+
+  // Sync hide-revenue state with localStorage (same key as Dashboard)
+  useEffect(() => {
+    const saved = localStorage.getItem('revenue_hidden')
+    if (saved === '1') setRevenueHidden(true)
+  }, [])
+  function toggleRevenue() {
+    setRevenueHidden(v => {
+      const next = !v
+      localStorage.setItem('revenue_hidden', next ? '1' : '0')
+      return next
+    })
+  }
 
   const event = events.find(e => e.id === selectedEventId) ?? null
 
@@ -226,12 +240,27 @@ export default function AttendeesPage() {
           { label: 'Pending', value: totalPending, color: 'text-yellow-400', border: 'border-zinc-800', adminOnly: true },
           { label: 'Free', value: totalFree, color: 'text-blue-400', border: 'border-zinc-800', adminOnly: true },
           { label: 'Revenue', value: `RM ${totalRevenue.toLocaleString()}`, color: 'text-amber-400', border: 'border-zinc-800', adminOnly: true },
-        ].filter(s => !s.adminOnly || isAdmin).map(s => (
-          <div key={s.label} className={`bg-[#111] border ${s.border} rounded-xl px-4 py-3`}>
-            <p className="text-xs text-zinc-500 mb-0.5">{s.label}</p>
-            <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
-          </div>
-        ))}
+        ].filter(s => !s.adminOnly || isAdmin).map(s => {
+          const isRevenue = s.label === 'Revenue'
+          const displayValue = isRevenue && revenueHidden ? 'RM ••••••' : s.value
+          return (
+            <div key={s.label} className={`bg-[#111] border ${s.border} rounded-xl px-4 py-3`}>
+              <div className="flex items-center justify-between mb-0.5">
+                <p className="text-xs text-zinc-500">{s.label}</p>
+                {isRevenue && (
+                  <button
+                    onClick={toggleRevenue}
+                    title={revenueHidden ? 'Show revenue' : 'Hide revenue'}
+                    className="text-zinc-600 hover:text-amber-400 text-sm leading-none"
+                  >
+                    {revenueHidden ? '👁' : '🙈'}
+                  </button>
+                )}
+              </div>
+              <p className={`text-xl font-bold ${s.color}`}>{displayValue}</p>
+            </div>
+          )
+        })}
       </div>
 
       {/* Filters */}
