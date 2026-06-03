@@ -738,24 +738,18 @@ const INVOICE_CSS = `
     font-weight: 900;
     font-size: 18px;
     letter-spacing: 0.5px;
-    padding: 0 12px;
-    height: 38px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    padding: 10px 14px;
     line-height: 1;
+    display: inline-block;
   }
   .inv-logo-media {
     color: #111;
     font-weight: 800;
     font-size: 18px;
     letter-spacing: 3px;
-    padding: 0 14px;
-    height: 38px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    padding: 10px 16px;
     line-height: 1;
+    display: inline-block;
   }
   .inv-title {
     font-size: 44px;
@@ -763,6 +757,7 @@ const INVOICE_CSS = `
     letter-spacing: 4px;
     color: #111;
     line-height: 1;
+    margin-top: -10px;
   }
   .inv-divider { height: 1px; background: #d8d8d8; margin-bottom: 22px; }
 
