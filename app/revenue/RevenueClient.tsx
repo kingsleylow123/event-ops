@@ -46,6 +46,21 @@ export default function RevenueClient() {
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
   const [filterEventId, setFilterEventId] = useState<string>('all')
+  const [revenueHidden, setRevenueHidden] = useState(false)
+
+  // Sync with shared 'revenue_hidden' key used by Dashboard + Attendees
+  useEffect(() => {
+    const saved = localStorage.getItem('revenue_hidden')
+    if (saved === '1') setRevenueHidden(true)
+  }, [])
+  function toggleRevenue() {
+    setRevenueHidden(v => {
+      const next = !v
+      localStorage.setItem('revenue_hidden', next ? '1' : '0')
+      return next
+    })
+  }
+  const display = (n: number) => revenueHidden ? 'RM ••••••' : fmtRM(n)
 
   async function loadAll() {
     try {
@@ -157,7 +172,16 @@ export default function RevenueClient() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-xl font-bold">Revenue</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-bold">Revenue</h1>
+          <button
+            onClick={toggleRevenue}
+            title={revenueHidden ? 'Show amounts' : 'Hide amounts'}
+            className="text-zinc-500 hover:text-amber-400 text-base"
+          >
+            {revenueHidden ? '👁' : '🙈'}
+          </button>
+        </div>
         <div className="flex gap-2 flex-wrap items-center w-full sm:w-auto">
           <select
             value={filterEventId}
@@ -189,17 +213,17 @@ export default function RevenueClient() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Total revenue</p>
-            <p className="text-2xl font-bold text-amber-400">{fmtRM(grandTotal)}</p>
+            <p className="text-2xl font-bold text-amber-400">{display(grandTotal)}</p>
             <p className="text-xs text-zinc-500 mt-0.5">{grandPaidCount} paid</p>
           </div>
           <div>
             <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Total expenses</p>
-            <p className="text-2xl font-bold text-red-400">{fmtRM(grandExpenses)}</p>
+            <p className="text-2xl font-bold text-red-400">{display(grandExpenses)}</p>
           </div>
           <div>
             <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Net profit</p>
             <p className={`text-2xl font-bold ${grandProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-              {fmtRM(grandProfit)}
+              {display(grandProfit)}
             </p>
           </div>
         </div>
@@ -229,9 +253,9 @@ export default function RevenueClient() {
                 <div className="text-right">
                   <p className="text-xs text-zinc-500">Net profit</p>
                   <p className={`text-2xl font-bold ${r.profit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {fmtRM(r.profit)}
+                    {display(r.profit)}
                   </p>
-                  <p className="text-xs text-zinc-500 mt-0.5">{fmtRM(r.totalPaid)} − {fmtRM(r.totalExpenses)}</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">{display(r.totalPaid)} − {display(r.totalExpenses)}</p>
                 </div>
               </div>
 
@@ -241,7 +265,7 @@ export default function RevenueClient() {
                     <p className="text-xs text-zinc-500 uppercase tracking-wider">💳 Stripe</p>
                     <span className="text-xs text-zinc-500">{stripeShare}%</span>
                   </div>
-                  <p className="text-base font-semibold text-white">{fmtRM(r.stripeRevenue)}</p>
+                  <p className="text-base font-semibold text-white">{display(r.stripeRevenue)}</p>
                   <p className="text-xs text-zinc-500 mt-0.5">{r.stripeCount} payment{r.stripeCount === 1 ? '' : 's'}</p>
                 </div>
                 <div className="bg-zinc-950/60 border border-zinc-800 rounded-lg p-3">
@@ -249,7 +273,7 @@ export default function RevenueClient() {
                     <p className="text-xs text-zinc-500 uppercase tracking-wider">🏦 Bank Transfer</p>
                     <span className="text-xs text-zinc-500">{bankShare}%</span>
                   </div>
-                  <p className="text-base font-semibold text-white">{fmtRM(r.bankRevenue)}</p>
+                  <p className="text-base font-semibold text-white">{display(r.bankRevenue)}</p>
                   <p className="text-xs text-zinc-500 mt-0.5">{r.bankCount} payment{r.bankCount === 1 ? '' : 's'}</p>
                 </div>
               </div>
@@ -258,7 +282,7 @@ export default function RevenueClient() {
               <div className="border-t border-zinc-800 pt-4">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs text-zinc-500 uppercase tracking-wider">
-                    💸 Expenses ({r.expenses.length}) — {fmtRM(r.totalExpenses)}
+                    💸 Expenses ({r.expenses.length}) — {display(r.totalExpenses)}
                   </p>
                   {!isAdding && (
                     <button onClick={() => openAdd(r.event.id)}
@@ -312,7 +336,7 @@ export default function RevenueClient() {
                           <span className="text-zinc-300 truncate">{exp.description}</span>
                           <span className="text-xs text-zinc-500 bg-zinc-900 border border-zinc-800 rounded-full px-2 py-0.5 flex-shrink-0">{exp.category}</span>
                         </div>
-                        <span className="text-red-400 font-mono flex-shrink-0">−{fmtRM(Number(exp.amount))}</span>
+                        <span className="text-red-400 font-mono flex-shrink-0">−{display(Number(exp.amount))}</span>
                         <button onClick={() => deleteExpense(exp.id)}
                           className="text-zinc-600 hover:text-red-400 text-xs px-1">✕</button>
                       </li>
@@ -324,7 +348,7 @@ export default function RevenueClient() {
               {(r.pendingCount > 0 || r.freeCount > 0) && (
                 <div className="mt-3 pt-3 border-t border-zinc-800 flex gap-6 text-xs text-zinc-500">
                   {r.pendingCount > 0 && (
-                    <span>⏳ {r.pendingCount} pending · {fmtRM(r.pendingRevenue)}</span>
+                    <span>⏳ {r.pendingCount} pending · {display(r.pendingRevenue)}</span>
                   )}
                   {r.freeCount > 0 && (
                     <span>🎟️ {r.freeCount} free</span>
