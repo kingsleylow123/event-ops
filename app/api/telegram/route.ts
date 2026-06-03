@@ -126,6 +126,35 @@ async function getActiveEvent() {
   return data?.[0] ?? null
 }
 
+// Load ALL events the admin has (past + future) for natural-language queries.
+async function getAllEvents() {
+  const { data, error } = await supabase
+    .from('events').select('*')
+    .order('date', { ascending: false })
+  if (error) throw new Error(`events: ${error.message}`)
+  return data ?? []
+}
+
+// Load attendees, expenses, etc. across multiple events at once for Claude.
+async function loadAcrossEvents(eventIds: string[]) {
+  if (!eventIds.length) return { attendees: [], expenses: [], survey: [], meetings: [] }
+  const [attendees, expenses, survey, meetings] = await Promise.all([
+    supabase.from('attendees').select('*').in('event_id', eventIds),
+    supabase.from('expenses').select('*').in('event_id', eventIds),
+    supabase.from('pre_event_survey_responses').select('*').in('event_id', eventIds),
+    supabase.from('meetings').select('*').in('event_id', eventIds),
+  ])
+  for (const r of [attendees, expenses, survey, meetings]) {
+    if (r.error) throw new Error(`load-across: ${r.error.message}`)
+  }
+  return {
+    attendees: attendees.data ?? [],
+    expenses: expenses.data ?? [],
+    survey: survey.data ?? [],
+    meetings: meetings.data ?? [],
+  }
+}
+
 async function loadAll(eventId: string) {
   const [attendees, checklist, expenses, survey, meetings] = await Promise.all([
     supabase.from('attendees').select('*').eq('event_id', eventId).order('created_at', { ascending: false }),
@@ -484,32 +513,49 @@ async function executeInvoiceTool(
 
 // ── Claude natural-language fallback ──────────────────────────────────────────
 async function askClaude(question: string, ev: Row, d: Awaited<ReturnType<typeof loadAll>>, chatId: number) {
+  // Load every event (past + future) and their attendees so Claude can
+  // answer questions about ANY event, not just the upcoming one.
+  const allEvents = await getAllEvents()
+  const eventIds = allEvents.map(e => e.id as string)
+  const across = await loadAcrossEvents(eventIds)
+
+  const eventsSnapshot = allEvents.map(e => {
+    const att = across.attendees.filter(a => a.event_id === e.id)
+    const exp = across.expenses.filter(x => x.event_id === e.id)
+    return {
+      id: e.id,
+      name: e.name,
+      date: e.date,
+      venue: e.venue,
+      capacity: e.capacity,
+      is_active: e.is_active,
+      days_until: daysUntil(e.date as string),
+      totals: {
+        registered: att.length,
+        paid: att.filter(a => a.payment_status === 'paid').length,
+        pending: att.filter(a => a.payment_status === 'pending').length,
+        free: att.filter(a => a.payment_status === 'free').length,
+        confirmed: att.filter(a => a.attendance_confirmed).length,
+        revenue_rm: revenue(att),
+        expenses_rm: totalExpenses(exp),
+      },
+      attendees: att.map(a => ({
+        name: a.name, ticket: a.ticket_type, payment: a.payment_status,
+        method: a.payment_method, amount: a.payment_amount,
+        confirmed: a.attendance_confirmed, phone: a.phone, email: a.email, notes: a.notes,
+      })),
+      expenses: exp.map(x => ({ desc: x.description, amount: x.amount, category: x.category })),
+    }
+  })
+
   const snapshot = {
-    event: {
-      name: ev.name, date: ev.date, venue: ev.venue, capacity: ev.capacity,
-      days_until: daysUntil(ev.date as string),
-      team: ev.team, floor_plan: ev.floor_plan,
-    },
-    totals: {
-      registered: d.attendees.length,
-      paid: d.attendees.filter(a => a.payment_status === 'paid').length,
-      pending: d.attendees.filter(a => a.payment_status === 'pending').length,
-      free: d.attendees.filter(a => a.payment_status === 'free').length,
-      confirmed: d.attendees.filter(a => a.attendance_confirmed).length,
-      revenue_rm: revenue(d.attendees),
-      expenses_rm: totalExpenses(d.expenses),
-      net_rm: revenue(d.attendees) - totalExpenses(d.expenses),
-      survey_responses: d.survey.length,
-    },
-    attendees: d.attendees.map(a => ({
-      name: a.name, ticket: a.ticket_type, payment: a.payment_status,
-      method: a.payment_method, amount: a.payment_amount,
-      confirmed: a.attendance_confirmed, phone: a.phone, email: a.email, notes: a.notes,
-    })),
-    checklist: d.checklist.map(c => ({ category: c.category, item: c.item, status: c.status, pic: c.pic_name, due: c.due_date })),
-    expenses: d.expenses.map(e => ({ desc: e.description, amount: e.amount, category: e.category })),
-    survey: d.survey.map(s => ({ name: s.name, industry: s.industry, company_size: s.company_size, challenge: s.biggest_challenge, goal: s.workshop_goal })),
-    meetings: d.meetings.map(m => ({ title: m.title, date: m.meeting_date, attendance: m.attendance })),
+    today: new Date().toISOString().slice(0, 10),
+    upcoming_event_id: ev.id,
+    events: eventsSnapshot,
+    // Active-event-only data that doesn't make sense to load globally
+    active_event_checklist: d.checklist.map(c => ({ category: c.category, item: c.item, status: c.status, pic: c.pic_name, due: c.due_date })),
+    active_event_survey: d.survey.map(s => ({ name: s.name, industry: s.industry, company_size: s.company_size, challenge: s.biggest_challenge, goal: s.workshop_goal })),
+    active_event_meetings: d.meetings.map(m => ({ title: m.title, date: m.meeting_date, attendance: m.attendance })),
   }
 
   const system = `You are Jarvis — the EventOps assistant, an internal ops bot for the event organiser (a single trusted admin). You are sharp, concise, and quietly witty (think Tony Stark's Jarvis) — but never waste the admin's time with fluff. Answer questions about the event using the live JSON data below. Today is ${new Date().toISOString().slice(0, 10)}.
@@ -521,6 +567,7 @@ Rules:
 - Do the math when asked (counts, %, revenue gaps, who's missing from X). Cross-reference survey vs attendees by name/phone when relevant.
 - If data isn't present, say so plainly.
 - If the admin asks to send, generate, create, or make an invoice for someone, CALL the generate_invoice tool — do not just describe what you would do. Infer mode='balance' only if they mention a deposit, partial payment, or balance; otherwise use mode='quick'.
+- The snapshot below contains EVERY event (past and future). When the admin asks about a specific event (e.g. "1st June", "last month", "Claude Malaysia Workshop"), match by name OR date and answer from THAT event's data. Do NOT say "no data" just because an event is in the past — the data is right here in events[].
 
 LIVE DATA:
 ${JSON.stringify(snapshot)}`
