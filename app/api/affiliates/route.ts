@@ -67,6 +67,33 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(data, { headers: NO_STORE_HEADERS })
 }
 
+// PATCH { id, bank_name?, bank_account?, bank_holder?, name?, active? }
+// → update an affiliate's profile (bank info, etc.)
+export async function PATCH(req: NextRequest) {
+  const body = await req.json().catch(() => ({})) as {
+    id?: string
+    bank_name?: string | null
+    bank_account?: string | null
+    bank_holder?: string | null
+    name?: string | null
+    active?: boolean
+  }
+  const { id, ...updates } = body
+  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400, headers: NO_STORE_HEADERS })
+  // Whitelist columns we allow editing through this endpoint
+  const ALLOWED = ['bank_name', 'bank_account', 'bank_holder', 'name', 'active'] as const
+  const patch: Record<string, unknown> = {}
+  for (const k of ALLOWED) {
+    if (k in updates) patch[k] = (updates as Record<string, unknown>)[k]
+  }
+  if (Object.keys(patch).length === 0) {
+    return NextResponse.json({ error: 'nothing to update' }, { status: 400, headers: NO_STORE_HEADERS })
+  }
+  const { data, error } = await supabase.from('affiliates').update(patch).eq('id', id).select().single()
+  if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE_HEADERS })
+  return NextResponse.json(data, { headers: NO_STORE_HEADERS })
+}
+
 // DELETE ?id=  → remove an attribution by id
 export async function DELETE(req: NextRequest) {
   const { searchParams } = new URL(req.url)

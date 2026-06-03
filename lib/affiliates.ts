@@ -90,13 +90,25 @@ export interface PayoutReport {
     affiliate_handle: string | null
     source: string | null
   }>
-  affiliates: Array<{ id: string; handle: string; name: string | null; rate: number; active: boolean }>
+  affiliates: Array<{
+    id: string
+    handle: string
+    name: string | null
+    rate: number
+    active: boolean
+    bank_name: string | null
+    bank_account: string | null
+    bank_holder: string | null
+  }>
   summary: Array<{
     affiliate_id: string
     handle: string
     buyers: number
     revenue: number
     commission: number
+    bank_name: string | null
+    bank_account: string | null
+    bank_holder: string | null
   }>
   totals: { attributed_revenue: number; total_commission: number; unattributed_revenue: number }
 }
@@ -140,15 +152,21 @@ export async function loadBuyers(eventId: string): Promise<BuyerRow[]> {
 export async function buildReport(eventId: string): Promise<PayoutReport> {
   const [buyers, affRes, attrRes] = await Promise.all([
     loadBuyers(eventId),
-    supabase.from('affiliates').select('id, handle, name, commission_rate, active'),
+    supabase.from('affiliates').select('id, handle, name, commission_rate, active, bank_name, bank_account, bank_holder'),
     supabase.from('affiliate_attributions').select('id, attendee_id, affiliate_id, source').eq('event_id', eventId),
   ])
   if (affRes.error) throw new Error(affRes.error.message)
   if (attrRes.error) throw new Error(attrRes.error.message)
 
   const affiliates = (affRes.data ?? []).map(a => ({
-    id: a.id as string, handle: a.handle as string, name: a.name as string | null,
-    rate: Number(a.commission_rate ?? 0.10), active: a.active as boolean,
+    id: a.id as string,
+    handle: a.handle as string,
+    name: a.name as string | null,
+    rate: Number(a.commission_rate ?? 0.10),
+    active: a.active as boolean,
+    bank_name: (a.bank_name as string | null) ?? null,
+    bank_account: (a.bank_account as string | null) ?? null,
+    bank_holder: (a.bank_holder as string | null) ?? null,
   }))
   const affById = new Map(affiliates.map(a => [a.id, a]))
 
@@ -184,7 +202,16 @@ export async function buildReport(eventId: string): Promise<PayoutReport> {
 
   const summary = [...sumMap.entries()].map(([id, s]) => {
     const aff = affById.get(id)!
-    return { affiliate_id: id, handle: aff.handle, buyers: s.buyers, revenue: s.revenue, commission: s.revenue * aff.rate }
+    return {
+      affiliate_id: id,
+      handle: aff.handle,
+      buyers: s.buyers,
+      revenue: s.revenue,
+      commission: s.revenue * aff.rate,
+      bank_name: aff.bank_name,
+      bank_account: aff.bank_account,
+      bank_holder: aff.bank_holder,
+    }
   }).sort((a, b) => b.commission - a.commission)
 
   const attributed_revenue = summary.reduce((t, s) => t + s.revenue, 0)
