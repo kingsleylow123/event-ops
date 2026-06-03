@@ -760,7 +760,7 @@ const INVOICE_CSS = `
     font-weight: 900;
     font-size: 18px;
     letter-spacing: 0.5px;
-    padding: 10px 14px;
+    padding: 5px 14px 15px;
     line-height: 1;
     display: inline-block;
   }
@@ -769,7 +769,7 @@ const INVOICE_CSS = `
     font-weight: 800;
     font-size: 18px;
     letter-spacing: 3px;
-    padding: 10px 16px;
+    padding: 5px 16px 15px;
     line-height: 1;
     display: inline-block;
   }
