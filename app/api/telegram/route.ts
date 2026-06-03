@@ -3,6 +3,8 @@ import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
 import { supabase } from '@/lib/supabase'
 import { buildReport } from '@/lib/affiliates'
+import { renderInvoicePDF, type InvoiceData, type InvoiceLineItem, type InvoicePayment } from '@/lib/invoice-pdf'
+import { findAttendeesByName, type AttendeeMatch } from '@/lib/invoice-lookup'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -91,6 +93,28 @@ async function sendMessage(chatId: number, text: string) {
 }
 
 const sendTyping = (chatId: number) => tg('sendChatAction', { chat_id: chatId, action: 'typing' })
+const sendUploadingDoc = (chatId: number) => tg('sendChatAction', { chat_id: chatId, action: 'upload_document' })
+
+// Upload a PDF buffer to Telegram as a file attachment.
+async function sendDocument(chatId: number, fileName: string, pdfBuffer: Buffer, caption?: string) {
+  const form = new FormData()
+  form.append('chat_id', String(chatId))
+  form.append('document', new Blob([new Uint8Array(pdfBuffer)], { type: 'application/pdf' }), fileName)
+  if (caption) {
+    form.append('caption', caption)
+    form.append('parse_mode', 'HTML')
+  }
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`, {
+      method: 'POST',
+      body: form,
+    })
+    if (!res.ok) console.error('[telegram] sendDocument failed', await res.text())
+    return res
+  } catch (e) {
+    console.error('[telegram] sendDocument threw', e)
+  }
+}
 
 // ── Data loading ──────────────────────────────────────────────────────────────
 async function getActiveEvent() {
@@ -347,10 +371,119 @@ const HELP = `🤖 ${b('Jarvis')} — your EventOps assistant\n\n` +
   `/affiliates — creator commission payout\n` +
   `/find &lt;name&gt; — look up an attendee\n\n` +
   `Or just ${b('ask anything')} in plain English 👇\n` +
-  `<i>e.g. "who hasn't paid?", "how full are we vs capacity?", "which paid attendees skipped the survey?"</i>`
+  `<i>e.g. "who hasn't paid?", "how full are we vs capacity?", "which paid attendees skipped the survey?"</i>\n\n` +
+  `${b('🧾 Invoices')}\n` +
+  `<i>"send Daphne an invoice"</i> · <i>"invoice Ken Ang RM 497"</i> · <i>"make an invoice for Jeremy with 2000 deposit"</i>\n` +
+  `→ Jarvis generates a branded PDF and sends it back as a file.`
+
+// ── Invoice generation (via Jarvis tool-use) ──────────────────────────────────
+
+// JSON schema for Claude's tool
+const GENERATE_INVOICE_TOOL = {
+  name: 'generate_invoice',
+  description:
+    'Generate a branded Oppa-Media PDF invoice for an attendee and send it as a file. ' +
+    'Use this whenever the admin asks to create, send, or make an invoice. ' +
+    'Look up the attendee by their name (partial match supported). The PDF is sent ' +
+    'to the chat as a file — do NOT also reply with a text summary; the tool result handles it.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      attendee_name: {
+        type: 'string',
+        description: 'Name (or partial name) of the attendee to invoice. Will look up in the active event first, then all events.',
+      },
+      override_amount: {
+        type: 'number',
+        description: 'Optional total amount in RM. Defaults to the attendee\'s recorded payment_amount.',
+      },
+      description: {
+        type: 'string',
+        description: 'Optional line-item description. Defaults to "[<ticket label>] Claude Workshop".',
+      },
+      mode: {
+        type: 'string',
+        enum: ['quick', 'balance'],
+        description: 'quick = single line + TOTAL box. balance = multi-line with Subtotal/Payments/BALANCE DUE. Default: quick.',
+      },
+      payments_received: {
+        type: 'array',
+        description: 'Only used when mode=balance. Each payment received so far.',
+        items: {
+          type: 'object',
+          properties: {
+            label: { type: 'string', description: 'e.g. "TnG · Deposit"' },
+            amount: { type: 'number', description: 'Amount in RM' },
+          },
+          required: ['label', 'amount'],
+        },
+      },
+    },
+    required: ['attendee_name'],
+  },
+} as const
+
+type InvoiceToolInput = {
+  attendee_name: string
+  override_amount?: number
+  description?: string
+  mode?: 'quick' | 'balance'
+  payments_received?: { label: string; amount: number }[]
+}
+
+// Execute the invoice tool: look up attendee → build InvoiceData → render PDF →
+// send via Telegram. Returns a short text status that becomes Claude's tool_result.
+async function executeInvoiceTool(
+  input: InvoiceToolInput,
+  chatId: number,
+  ev: Row,
+): Promise<string> {
+  const matches = await findAttendeesByName(input.attendee_name, ev.id as string)
+  // Fall back to all events if nothing matches in active event
+  const finalMatches = matches.length ? matches : await findAttendeesByName(input.attendee_name)
+
+  if (finalMatches.length === 0) {
+    return `No attendee matching "${input.attendee_name}". Try a different spelling or check /attendees.`
+  }
+  if (finalMatches.length > 1) {
+    const list = finalMatches.slice(0, 5).map((m: AttendeeMatch) => `• ${m.name} (${m.ticket_label}, RM ${m.payment_amount})`).join('\n')
+    return `Multiple matches for "${input.attendee_name}":\n${list}\nReply with a more specific name.`
+  }
+
+  const a = finalMatches[0]
+  const mode = input.mode || 'quick'
+  const amount = input.override_amount ?? a.payment_amount
+  const desc = input.description || `[${a.ticket_label}] Claude Workshop`
+
+  let lineItems: InvoiceLineItem[]
+  let payments: InvoicePayment[] | undefined
+
+  if (mode === 'balance') {
+    lineItems = [{ desc, qty: 1, unit: amount }]
+    payments = input.payments_received || []
+  } else {
+    lineItems = [{ desc, qty: 1, unit: amount }]
+  }
+
+  const invoice: InvoiceData = {
+    clientName: a.name,
+    date: new Date(),
+    lineItems,
+    payments,
+    note: mode === 'quick' ? '[non refundable' : undefined,
+  }
+
+  await sendUploadingDoc(chatId)
+  const pdfBuffer = await renderInvoicePDF(invoice)
+  const safeName = a.name.replace(/[^a-zA-Z0-9 _-]/g, '').replace(/\s+/g, '-')
+  await sendDocument(chatId, `Invoice-${safeName}.pdf`, pdfBuffer,
+    `🧾 <b>Invoice</b> for ${esc(a.name)} — RM ${amount.toLocaleString('en-MY')}`)
+
+  return `Invoice PDF sent to the chat for ${a.name} (RM ${amount}).`
+}
 
 // ── Claude natural-language fallback ──────────────────────────────────────────
-async function askClaude(question: string, ev: Row, d: Awaited<ReturnType<typeof loadAll>>) {
+async function askClaude(question: string, ev: Row, d: Awaited<ReturnType<typeof loadAll>>, chatId: number) {
   const snapshot = {
     event: {
       name: ev.name, date: ev.date, venue: ev.venue, capacity: ev.capacity,
@@ -387,17 +520,32 @@ Rules:
 - When listing people, use • bullets on separate lines.
 - Do the math when asked (counts, %, revenue gaps, who's missing from X). Cross-reference survey vs attendees by name/phone when relevant.
 - If data isn't present, say so plainly.
+- If the admin asks to send, generate, create, or make an invoice for someone, CALL the generate_invoice tool — do not just describe what you would do. Infer mode='balance' only if they mention a deposit, partial payment, or balance; otherwise use mode='quick'.
 
 LIVE DATA:
 ${JSON.stringify(snapshot)}`
 
-  const msg = await anthropic.messages.create({
+  // First turn: let Claude either answer directly OR call generate_invoice
+  const first = await anthropic.messages.create({
     model: 'claude-haiku-4-5',
     max_tokens: 1024,
     system,
+    tools: [GENERATE_INVOICE_TOOL],
     messages: [{ role: 'user', content: question }],
   })
-  const block = msg.content.find(x => x.type === 'text')
+
+  // If Claude chose to call the invoice tool, execute it
+  const toolUse = first.content.find(x => x.type === 'tool_use')
+  if (toolUse && toolUse.type === 'tool_use' && toolUse.name === 'generate_invoice') {
+    const status = await executeInvoiceTool(toolUse.input as InvoiceToolInput, chatId, ev)
+    // We already sent the PDF (via sendDocument). Return empty so the caller
+    // doesn't double-send. Errors / multi-match prompts come back through `status`.
+    if (status.startsWith('Invoice PDF sent')) return ''
+    return status
+  }
+
+  // Otherwise just return Claude's text reply
+  const block = first.content.find(x => x.type === 'text')
   return block && block.type === 'text' ? block.text : 'Sorry, I could not generate a reply.'
 }
 
@@ -474,10 +622,11 @@ export async function POST(req: NextRequest) {
     let reply = await handle(text, ev, data)
     if (!reply) {
       await sendTyping(chatId)
-      reply = await askClaude(text, ev, data)
+      reply = await askClaude(text, ev, data, chatId)
     }
 
-    await sendMessage(chatId, reply)
+    // Empty reply = the handler already sent something (e.g. an invoice PDF)
+    if (reply) await sendMessage(chatId, reply)
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('[telegram] unhandled', err)
