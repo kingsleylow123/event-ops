@@ -199,8 +199,9 @@ export default function AffiliatesPage() {
         <div className="text-zinc-500 text-center py-12">Loading payout…</div>
       ) : (
         <>
-          {/* Summary cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        <div className="flex gap-4 flex-col lg:flex-row items-stretch">
+          {/* Summary cards (left, flex-grow) */}
+          <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-3 self-start">
             {report.summary.length === 0 && (
               <div className="col-span-full text-zinc-500 text-sm bg-[#111] border border-zinc-800 rounded-xl p-5">
                 No attributions yet. Click <span className="text-amber-400">Auto-match from sheet</span> or assign affiliates below.
@@ -237,19 +238,32 @@ export default function AffiliatesPage() {
             ))}
           </div>
 
-          {/* Totals bar — right-aligned */}
-          <div className="bg-[#111] border border-zinc-800 rounded-xl p-4 flex flex-wrap gap-6 text-sm items-center justify-end">
-            <button
-              onClick={toggleRevenue}
-              title={revenueHidden ? 'Show amounts' : 'Hide amounts'}
-              className="text-zinc-500 hover:text-amber-400 text-base mr-auto"
-            >
-              {revenueHidden ? '👁' : '🙈'}
-            </button>
-            <div><span className="text-zinc-500">Attributed revenue:</span> <span className="font-semibold">{display(report.totals.attributed_revenue)}</span></div>
-            <div><span className="text-zinc-500">Total payout (10%):</span> <span className="font-bold text-amber-400">{display(report.totals.total_commission)}</span></div>
-            <div><span className="text-zinc-500">Unattributed:</span> <span className="text-zinc-400">{display(report.totals.unattributed_revenue)}</span></div>
+          {/* Totals — right sidebar panel */}
+          <div className="bg-[#111] border border-zinc-800 rounded-xl p-4 lg:w-80 flex-shrink-0 space-y-3 self-start">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-zinc-500 uppercase tracking-wider">Payout Summary</p>
+              <button
+                onClick={toggleRevenue}
+                title={revenueHidden ? 'Show amounts' : 'Hide amounts'}
+                className="text-zinc-500 hover:text-amber-400 text-sm"
+              >
+                {revenueHidden ? '👁' : '🙈'}
+              </button>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-zinc-500">Attributed revenue</span>
+              <span className="font-semibold">{display(report.totals.attributed_revenue)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-zinc-500">Total payout (10%)</span>
+              <span className="font-bold text-amber-400">{display(report.totals.total_commission)}</span>
+            </div>
+            <div className="flex justify-between text-sm pt-2 border-t border-zinc-800">
+              <span className="text-zinc-500">Unattributed</span>
+              <span className="text-zinc-400">{display(report.totals.unattributed_revenue)}</span>
+            </div>
           </div>
+        </div>
 
           {/* Buyers table */}
           <div className="bg-[#111] border border-zinc-800 rounded-xl overflow-hidden">
