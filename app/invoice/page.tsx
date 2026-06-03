@@ -163,17 +163,18 @@ function InvoiceContent() {
           margin: 0,
           filename: `Invoice-${safeName}.pdf`,
           image: { type: 'jpeg', quality: 0.98 },
+          autoPaging: false,
           html2canvas: {
             scale: 2,
             useCORS: true,
             backgroundColor: '#ffffff',
             width: 794,
-            height: 1123,
+            height: 1115,
             windowWidth: 794,
-            windowHeight: 1123,
+            windowHeight: 1115,
           },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-          pagebreak: { mode: ['avoid-all'] },
+          pagebreak: { mode: ['avoid-all'], avoid: '*' },
         })
         .from(el)
         .save()
