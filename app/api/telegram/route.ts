@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
 import { buildReport } from '@/lib/affiliates'
 import { renderInvoicePDF, type InvoiceData, type InvoiceLineItem, type InvoicePayment } from '@/lib/invoice-pdf'
 import { findAttendeesByName, type AttendeeMatch } from '@/lib/invoice-lookup'

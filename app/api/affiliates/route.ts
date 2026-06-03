@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin } from '@/lib/supabase-admin'
+import { requireAdmin } from '@/lib/auth/guard'
 import { buildReport, autoMatch } from '@/lib/affiliates'
 
 const NO_STORE_HEADERS = { 'Cache-Control': 'no-store, no-cache, must-revalidate' } as const
@@ -8,6 +9,7 @@ export const dynamic = 'force-dynamic'
 
 // GET ?event_id=  → full payout report
 export async function GET(req: NextRequest) {
+  const g = await requireAdmin('GET /api/affiliates'); if (g.response) return g.response
   const { searchParams } = new URL(req.url)
   const event_id = searchParams.get('event_id')
   if (!event_id) return NextResponse.json({ error: 'event_id required' }, { status: 400, headers: NO_STORE_HEADERS })
@@ -28,6 +30,7 @@ export async function GET(req: NextRequest) {
 //   → remove the paid record (mark as unpaid again)
 // POST { event_id, attendee_id, affiliate_id }  → manual assign (default)
 export async function POST(req: NextRequest) {
+  const g = await requireAdmin('POST /api/affiliates'); if (g.response) return g.response
   const { searchParams } = new URL(req.url)
   const action = searchParams.get('action')
   const body = await req.json().catch(() => ({}))
@@ -105,7 +108,7 @@ export async function POST(req: NextRequest) {
 
   // affiliate_id null/empty → clear the attribution (set to "none")
   if (!affiliate_id) {
-    const { error } = await supabase
+    const { error } = await supabaseAdmin
       .from('affiliate_attributions')
       .delete()
       .eq('event_id', event_id)
@@ -114,7 +117,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true }, { headers: NO_STORE_HEADERS })
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('affiliate_attributions')
     .upsert(
       { event_id, attendee_id, affiliate_id, source: 'manual' },
@@ -155,10 +158,11 @@ export async function PATCH(req: NextRequest) {
 
 // DELETE ?id=  → remove an attribution by id
 export async function DELETE(req: NextRequest) {
+  const g = await requireAdmin('DELETE /api/affiliates'); if (g.response) return g.response
   const { searchParams } = new URL(req.url)
   const id = searchParams.get('id')
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400, headers: NO_STORE_HEADERS })
-  const { error } = await supabase.from('affiliate_attributions').delete().eq('id', id)
+  const { error } = await supabaseAdmin.from('affiliate_attributions').delete().eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE_HEADERS })
   return NextResponse.json({ success: true }, { headers: NO_STORE_HEADERS })
 }

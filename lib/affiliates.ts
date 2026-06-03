@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase'
+import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
 
 // Public CSV export of the affiliate lead sheet
 export const LEAD_SHEET_CSV =
