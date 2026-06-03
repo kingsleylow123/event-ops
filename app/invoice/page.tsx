@@ -2,6 +2,7 @@
 
 import { useSearchParams } from 'next/navigation'
 import { Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { TICKET_LABELS, type TicketType } from '@/lib/supabase'
 
 type AttendeeLite = {
@@ -86,6 +87,85 @@ function InvoiceContent() {
   useEffect(() => {
     document.title = `Invoice - ${name}`
   }, [name])
+
+  // ── PDF export
+  const [exporting, setExporting] = useState(false)
+
+  async function exportPDF() {
+    // 1. Flip into export mode synchronously so inputs swap to plain text
+    flushSync(() => setExporting(true))
+    // 2. Wait two frames so React's DOM commit + browser layout are done
+    await new Promise(r => requestAnimationFrame(() => r(null)))
+    await new Promise(r => requestAnimationFrame(() => r(null)))
+
+    const el = document.getElementById('invoice-page-printable')
+    if (!el) { setExporting(false); return }
+
+    const safeName = (name || 'Invoice').replace(/[^a-zA-Z0-9 _-]/g, '').trim().replace(/\s+/g, '-')
+
+    try {
+      const html2pdf = (await import('html2pdf.js')).default
+      await html2pdf()
+        .set({
+          margin: 0,
+          filename: `Invoice-${safeName}.pdf`,
+          image: { type: 'jpeg', quality: 0.98 },
+          html2canvas: {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            windowWidth: 794,
+            windowHeight: 1123,
+            // Transform the cloned DOM html2canvas captures, replacing
+            // form inputs with plain text spans — canvas renders them crisply.
+            onclone: (_doc: Document, root: HTMLElement) => {
+              const target = root.querySelector('#invoice-page-printable') as HTMLElement | null
+              if (!target) return
+              target.querySelectorAll('input, textarea').forEach(node => {
+                const input = node as HTMLInputElement | HTMLTextAreaElement
+                if ((input as HTMLInputElement).type === 'date') {
+                  input.remove(); return
+                }
+                const inlineDisplay = input.style.display
+                const isBlock = input.tagName === 'TEXTAREA' || inlineDisplay === 'block'
+                const tag = isBlock ? 'div' : 'span'
+                const replacement = document.createElement(tag)
+                replacement.textContent = input.value || ''
+                const ta = input.style.textAlign || 'left'
+                const w = input.tagName === 'TEXTAREA' ? '100%' : 'auto'
+                replacement.setAttribute('style',
+                  `display:${isBlock ? 'block' : 'inline-block'};` +
+                  `width:${w};` +
+                  `text-align:${ta};` +
+                  `white-space:pre-wrap;` +
+                  `word-break:break-word;` +
+                  `padding:0;margin:0;border:none;background:transparent;` +
+                  `font-family:inherit;font-size:inherit;font-weight:inherit;` +
+                  `color:inherit;letter-spacing:inherit;line-height:1.45;`)
+                input.parentNode?.replaceChild(replacement, input)
+              })
+              // Hide all action buttons + the X column
+              target.querySelectorAll('.add-btn, .add-btn-small, .x-btn, .col-x')
+                .forEach(b => { (b as HTMLElement).style.display = 'none' })
+              // Remove dashed borders from any remaining edit fields
+              target.querySelectorAll('.inv-edit, .inv-line-desc').forEach(e => {
+                const s = (e as HTMLElement).style
+                s.border = 'none'
+                s.background = 'transparent'
+                s.padding = '0'
+                s.resize = 'none'
+              })
+            },
+          },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          pagebreak: { mode: ['avoid-all'] },
+        })
+        .from(el)
+        .save()
+    } finally {
+      flushSync(() => setExporting(false))
+    }
+  }
 
   // ── Attendee search
   const [attendees, setAttendees] = useState<AttendeeLite[]>([])
@@ -201,108 +281,12 @@ function InvoiceContent() {
             </button>
           </div>
 
-          <button onClick={async () => {
-            const original = document.getElementById('invoice-page-printable')
-            if (!original) return
-            const safeName = (name || 'Invoice').replace(/[^a-zA-Z0-9 _-]/g, '').trim().replace(/\s+/g, '-')
-
-            // Collect original input styles BEFORE cloning (these elements are in the live DOM)
-            const originalInputs = Array.from(
-              original.querySelectorAll('input, textarea'),
-            ) as (HTMLInputElement | HTMLTextAreaElement)[]
-            const inputStyles = originalInputs.map(input => {
-              const cs = window.getComputedStyle(input)
-              return {
-                value: input.value || '',
-                tag: input.tagName,
-                type: (input as HTMLInputElement).type || '',
-                inlineDisplay: input.style.display,
-                fontFamily: cs.fontFamily,
-                fontSize: cs.fontSize,
-                fontWeight: cs.fontWeight,
-                color: cs.color,
-                textAlign: cs.textAlign,
-                letterSpacing: cs.letterSpacing,
-              }
-            })
-
-            // Clone for clean PDF render
-            const clone = original.cloneNode(true) as HTMLElement
-            clone.id = 'invoice-pdf-clone'
-
-            // Off-screen container — append BEFORE transforming so layout queries work
-            const wrap = document.createElement('div')
-            wrap.style.cssText = 'position:fixed;left:-10000px;top:0;width:794px;background:#fff;'
-            wrap.appendChild(clone)
-            document.body.appendChild(wrap)
-
-            // Iterate clone's inputs in same order (cloneNode preserves order)
-            const cloneInputs = Array.from(
-              clone.querySelectorAll('input, textarea'),
-            ) as (HTMLInputElement | HTMLTextAreaElement)[]
-
-            cloneInputs.forEach((input, i) => {
-              const info = inputStyles[i]
-              if (!info) return
-              // Remove hidden date-picker inputs entirely
-              if (info.type === 'date') { input.remove(); return }
-
-              const isBlock = info.inlineDisplay === 'block' || info.tag === 'TEXTAREA'
-              const span = document.createElement(isBlock ? 'div' : 'span')
-              span.textContent = info.value
-              span.style.cssText = `
-                font-family: ${info.fontFamily};
-                font-size: ${info.fontSize};
-                font-weight: ${info.fontWeight};
-                color: ${info.color};
-                text-align: ${info.textAlign};
-                letter-spacing: ${info.letterSpacing};
-                line-height: 1.5;
-                white-space: pre-wrap;
-                word-break: break-word;
-                padding: 0;
-                margin: 0;
-                background: transparent;
-                border: none;
-                display: ${isBlock ? 'block' : 'inline-block'};
-                width: ${info.tag === 'TEXTAREA' ? '100%' : 'auto'};
-              `
-              input.parentNode?.replaceChild(span, input)
-            })
-
-            // Hide action buttons + grow handles + tab bar
-            clone.querySelectorAll('.add-btn, .add-btn-small, .x-btn, .col-x').forEach(b => {
-              (b as HTMLElement).style.display = 'none'
-            })
-
-            try {
-              const html2pdf = (await import('html2pdf.js')).default
-              await html2pdf()
-                .set({
-                  margin: 0,
-                  filename: `Invoice-${safeName}.pdf`,
-                  image: { type: 'jpeg', quality: 0.98 },
-                  html2canvas: {
-                    scale: 2,
-                    useCORS: true,
-                    backgroundColor: '#ffffff',
-                    windowWidth: 794,
-                    windowHeight: 1123,
-                  },
-                  jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-                  pagebreak: { mode: ['avoid-all'] },
-                })
-                .from(clone)
-                .save()
-            } finally {
-              document.body.removeChild(wrap)
-            }
-          }}>📄 Save as PDF</button>
+          <button onClick={exportPDF}>📄 Save as PDF</button>
           <button className="secondary" onClick={() => window.close()}>Close</button>
         </div>
 
         {/* ── Invoice page (A4) ── */}
-        <div id="invoice-page-printable" className="invoice-page">
+        <div id="invoice-page-printable" className={`invoice-page ${exporting ? 'is-exporting' : ''}`}>
           <div className="red-stripe">
             <div className="seg-top" />
             <div className="seg-gap" />
@@ -986,5 +970,42 @@ const INVOICE_CSS = `
     .invoice-page { box-shadow: none; width: 210mm; height: 297mm; }
     .inv-edit { border-color: transparent !important; background: transparent !important; }
     .add-btn, .add-btn-small, .x-btn { display: none !important; }
+  }
+
+  /* ── Export / PDF mode (toggled by React state during html2pdf capture) ── */
+  .is-exporting .add-btn,
+  .is-exporting .add-btn-small,
+  .is-exporting .x-btn,
+  .is-exporting .col-x { display: none !important; }
+
+  .is-exporting input,
+  .is-exporting textarea {
+    border: none !important;
+    background: transparent !important;
+    outline: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    resize: none !important;
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    box-shadow: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    line-height: 1.45 !important;
+  }
+
+  .is-exporting input[type="date"] { display: none !important; }
+
+  .is-exporting .inv-line-desc {
+    width: 100% !important;
+    min-height: 0 !important;
+    border: none !important;
+    padding: 0 !important;
+    background: transparent !important;
+    resize: none !important;
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+    overflow: visible !important;
   }
 `
