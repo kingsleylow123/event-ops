@@ -163,6 +163,7 @@ function InvoiceContent() {
           margin: 0,
           filename: `Invoice-${safeName}.pdf`,
           image: { type: 'jpeg', quality: 0.98 },
+          // @ts-expect-error html2pdf supports `autoPaging` at runtime but the types miss it
           autoPaging: false,
           html2canvas: {
             scale: 2,

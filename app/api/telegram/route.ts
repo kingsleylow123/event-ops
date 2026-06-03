@@ -408,7 +408,7 @@ const HELP = `🤖 ${b('Jarvis')} — your EventOps assistant\n\n` +
 // ── Invoice generation (via Jarvis tool-use) ──────────────────────────────────
 
 // JSON schema for Claude's tool
-const GENERATE_INVOICE_TOOL = {
+const GENERATE_INVOICE_TOOL: Anthropic.Tool = {
   name: 'generate_invoice',
   description:
     'Generate a branded Oppa-Media PDF invoice for an attendee and send it as a file. ' +
@@ -450,7 +450,7 @@ const GENERATE_INVOICE_TOOL = {
     },
     required: ['attendee_name'],
   },
-} as const
+}
 
 type InvoiceToolInput = {
   attendee_name: string

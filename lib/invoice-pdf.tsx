@@ -426,7 +426,7 @@ function InvoiceDocument({ data }: { data: InvoiceData }) {
                   </>
                 )}
                 <View style={styles.balanceLine}>
-                  <Text style={[styles.balanceLbl, balance <= 0 ? { color: '#2c7a2f' } : null]}>
+                  <Text style={balance <= 0 ? [styles.balanceLbl, { color: '#2c7a2f' }] : styles.balanceLbl}>
                     {balance <= 0 ? 'PAID IN FULL' : 'BALANCE DUE'}
                   </Text>
                   <Text style={styles.balanceAmt}>{rm(Math.max(0, balance))}</Text>
