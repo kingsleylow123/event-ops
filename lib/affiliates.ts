@@ -289,3 +289,58 @@ export async function autoMatch(eventId: string): Promise<number> {
   if (error) throw new Error(error.message)
   return toInsert.length
 }
+
+// ── Cosmetic leads-tag sync ───────────────────────────────────────────────────
+// Reflects the affiliate sheet into the `leads` table TAG only. Money/attributions
+// are NOT touched. First-tag-wins: only flips leads currently owner='kingsley' to
+// owner='affiliate'; never reassigns or demotes an existing affiliate lead, and
+// never touches inactive handles (e.g. kingsley1022). Idempotent.
+export async function syncLeadTags(): Promise<number> {
+  const [leadsFromSheet, affRes] = await Promise.all([
+    fetchLeads(),
+    supabase.from('affiliates').select('id, handle, active'),
+  ])
+  if (affRes.error) throw new Error(affRes.error.message)
+
+  // active handle → affiliate id (inactive like kingsley1022 excluded)
+  const handleToId = new Map<string, string>()
+  for (const a of affRes.data ?? []) {
+    if (a.active) handleToId.set(a.handle as string, a.id as string)
+  }
+
+  // sheet phone_norm → {handle, affiliate_id}, first occurrence wins
+  const phoneToAff = new Map<string, { handle: string; id: string }>()
+  for (const l of leadsFromSheet) {
+    if (!l.phone) continue
+    const id = handleToId.get(l.handle)
+    if (!id) continue // unknown / inactive handle
+    if (!phoneToAff.has(l.phone)) phoneToAff.set(l.phone, { handle: l.handle, id })
+  }
+  if (!phoneToAff.size) return 0
+
+  // Only kingsley-owned leads are eligible to flip (guarantees first-tag-wins).
+  const { data: candidates, error: cErr } = await supabase
+    .from('leads')
+    .select('id, phone_norm')
+    .eq('owner', 'kingsley')
+  if (cErr) throw new Error(cErr.message)
+
+  const updates: Array<{ id: string; handle: string; affiliate_id: string }> = []
+  for (const c of candidates ?? []) {
+    const match = phoneToAff.get(c.phone_norm as string)
+    if (match) updates.push({ id: c.id as string, handle: match.handle, affiliate_id: match.id })
+  }
+  if (!updates.length) return 0
+
+  // Apply per-row (Supabase has no bulk different-value update in one call).
+  let flipped = 0
+  for (const u of updates) {
+    const { error } = await supabase
+      .from('leads')
+      .update({ owner: 'affiliate', affiliate_handle: u.handle, affiliate_id: u.affiliate_id })
+      .eq('id', u.id)
+      .eq('owner', 'kingsley') // guard: only flip if still kingsley (race-safe)
+    if (!error) flipped++
+  }
+  return flipped
+}

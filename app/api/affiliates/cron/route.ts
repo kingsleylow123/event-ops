@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
-import { autoMatch, loadBuyers } from '@/lib/affiliates'
+import { autoMatch, loadBuyers, syncLeadTags } from '@/lib/affiliates'
 import { notifyAdmins, esc, b } from '@/lib/telegram'
 
 export const dynamic = 'force-dynamic'
@@ -23,6 +23,14 @@ export async function GET(req: NextRequest) {
     .select('id, name')
     .gte('date', cutoff)
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+
+  // ── Cosmetic: sync leads-table tags from the affiliate sheet (no money) ─────
+  let leadsTagged = 0
+  try {
+    leadsTagged = await syncLeadTags()
+  } catch (e) {
+    console.error('[affiliates/cron] syncLeadTags failed', e)
+  }
 
   // ── Lead lookup maps (owner='affiliate' only) ──────────────────────────────
   const { data: affLeads } = await supabase
@@ -117,5 +125,5 @@ export async function GET(req: NextRequest) {
     await notifyAdmins(msg)
   }
 
-  return NextResponse.json({ ok: true, matched: matchResults, newAffiliateBuyers: newBuyers.length })
+  return NextResponse.json({ ok: true, matched: matchResults, newAffiliateBuyers: newBuyers.length, leadsTagged })
 }

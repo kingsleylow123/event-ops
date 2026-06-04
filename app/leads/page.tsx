@@ -75,6 +75,20 @@ export default function LeadsPage() {
     }
   }
 
+  async function syncFromSheet() {
+    setImporting(true); setMsg('')
+    try {
+      const res = await fetch('/api/leads?action=synctags', { method: 'POST' })
+      const d = await res.json()
+      setMsg(res.ok ? `✅ Re-tagged ${d.tagged} lead(s) from the affiliate sheet.` : `⚠️ ${d.error || 'Sync failed'}`)
+      load()
+    } catch {
+      setMsg('⚠️ Sync failed')
+    } finally {
+      setImporting(false)
+    }
+  }
+
   function copyCsv() {
     const lines = [['Name', 'Phone', 'Owner', 'Affiliate', 'Sources', 'Last message'].join(',')]
     for (const l of leads) {
@@ -100,6 +114,10 @@ export default function LeadsPage() {
           <p className="text-sm text-zinc-400">Master CRM — tagged by affiliate or Kingsley</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={syncFromSheet} disabled={importing}
+            className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg border border-zinc-700">
+            {importing ? 'Syncing…' : '🔁 Sync from sheet'}
+          </button>
           <button onClick={runImport} disabled={importing}
             className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg border border-zinc-700">
             {importing ? 'Importing…' : '🔄 Re-import seed'}

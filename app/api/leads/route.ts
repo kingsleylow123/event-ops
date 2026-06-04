@@ -3,6 +3,7 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { requireAdmin } from '@/lib/auth/guard'
+import { syncLeadTags } from '@/lib/affiliates'
 
 const NO_STORE_HEADERS = { 'Cache-Control': 'no-store, no-cache, must-revalidate' } as const
 
@@ -59,10 +60,22 @@ export async function GET(req: NextRequest) {
 }
 
 // POST ?action=import → bulk upsert from the committed seed file (idempotent)
+// POST ?action=synctags → re-tag leads from the live affiliate sheet (cosmetic)
 export async function POST(req: NextRequest) {
   const g = await requireAdmin('POST /api/leads'); if (g.response) return g.response
   const { searchParams } = new URL(req.url)
-  if (searchParams.get('action') !== 'import') {
+  const action = searchParams.get('action')
+
+  if (action === 'synctags') {
+    try {
+      const tagged = await syncLeadTags()
+      return NextResponse.json({ tagged }, { headers: NO_STORE_HEADERS })
+    } catch (e) {
+      return NextResponse.json({ error: (e as Error).message }, { status: 500, headers: NO_STORE_HEADERS })
+    }
+  }
+
+  if (action !== 'import') {
     return NextResponse.json({ error: 'unknown action' }, { status: 400, headers: NO_STORE_HEADERS })
   }
 
