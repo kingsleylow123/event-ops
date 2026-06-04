@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Event, Attendee, Expense, ExpenseCategory } from '@/lib/supabase'
 import { EXPENSE_CATEGORIES } from '@/lib/supabase'
+import { useRevenueHidden } from '@/lib/useRevenueHidden'
 
 function fmtRM(n: number): string {
   const sign = n < 0 ? '-' : ''
@@ -46,20 +47,7 @@ export default function RevenueClient() {
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
   const [filterEventId, setFilterEventId] = useState<string>('all')
-  const [revenueHidden, setRevenueHidden] = useState(false)
-
-  // Sync with shared 'revenue_hidden' key used by Dashboard + Attendees
-  useEffect(() => {
-    const saved = localStorage.getItem('revenue_hidden')
-    if (saved === '1') setRevenueHidden(true)
-  }, [])
-  function toggleRevenue() {
-    setRevenueHidden(v => {
-      const next = !v
-      localStorage.setItem('revenue_hidden', next ? '1' : '0')
-      return next
-    })
-  }
+  const [revenueHidden, toggleRevenue] = useRevenueHidden()
   const display = (n: number) => revenueHidden ? 'RM ••••••' : fmtRM(n)
 
   async function loadAll() {

@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useMemo } from 'react'
 import type { Event, Attendee, Expense } from '@/lib/supabase'
+import { useRevenueHidden } from '@/lib/useRevenueHidden'
 
 const rm = (n: number) =>
   `RM ${n.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -39,21 +40,10 @@ export default function MonthEndPage() {
   const [payouts, setPayouts] = useState<PayoutRow[]>([])
   const [affiliates, setAffiliates] = useState<AffiliateLite[]>([])
   const [loading, setLoading] = useState(true)
-  const [revenueHidden, setRevenueHidden] = useState(false)
+  const [revenueHidden, toggleRevenue] = useRevenueHidden()
   const [steps, setSteps] = useState<boolean[]>(() => CLOSE_STEPS.map(() => false))
   const [closedMonths, setClosedMonths] = useState<Record<string, string>>({})  // ym -> ISO timestamp
 
-  // Hide-revenue (shared with other pages)
-  useEffect(() => {
-    if (localStorage.getItem('revenue_hidden') === '1') setRevenueHidden(true)
-  }, [])
-  function toggleRevenue() {
-    setRevenueHidden(v => {
-      const next = !v
-      localStorage.setItem('revenue_hidden', next ? '1' : '0')
-      return next
-    })
-  }
   const display = (n: number) => (revenueHidden ? 'RM ••••••' : rm(n))
 
   // Persist step checkboxes + closed status per month

@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { isAdminEmail } from '@/lib/auth/admin'
-import MobileNav from './MobileNav'
+import Sidebar from './Sidebar'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -29,17 +29,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en">
       <body className="min-h-screen bg-[#0a0a0a] text-white">
-        <nav className="relative border-b border-zinc-800 bg-[#111] px-4 sm:px-6 py-4 flex items-center gap-4 lg:gap-6">
-          <span className="text-lg font-bold text-amber-400 flex-shrink-0">EventOps</span>
-          {user && (
-            <MobileNav
-              userEmail={user.email}
-              isAdmin={admin}
-              pendingCount={pendingCount}
-            />
-          )}
-        </nav>
-        <main className="p-3 sm:p-6 max-w-7xl mx-auto">{children}</main>
+        {user ? (
+          <>
+            <Sidebar userEmail={user.email} isAdmin={admin} pendingCount={pendingCount} />
+            <main className="lg:pl-64">
+              <div className="p-3 sm:p-6 max-w-7xl mx-auto">{children}</div>
+            </main>
+          </>
+        ) : (
+          <main>{children}</main>
+        )}
       </body>
     </html>
   )

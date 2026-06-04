@@ -2,6 +2,7 @@
 import { Fragment, useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import type { Event } from '@/lib/supabase'
+import { useRevenueHidden } from '@/lib/useRevenueHidden'
 
 interface Affiliate {
   id: string; handle: string; name: string | null; rate: number; active: boolean
@@ -35,19 +36,8 @@ export default function PayoutPage() {
   const [msg, setMsg] = useState('')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
-  // Shared revenue-hide state
-  const [revenueHidden, setRevenueHidden] = useState(false)
-  useEffect(() => {
-    const saved = localStorage.getItem('revenue_hidden')
-    if (saved === '1') setRevenueHidden(true)
-  }, [])
-  function toggleRevenue() {
-    setRevenueHidden(v => {
-      const next = !v
-      localStorage.setItem('revenue_hidden', next ? '1' : '0')
-      return next
-    })
-  }
+  // Shared global revenue-hide state
+  const [revenueHidden, toggleRevenue] = useRevenueHidden()
   const display = (n: number) => revenueHidden ? 'RM ••••••' : rm(n)
 
   // Bank-edit modal

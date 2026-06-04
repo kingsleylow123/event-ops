@@ -5,26 +5,14 @@ import type { Event, Attendee } from '@/lib/supabase'
 import { TICKET_LABELS } from '@/lib/supabase'
 import { pickActiveEvent } from '@/lib/event'
 import { rmShort, fmtDate } from '@/lib/format'
+import { useRevenueHidden } from '@/lib/useRevenueHidden'
 
 export default function Dashboard() {
   const [event, setEvent] = useState<Event | null>(null)
   const [attendees, setAttendees] = useState<Attendee[]>([])
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
-  const [revenueHidden, setRevenueHidden] = useState(false)
-
-  // Persist revenue visibility across reloads
-  useEffect(() => {
-    const saved = localStorage.getItem('revenue_hidden')
-    if (saved === '1') setRevenueHidden(true)
-  }, [])
-  function toggleRevenue() {
-    setRevenueHidden(v => {
-      const next = !v
-      localStorage.setItem('revenue_hidden', next ? '1' : '0')
-      return next
-    })
-  }
+  const [revenueHidden, toggleRevenue] = useRevenueHidden()
 
   useEffect(() => {
     fetch('/api/me', { cache: 'no-store' })

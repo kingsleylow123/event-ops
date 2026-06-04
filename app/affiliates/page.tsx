@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import type { Event } from '@/lib/supabase'
 import { resolveInitialEvent, storeEventId } from '@/lib/event'
+import { useRevenueHidden } from '@/lib/useRevenueHidden'
 
 interface Affiliate {
   id: string; handle: string; name: string | null; rate: number; active: boolean
@@ -32,20 +33,7 @@ export default function AffiliatesPage() {
   const [loadingReport, setLoadingReport] = useState(false)
   const [importing, setImporting] = useState(false)
   const [msg, setMsg] = useState('')
-  const [revenueHidden, setRevenueHidden] = useState(false)
-
-  // Shared 'revenue_hidden' key with Dashboard / Attendees / Revenue pages
-  useEffect(() => {
-    const saved = localStorage.getItem('revenue_hidden')
-    if (saved === '1') setRevenueHidden(true)
-  }, [])
-  function toggleRevenue() {
-    setRevenueHidden(v => {
-      const next = !v
-      localStorage.setItem('revenue_hidden', next ? '1' : '0')
-      return next
-    })
-  }
+  const [revenueHidden] = useRevenueHidden()
   const display = (n: number) => revenueHidden ? 'RM ••••••' : rm(n)
 
   useEffect(() => {

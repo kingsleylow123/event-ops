@@ -4,6 +4,7 @@ import type { Event, Attendee, TicketType, PaymentMethod, PaymentStatus } from '
 import { TICKET_LABELS, TICKET_PRICES, toWhatsApp } from '@/lib/supabase'
 import { resolveInitialEvent, storeEventId } from '@/lib/event'
 import { identityKey } from '@/lib/format'
+import { useRevenueHidden } from '@/lib/useRevenueHidden'
 
 const STATUS_COLORS: Record<PaymentStatus, string> = {
   paid: 'bg-green-900/40 text-green-400 border border-green-800',
@@ -34,20 +35,7 @@ export default function AttendeesPage() {
   const [filterAttendance, setFilterAttendance] = useState<string>('all')
   const [showQRModal, setShowQRModal] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
-  const [revenueHidden, setRevenueHidden] = useState(false)
-
-  // Sync hide-revenue state with localStorage (same key as Dashboard)
-  useEffect(() => {
-    const saved = localStorage.getItem('revenue_hidden')
-    if (saved === '1') setRevenueHidden(true)
-  }, [])
-  function toggleRevenue() {
-    setRevenueHidden(v => {
-      const next = !v
-      localStorage.setItem('revenue_hidden', next ? '1' : '0')
-      return next
-    })
-  }
+  const [revenueHidden, toggleRevenue] = useRevenueHidden()
 
   const event = events.find(e => e.id === selectedEventId) ?? null
 
