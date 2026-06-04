@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
+import { requireUser } from '@/lib/auth/guard'
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
@@ -39,6 +40,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'event_id required' }, { status: 400 })
   }
 
+  // Public mode (?name=1): return ONLY the event name for the survey form header.
+  // No PII — safe for the unauthenticated public survey page.
+  if (searchParams.get('name') === '1') {
+    const { data } = await supabase.from('events').select('name').eq('id', event_id).single()
+    return NextResponse.json({ name: data?.name ?? null })
+  }
+
+  // Full responses list = admin/staff only (contains PII).
+  const g = await requireUser('GET /api/survey'); if (g.response) return g.response
+
   const { data, error } = await supabase
     .from('pre_event_survey_responses')
     .select('*')
@@ -53,6 +64,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  const g = await requireUser('PATCH /api/survey'); if (g.response) return g.response
   const { id, ...updates } = await req.json()
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 

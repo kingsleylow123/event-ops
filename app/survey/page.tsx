@@ -58,12 +58,9 @@ function SurveyForm() {
       setSubmitted(true)
     }
     if (eventId) {
-      fetch(`/api/events`)
+      fetch(`/api/survey?event_id=${eventId}&name=1`)
         .then(r => r.json())
-        .then((events: { id: string; name: string }[]) => {
-          const ev = events.find(e => e.id === eventId)
-          if (ev) setEventName(ev.name)
-        })
+        .then((d: { name?: string }) => { if (d?.name) setEventName(d.name) })
         .catch(() => {})
     }
   }, [eventId, attendeeId])

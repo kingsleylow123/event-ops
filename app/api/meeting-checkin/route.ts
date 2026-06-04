@@ -6,6 +6,15 @@ export const dynamic = 'force-dynamic'
 
 const NO_STORE_HEADERS = { 'Cache-Control': 'no-store, no-cache, must-revalidate' } as const
 
+// Public: fetch a meeting's title for the check-in kiosk header (no PII).
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url)
+  const id = searchParams.get('id')
+  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400, headers: NO_STORE_HEADERS })
+  const { data } = await supabase.from('meetings').select('title').eq('id', id).single()
+  return NextResponse.json({ title: data?.title ?? null }, { headers: NO_STORE_HEADERS })
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json()
   const { meetingId, name } = body as { meetingId?: string; name?: string }

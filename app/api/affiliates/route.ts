@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
       bank_account: bank_account?.trim() || null,
       bank_holder: bank_holder?.trim() || null,
     }
-    const { data, error } = await supabase.from('affiliates').insert(insert).select().single()
+    const { data, error } = await supabaseAdmin.from('affiliates').insert(insert).select().single()
     if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE_HEADERS })
     return NextResponse.json(data, { headers: NO_STORE_HEADERS })
   }
@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
     if (!event_id || !affiliate_id || typeof amount !== 'number') {
       return NextResponse.json({ error: 'event_id, affiliate_id, amount required' }, { status: 400, headers: NO_STORE_HEADERS })
     }
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from('affiliate_payouts')
       .upsert(
         { event_id, affiliate_id, amount, notes: notes ?? null, paid_at: new Date().toISOString() },
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
     if (!event_id || !affiliate_id) {
       return NextResponse.json({ error: 'event_id, affiliate_id required' }, { status: 400, headers: NO_STORE_HEADERS })
     }
-    const { error } = await supabase
+    const { error } = await supabaseAdmin
       .from('affiliate_payouts')
       .delete()
       .eq('event_id', event_id)
@@ -151,7 +151,7 @@ export async function PATCH(req: NextRequest) {
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: 'nothing to update' }, { status: 400, headers: NO_STORE_HEADERS })
   }
-  const { data, error } = await supabase.from('affiliates').update(patch).eq('id', id).select().single()
+  const { data, error } = await supabaseAdmin.from('affiliates').update(patch).eq('id', id).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE_HEADERS })
   return NextResponse.json(data, { headers: NO_STORE_HEADERS })
 }

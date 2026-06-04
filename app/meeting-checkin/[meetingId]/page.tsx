@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
 
 type CheckinState =
   | { status: 'idle' }
@@ -25,14 +24,10 @@ export default function MeetingCheckinPage() {
 
   useEffect(() => {
     if (!meetingId) return
-    supabase
-      .from('meetings')
-      .select('title')
-      .eq('id', meetingId)
-      .single()
-      .then(({ data }) => {
-        if (data) setMeetingTitle(data.title)
-      })
+    fetch(`/api/meeting-checkin?id=${meetingId}`)
+      .then(r => r.json())
+      .then(d => { if (d?.title) setMeetingTitle(d.title) })
+      .catch(() => {})
   }, [meetingId])
 
   async function handleSubmit(e: React.FormEvent) {
