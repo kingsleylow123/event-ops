@@ -301,6 +301,8 @@ export async function syncLeadTags(): Promise<number> {
     supabase.from('affiliates').select('id, handle, active'),
   ])
   if (affRes.error) throw new Error(affRes.error.message)
+  // diagnostic: surface sheet row count so a silent empty-fetch is visible
+  if (!leadsFromSheet.length) throw new Error('fetchLeads returned 0 sheet rows (CSV fetch likely blocked server-side)')
 
   // active handle → affiliate id (inactive like kingsley1022 excluded)
   const handleToId = new Map<string, string>()

@@ -26,9 +26,11 @@ export async function GET(req: NextRequest) {
 
   // ── Cosmetic: sync leads-table tags from the affiliate sheet (no money) ─────
   let leadsTagged = 0
+  let leadsSyncError: string | null = null
   try {
     leadsTagged = await syncLeadTags()
   } catch (e) {
+    leadsSyncError = String((e as Error).message || e)
     console.error('[affiliates/cron] syncLeadTags failed', e)
   }
 
@@ -125,5 +127,5 @@ export async function GET(req: NextRequest) {
     await notifyAdmins(msg)
   }
 
-  return NextResponse.json({ ok: true, matched: matchResults, newAffiliateBuyers: newBuyers.length, leadsTagged })
+  return NextResponse.json({ ok: true, matched: matchResults, newAffiliateBuyers: newBuyers.length, leadsTagged, leadsSyncError })
 }
