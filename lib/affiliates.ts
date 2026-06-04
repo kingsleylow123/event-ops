@@ -1,21 +1,12 @@
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
+import { normPhone, normEmail } from '@/lib/format'
+
+// Re-export so existing importers (cron, etc.) keep working unchanged.
+export { normPhone, normEmail }
 
 // Public CSV export of the affiliate lead sheet
 export const LEAD_SHEET_CSV =
   'https://docs.google.com/spreadsheets/d/13cY7A5GA3e5X8dlZFuIySOFYX2BiBONVnGSj5J2AFz8/export?format=csv'
-
-// ── Normalization (mirrors the validated /tmp/payout.py logic) ────────────────
-export function normPhone(p: string | null | undefined): string {
-  if (!p) return ''
-  let d = String(p).replace(/\D/g, '')
-  if (d.startsWith('60')) d = d.slice(2) // strip MY country code
-  d = d.replace(/^0+/, '') // strip leading zeros
-  return d
-}
-
-export function normEmail(e: string | null | undefined): string {
-  return (e ?? '').trim().toLowerCase()
-}
 
 // ── Lead sheet parsing ────────────────────────────────────────────────────────
 export interface Lead {

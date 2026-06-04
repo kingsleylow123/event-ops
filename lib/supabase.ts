@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { normPhone } from '@/lib/format'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://placeholder.supabase.co'
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? 'placeholder-key'
@@ -185,8 +186,9 @@ export interface ChecklistItem {
 
 export function toWhatsApp(phone: string | null): string | null {
   if (!phone) return null
-  const digits = phone.replace(/\D/g, '')
-  if (digits.startsWith('60')) return `https://wa.me/${digits}`
-  if (digits.startsWith('0')) return `https://wa.me/6${digits}`
-  return `https://wa.me/60${digits}`
+  // normPhone strips the 60 country code + leading zeros; we re-prepend 60 for
+  // the wa.me link. Identical output to the old inline logic, single source now.
+  const local = normPhone(phone)
+  if (!local) return null
+  return `https://wa.me/60${local}`
 }

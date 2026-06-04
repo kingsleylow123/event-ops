@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import type { Event, Attendee, TicketType, PaymentMethod, PaymentStatus } from '@/lib/supabase'
 import { TICKET_LABELS, TICKET_PRICES, toWhatsApp } from '@/lib/supabase'
 import { resolveInitialEvent, storeEventId } from '@/lib/event'
+import { identityKey } from '@/lib/format'
 
 const STATUS_COLORS: Record<PaymentStatus, string> = {
   paid: 'bg-green-900/40 text-green-400 border border-green-800',
@@ -198,6 +199,13 @@ export default function AttendeesPage() {
   const totalFree = attendees.filter(a => a.payment_status === 'free').length
   const totalRevenue = attendees.filter(a => a.payment_status === 'paid').reduce((s, a) => s + (a.payment_amount ?? 0), 0)
 
+  // Duplicate detection: count attendees sharing a normalized phone/email identity.
+  const dupCounts = attendees.reduce<Record<string, number>>((acc, a) => {
+    const key = identityKey(a.phone, a.email)
+    if (key) acc[key] = (acc[key] ?? 0) + 1
+    return acc
+  }, {})
+
   if (loading) return <div className="text-zinc-500 mt-20 text-center">Loading...</div>
 
   return (
@@ -323,6 +331,14 @@ export default function AttendeesPage() {
                 <tr key={a.id} className="border-b border-zinc-900 hover:bg-zinc-900/30">
                   <td className="px-4 py-3 font-medium">
                     {a.name}
+                    {(() => {
+                      const k = identityKey(a.phone, a.email)
+                      const n = k ? dupCounts[k] : 0
+                      return n > 1 ? (
+                        <span title="Possible duplicate — same phone/email as another attendee"
+                          className="ml-2 text-[10px] bg-red-500/20 text-red-300 px-1.5 py-0.5 rounded">⚠️ dup ×{n}</span>
+                      ) : null
+                    })()}
                     {a.email && <div className="text-xs text-zinc-500">{a.email}</div>}
                   </td>
                   <td className="px-4 py-3 text-zinc-300">{a.phone ?? '—'}</td>

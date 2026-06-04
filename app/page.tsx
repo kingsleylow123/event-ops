@@ -4,6 +4,7 @@ import Link from 'next/link'
 import type { Event, Attendee } from '@/lib/supabase'
 import { TICKET_LABELS } from '@/lib/supabase'
 import { pickActiveEvent } from '@/lib/event'
+import { rmShort, fmtDate } from '@/lib/format'
 
 export default function Dashboard() {
   const [event, setEvent] = useState<Event | null>(null)
@@ -76,7 +77,7 @@ export default function Dashboard() {
             <p className="text-xs text-amber-400 font-semibold uppercase tracking-widest mb-1">Active Event</p>
             <h1 className="text-xl sm:text-2xl font-bold">{event.name}</h1>
             <div className="flex flex-wrap gap-2 sm:gap-4 mt-2 text-sm text-zinc-400">
-              {event.date && <span>📅 {new Date(event.date).toLocaleDateString('en-MY', { dateStyle: 'medium' })}</span>}
+              {event.date && <span>📅 {fmtDate(event.date)}</span>}
               {event.venue && <span>📍 {event.venue}</span>}
               {event.capacity && <span>👥 Capacity: {event.capacity}</span>}
             </div>
@@ -97,7 +98,7 @@ export default function Dashboard() {
           { label: 'Pending', value: pending.length, color: 'text-yellow-400', adminOnly: true },
           { label: 'Free', value: free.length, color: 'text-blue-400', adminOnly: true },
           { label: 'Attended', value: attended.length, color: 'text-purple-400', adminOnly: false },
-          { label: 'Revenue', value: `RM ${revenue.toLocaleString()}`, color: 'text-amber-400', adminOnly: true },
+          { label: 'Revenue', value: rmShort(revenue), color: 'text-amber-400', adminOnly: true },
         ].filter(s => !s.adminOnly || isAdmin).map(s => {
           const isRevenue = s.label === 'Revenue'
           const displayValue = isRevenue && revenueHidden ? 'RM ••••••' : s.value
