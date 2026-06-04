@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { Event, Attendee } from '@/lib/supabase'
 import { TICKET_LABELS } from '@/lib/supabase'
+import { pickActiveEvent } from '@/lib/event'
 
 export default function Dashboard() {
   const [event, setEvent] = useState<Event | null>(null)
@@ -37,7 +38,7 @@ export default function Dashboard() {
         const evRes = await fetch('/api/events', { cache: 'no-store' })
         if (!evRes.ok) throw new Error('API error')
         const events: Event[] = await evRes.json()
-        const active = events.find(e => e.is_active) ?? null
+        const active = pickActiveEvent(events)
         setEvent(active)
         if (active) {
           const attRes = await fetch(`/api/attendees?event_id=${active.id}`, { cache: 'no-store' })

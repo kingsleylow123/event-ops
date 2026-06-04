@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Event, ChecklistItem, ChecklistStatus } from '@/lib/supabase'
 import { CHECKLIST_CATEGORIES, toWhatsApp } from '@/lib/supabase'
+import { pickActiveEvent } from '@/lib/event'
 
 const STATUS_STYLES: Record<ChecklistStatus, string> = {
   pending: 'bg-zinc-800 text-zinc-400',
@@ -54,7 +55,7 @@ export default function ChecklistPage() {
       if (!evRes.ok) throw new Error()
       const events: Event[] = await evRes.json()
       setAllEvents(events)
-      const active = events.find(e => e.is_active) ?? null
+      const active = pickActiveEvent(events)
       setEvent(active)
       if (active) {
         const res = await fetch(`/api/checklist?event_id=${active.id}`, { cache: 'no-store' })

@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import type { Event } from '@/lib/supabase'
+import { resolveInitialEvent, storeEventId } from '@/lib/event'
 
 interface SurveyResponse {
   id: string
@@ -41,7 +42,7 @@ export default function InsightsPage() {
       .then(r => r.json())
       .then((data: Event[]) => {
         setEvents(data)
-        const active = data.find(e => e.is_active)
+        const active = resolveInitialEvent(data)
         if (active) setSelectedEventId(active.id)
       })
       .catch(() => {})
@@ -94,7 +95,7 @@ export default function InsightsPage() {
         <div className="flex items-center gap-2 flex-wrap">
           <select
             value={selectedEventId}
-            onChange={e => setSelectedEventId(e.target.value)}
+            onChange={e => { setSelectedEventId(e.target.value); storeEventId(e.target.value) }}
             className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm">
             {events.map(e => (
               <option key={e.id} value={e.id}>{e.name}{e.is_active ? ' (Active)' : ''}</option>

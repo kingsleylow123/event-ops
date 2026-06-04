@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import type { Event } from '@/lib/supabase'
+import { resolveInitialEvent, storeEventId } from '@/lib/event'
 
 interface Affiliate {
   id: string; handle: string; name: string | null; rate: number; active: boolean
@@ -52,11 +53,7 @@ export default function AffiliatesPage() {
       .then(r => r.json())
       .then((data: Event[]) => {
         setEvents(data)
-        // default to soonest upcoming event, else active, else first
-        const upcoming = [...data]
-          .filter(e => e.date && new Date(e.date).getTime() >= Date.now())
-          .sort((a, b) => new Date(a.date!).getTime() - new Date(b.date!).getTime())
-        const pick = upcoming[0] || data.find(e => e.is_active) || data[0]
+        const pick = resolveInitialEvent(data)
         if (pick) setEventId(pick.id)
       })
       .catch(() => {})
@@ -134,7 +131,7 @@ export default function AffiliatesPage() {
           <p className="text-sm text-zinc-400">10% of attributed buyer revenue</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <select value={eventId} onChange={e => setEventId(e.target.value)}
+          <select value={eventId} onChange={e => { setEventId(e.target.value); storeEventId(e.target.value) }}
             className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm">
             {events.map(e => (
               <option key={e.id} value={e.id}>{e.name}{e.is_active ? ' (Active)' : ''}</option>

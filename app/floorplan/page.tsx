@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
 import type { Event, FloorPlan, FloorPlanSection, FloorPlanSectionType } from '@/lib/supabase'
+import { resolveInitialEvent, storeEventId } from '@/lib/event'
 
 const SECTION_TYPE_COLORS: Record<FloorPlanSectionType, string> = {
   vip: 'bg-blue-900',
@@ -48,7 +49,7 @@ export default function FloorPlanPage() {
         const list: Event[] = await res.json()
         setEvents(list)
         if (!selectedEventId) {
-          const active = list.find(e => e.is_active) ?? list[0] ?? null
+          const active = resolveInitialEvent(list)
           if (active) setSelectedEventId(active.id)
         }
       }
@@ -158,7 +159,7 @@ export default function FloorPlanPage() {
         </div>
         <div className="flex gap-2 flex-wrap items-center">
           {events.length > 1 && !editing && (
-            <select value={selectedEventId} onChange={e => setSelectedEventId(e.target.value)}
+            <select value={selectedEventId} onChange={e => { setSelectedEventId(e.target.value); storeEventId(e.target.value) }}
               className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm">
               {events.map(ev => (
                 <option key={ev.id} value={ev.id}>{eventLabel(ev)}</option>

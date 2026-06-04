@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import type { Event, Attendee, TicketType, PaymentMethod, PaymentStatus } from '@/lib/supabase'
 import { TICKET_LABELS, TICKET_PRICES, toWhatsApp } from '@/lib/supabase'
+import { resolveInitialEvent, storeEventId } from '@/lib/event'
 
 const STATUS_COLORS: Record<PaymentStatus, string> = {
   paid: 'bg-green-900/40 text-green-400 border border-green-800',
@@ -65,7 +66,7 @@ export default function AttendeesPage() {
       const list: Event[] = await evRes.json()
       setEvents(list)
       if (!selectedEventId) {
-        const active = list.find(e => e.is_active) ?? list[0] ?? null
+        const active = resolveInitialEvent(list)
         if (active) setSelectedEventId(active.id)
       }
     } catch {
@@ -212,7 +213,7 @@ export default function AttendeesPage() {
           {events.length > 1 && (
             <select
               value={selectedEventId}
-              onChange={e => setSelectedEventId(e.target.value)}
+              onChange={e => { setSelectedEventId(e.target.value); storeEventId(e.target.value) }}
               className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm"
             >
               {events.map(ev => (
