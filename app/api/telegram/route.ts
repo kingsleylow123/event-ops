@@ -371,6 +371,30 @@ function fmtDuplicates(att: Row[]) {
     dupes.map(g => `${esc(g[0].name)} ×${g.length}\n` + g.map(a => `  • ${esc(tt(a.ticket_type))} · ${esc(a.payment_status)} · ${esc(a.email || a.phone)}`).join('\n')).join('\n\n')
 }
 
+async function fmtLeads() {
+  const { data, error } = await supabase.from('leads').select('owner, affiliate_handle')
+  if (error) return `🗂 ${b('Leads')}\nCould not load leads.`
+  const rows = data ?? []
+  const total = rows.length
+  const affiliate = rows.filter(r => r.owner === 'affiliate').length
+  const kingsley = total - affiliate
+  const byHandle: Record<string, number> = {}
+  rows.forEach(r => {
+    if (r.owner === 'affiliate') {
+      const h = (r.affiliate_handle as string) || '?'
+      byHandle[h] = (byHandle[h] ?? 0) + 1
+    }
+  })
+  const top = Object.entries(byHandle).sort((a, c) => c[1] - a[1]).slice(0, 10)
+  let out = `🗂 ${b('Leads')} — ${total} total\n`
+  out += `${b('Affiliate')}: ${affiliate}   ${b('Kingsley')}: ${kingsley}\n`
+  if (top.length) {
+    out += `\n${b('Top affiliates by leads')}\n`
+    out += top.map(([h, n]) => `• ${esc(h)}: ${n}`).join('\n')
+  }
+  return out
+}
+
 async function fmtAffiliates(eventId: string) {
   const rep = await buildReport(eventId)
   const money = (n: number) => 'RM ' + n.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -398,6 +422,7 @@ const HELP = `🤖 ${b('Jarvis')} — your EventOps assistant\n\n` +
   `/meetings — meeting attendance\n` +
   `/duplicates — flag duplicate entries\n` +
   `/affiliates — creator commission payout\n` +
+  `/leads — master leads (affiliate vs Kingsley)\n` +
   `/find &lt;name&gt; — look up an attendee\n\n` +
   `Or just ${b('ask anything')} in plain English 👇\n` +
   `<i>e.g. "who hasn't paid?", "how full are we vs capacity?", "which paid attendees skipped the survey?"</i>\n\n` +
@@ -612,6 +637,7 @@ async function handle(text: string, ev: Row, d: Awaited<ReturnType<typeof loadAl
   if (cmd === '/meetings') return fmtMeetings(d.meetings)
   if (cmd === '/duplicates') return fmtDuplicates(d.attendees)
   if (cmd === '/affiliates') return await fmtAffiliates(ev.id as string)
+  if (cmd === '/leads') return await fmtLeads()
   if (cmd.startsWith('/find ')) return fmtFind(d.attendees, text.slice(6).trim())
   return '' // signal: natural language
 }

@@ -26,6 +26,7 @@ export default function MobileNav({ userEmail, isAdmin, pendingCount }: MobileNa
     ...(isAdmin ? [{ href: '/month-end', label: 'Month-End' }] : []),
     { href: '/insights', label: 'Insights' },
     ...(isAdmin ? [{ href: '/affiliates', label: 'Affiliates' }] : []),
+    ...(isAdmin ? [{ href: '/leads', label: 'Leads' }] : []),
     { href: '/meetings', label: 'Activity' },
     { href: '/team', label: 'Claude Intern' },
     ...(isAdmin ? [{ href: '/admin', label: 'Admin', badge: pendingCount }] : []),
