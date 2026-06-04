@@ -334,7 +334,10 @@ export async function syncLeadTags(): Promise<number> {
     const match = phoneToAff.get(c.phone_norm as string)
     if (match) updates.push({ id: c.id as string, handle: match.handle, affiliate_id: match.id })
   }
-  if (!updates.length) return 0
+  // TEMP diagnostic: throw the internal counts so the cron response reveals them.
+  if (!updates.length) {
+    throw new Error(`DIAG sheetRows=${leadsFromSheet.length} activeHandles=${handleToId.size} phoneMap=${phoneToAff.size} candidates=${(candidates ?? []).length} updates=0`)
+  }
 
   // Apply per-row (Supabase has no bulk different-value update in one call).
   let flipped = 0
