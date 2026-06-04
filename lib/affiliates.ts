@@ -312,17 +312,19 @@ export async function syncLeadTags(): Promise<number> {
   const phoneToAff = new Map<string, { handle: string; id: string }>()
   for (const l of leadsFromSheet) {
     if (!l.phone) continue
-    const id = handleToId.get(l.handle)
+    const id = handleToId.get((l.handle || '').trim().replace(/^\[/, ''))
     if (!id) continue // unknown / inactive handle
-    if (!phoneToAff.has(l.phone)) phoneToAff.set(l.phone, { handle: l.handle, id })
+    if (!phoneToAff.has(l.phone)) phoneToAff.set(l.phone, { handle: (l.handle || '').trim().replace(/^\[/, ''), id })
   }
   if (!phoneToAff.size) return 0
 
   // Only kingsley-owned leads are eligible to flip (guarantees first-tag-wins).
+  // Explicit high limit — Supabase defaults to 1000 rows and we have >1000 leads.
   const { data: candidates, error: cErr } = await supabase
     .from('leads')
     .select('id, phone_norm')
     .eq('owner', 'kingsley')
+    .limit(10000)
   if (cErr) throw new Error(cErr.message)
 
   const updates: Array<{ id: string; handle: string; affiliate_id: string }> = []
