@@ -320,24 +320,25 @@ export async function syncLeadTags(): Promise<number> {
   }
   if (!phoneToAff.size) return 0
 
-  // Only kingsley-owned leads are eligible to flip (guarantees first-tag-wins).
-  // Explicit high limit — Supabase defaults to 1000 rows and we have >1000 leads.
-  const { data: candidates, error: cErr } = await supabase
-    .from('leads')
-    .select('id, phone_norm')
-    .eq('owner', 'kingsley')
-    .limit(10000)
-  if (cErr) throw new Error(cErr.message)
-
+  // Look up only the sheet phones among kingsley-owned leads. We query BY the
+  // sheet phone list (~few hundred) instead of fetching all leads, sidestepping
+  // PostgREST's hard 1000-row response cap. Chunk the `in` filter to stay safe.
+  const sheetPhones = [...phoneToAff.keys()]
   const updates: Array<{ id: string; handle: string; affiliate_id: string }> = []
-  for (const c of candidates ?? []) {
-    const match = phoneToAff.get(c.phone_norm as string)
-    if (match) updates.push({ id: c.id as string, handle: match.handle, affiliate_id: match.id })
+  for (let i = 0; i < sheetPhones.length; i += 200) {
+    const chunk = sheetPhones.slice(i, i + 200)
+    const { data: candidates, error: cErr } = await supabase
+      .from('leads')
+      .select('id, phone_norm')
+      .eq('owner', 'kingsley')
+      .in('phone_norm', chunk)
+    if (cErr) throw new Error(cErr.message)
+    for (const c of candidates ?? []) {
+      const match = phoneToAff.get(c.phone_norm as string)
+      if (match) updates.push({ id: c.id as string, handle: match.handle, affiliate_id: match.id })
+    }
   }
-  // TEMP diagnostic: throw the internal counts so the cron response reveals them.
-  if (!updates.length) {
-    throw new Error(`DIAG sheetRows=${leadsFromSheet.length} activeHandles=${handleToId.size} phoneMap=${phoneToAff.size} candidates=${(candidates ?? []).length} updates=0`)
-  }
+  if (!updates.length) return 0
 
   // Apply per-row (Supabase has no bulk different-value update in one call).
   let flipped = 0
