@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import type { Event } from '@/lib/supabase'
 import { resolveInitialEvent, storeEventId } from '@/lib/event'
+import { useCachedFetch, mutateCache, peekCache } from '@/lib/useCachedFetch'
 
 interface SurveyResponse {
   id: string
@@ -28,34 +29,37 @@ function sorted(obj: Record<string, number>): [string, number][] {
 }
 
 export default function InsightsPage() {
+  const { data: eventsData, loading: fetchingEvents } = useCachedFetch<Event[]>('events', '/api/events')
   const [events, setEvents] = useState<Event[]>([])
   const [selectedEventId, setSelectedEventId] = useState<string>('')
   const [responses, setResponses] = useState<SurveyResponse[]>([])
-  const [loading, setLoading] = useState(true)
   const [loadingResponses, setLoadingResponses] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState<Partial<SurveyResponse>>({})
   const [surveyLink, setSurveyLink] = useState('')
 
-  useEffect(() => {
-    fetch('/api/events')
-      .then(r => r.json())
-      .then((data: Event[]) => {
-        setEvents(data)
-        const active = resolveInitialEvent(data)
-        if (active) setSelectedEventId(active.id)
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [])
+  const loading = fetchingEvents && !eventsData
 
   useEffect(() => {
+    if (!eventsData) return
+    setEvents(eventsData)
+    if (!selectedEventId) {
+      const active = resolveInitialEvent(eventsData)
+      if (active) setSelectedEventId(active.id)
+    }
+  }, [eventsData, selectedEventId])
+
+  // Survey responses: cached per event (instant), refreshed in background.
+  useEffect(() => {
     if (!selectedEventId) return
-    setLoadingResponses(true)
+    const cacheKey = `survey:${selectedEventId}`
+    const cached = peekCache<SurveyResponse[]>(cacheKey)
+    if (cached) setResponses(cached)
+    else setLoadingResponses(true)
     fetch(`/api/survey?event_id=${selectedEventId}`)
       .then(r => r.json())
-      .then((data: SurveyResponse[]) => setResponses(data))
-      .catch(() => setResponses([]))
+      .then((data: SurveyResponse[]) => { setResponses(data); mutateCache<SurveyResponse[]>(cacheKey, () => data) })
+      .catch(() => { if (!cached) setResponses([]) })
       .finally(() => setLoadingResponses(false))
 
     const base = typeof window !== 'undefined' ? window.location.origin : ''

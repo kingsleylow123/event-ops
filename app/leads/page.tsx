@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
+import { peekCache, mutateCache } from '@/lib/useCachedFetch'
 
 interface Lead {
   id: string
@@ -27,24 +28,38 @@ export default function LeadsPage() {
   const [q, setQ] = useState('')
   const [importing, setImporting] = useState(false)
   const [msg, setMsg] = useState('')
+  const [page, setPage] = useState(0) // 100 rows/page
+
+  const PAGE_SIZE = 100
 
   const load = useCallback(() => {
-    setLoading(true)
     const p = new URLSearchParams()
     if (owner) p.set('owner', owner)
     if (handle) p.set('handle', handle)
     if (q) p.set('q', q)
+    const cacheKey = `leads:${owner}:${handle}:${q}`
+    const cached = peekCache<{ leads: Lead[]; summary: Summary }>(cacheKey)
+    if (cached) { setLeads(cached.leads || []); setSummary(cached.summary || null); setLoading(false) }
+    else setLoading(true)
     fetch(`/api/leads?${p.toString()}`)
       .then(r => r.json())
-      .then(d => { setLeads(d.leads || []); setSummary(d.summary || null) })
-      .catch(() => { setLeads([]); setSummary(null) })
+      .then(d => {
+        setLeads(d.leads || []); setSummary(d.summary || null)
+        mutateCache(cacheKey, () => ({ leads: d.leads || [], summary: d.summary || null }))
+      })
+      .catch(() => { if (!cached) { setLeads([]); setSummary(null) } })
       .finally(() => setLoading(false))
   }, [owner, handle, q])
 
   useEffect(() => {
+    setPage(0) // reset to first page on any filter/search change
     const t = setTimeout(load, q ? 300 : 0) // debounce search
     return () => clearTimeout(t)
   }, [load, q])
+
+  // Slice the current page for rendering (filters/search already applied server-side).
+  const pageCount = Math.max(1, Math.ceil(leads.length / PAGE_SIZE))
+  const pageLeads = leads.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE)
 
   async function runImport() {
     setImporting(true); setMsg('')
@@ -140,13 +155,13 @@ export default function LeadsPage() {
       <div className="bg-[#111] border border-zinc-800 rounded-xl overflow-hidden">
         <div className="px-5 py-3 border-b border-zinc-800">
           <h2 className="font-semibold text-sm">
-            {loading ? 'Loading…' : `${leads.length.toLocaleString()} shown`}
+            {loading ? 'Loading…' : `${leads.length.toLocaleString()} total`}
             {(owner || handle || q) && <span className="text-zinc-500 font-normal"> (filtered)</span>}
           </h2>
         </div>
-        <div className="overflow-x-auto max-h-[70vh]">
+        <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-[#111]">
+            <thead className="bg-[#111]">
               <tr className="text-left text-zinc-500 text-xs border-b border-zinc-900">
                 <th className="px-4 py-2">Name</th>
                 <th className="px-4 py-2">Phone</th>
@@ -156,7 +171,7 @@ export default function LeadsPage() {
               </tr>
             </thead>
             <tbody>
-              {leads.map(l => (
+              {pageLeads.map(l => (
                 <tr key={l.id} className="border-b border-zinc-900 hover:bg-zinc-900/30">
                   <td className="px-4 py-2.5 font-medium text-white whitespace-nowrap">{l.name || <span className="text-zinc-600">—</span>}</td>
                   <td className="px-4 py-2.5 text-zinc-300 whitespace-nowrap">{l.phone || '—'}</td>
@@ -172,6 +187,29 @@ export default function LeadsPage() {
             </tbody>
           </table>
         </div>
+        {/* Pagination */}
+        {leads.length > PAGE_SIZE && (
+          <div className="flex items-center justify-between px-5 py-3 border-t border-zinc-800 text-sm">
+            <span className="text-zinc-500">
+              Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, leads.length)} of {leads.length.toLocaleString()}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage(p => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-300 disabled:opacity-40 hover:bg-zinc-800">
+                ← Prev
+              </button>
+              <span className="text-zinc-400">{page + 1} / {pageCount}</span>
+              <button
+                onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}
+                disabled={page >= pageCount - 1}
+                className="px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-300 disabled:opacity-40 hover:bg-zinc-800">
+                Next →
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

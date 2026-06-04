@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import type { Event } from '@/lib/supabase'
+import { useCachedFetch, mutateCache } from '@/lib/useCachedFetch'
 
 const EMPTY_FORM = {
   name: '',
@@ -17,24 +18,21 @@ function toDatetimeLocalValue(iso: string | null): string {
 }
 
 export default function EventsPage() {
+  const { data: eventsData, loading: fetching } = useCachedFetch<Event[]>('events', '/api/events')
   const [events, setEvents] = useState<Event[]>([])
-  const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
 
-  async function loadEvents() {
-    try {
-      const res = await fetch('/api/events', { cache: 'no-store' })
-      if (res.ok) setEvents(await res.json())
-    } catch {
-      // db not configured yet
-    } finally {
-      setLoading(false)
-    }
-  }
+  // Mirror cached/fetched data into local state for optimistic edits.
+  useEffect(() => { if (eventsData) setEvents(eventsData) }, [eventsData])
+  const loading = fetching && !eventsData
 
-  useEffect(() => { loadEvents() }, [])
+  // After any local mutation, keep the shared 'events' cache in sync.
+  function syncEvents(next: Event[]) {
+    setEvents(next)
+    mutateCache<Event[]>('events', () => next)
+  }
 
   function openCreate() {
     setEditingId(null)
@@ -75,7 +73,7 @@ export default function EventsPage() {
         body: JSON.stringify({ id: editingId, ...payload }),
       })
       const updated = await res.json()
-      setEvents(prev => prev.map(e => (e.id === editingId ? updated : e)))
+      syncEvents(events.map(e => (e.id === editingId ? updated : e)))
     } else {
       const res = await fetch('/api/events', {
         method: 'POST',
@@ -83,7 +81,7 @@ export default function EventsPage() {
         body: JSON.stringify({ ...payload, is_active: events.length === 0 }),
       })
       const newEv = await res.json()
-      setEvents(prev => [newEv, ...prev])
+      syncEvents([newEv, ...events])
     }
     closeForm()
   }
@@ -94,13 +92,13 @@ export default function EventsPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, is_active: true }),
     })
-    setEvents(prev => prev.map(e => ({ ...e, is_active: e.id === id })))
+    syncEvents(events.map(e => ({ ...e, is_active: e.id === id })))
   }
 
   async function deleteEvent(id: string) {
     if (!confirm('Delete this event and all its attendees/checklist?')) return
     await fetch(`/api/events?id=${id}`, { method: 'DELETE' })
-    setEvents(prev => prev.filter(e => e.id !== id))
+    syncEvents(events.filter(e => e.id !== id))
   }
 
   if (loading) return <div className="text-zinc-500 mt-20 text-center">Loading...</div>

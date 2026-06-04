@@ -1,46 +1,29 @@
 'use client'
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { Event, Attendee } from '@/lib/supabase'
 import { TICKET_LABELS } from '@/lib/supabase'
 import { pickActiveEvent } from '@/lib/event'
 import { rmShort, fmtDate } from '@/lib/format'
 import { useRevenueHidden } from '@/lib/useRevenueHidden'
+import { useCachedFetch } from '@/lib/useCachedFetch'
 
 export default function Dashboard() {
-  const [event, setEvent] = useState<Event | null>(null)
-  const [attendees, setAttendees] = useState<Attendee[]>([])
-  const [loading, setLoading] = useState(true)
-  const [isAdmin, setIsAdmin] = useState(false)
   const [revenueHidden, toggleRevenue] = useRevenueHidden()
 
-  useEffect(() => {
-    fetch('/api/me', { cache: 'no-store' })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) setIsAdmin(d.is_admin) })
-      .catch(() => {})
-  }, [])
+  const { data: me } = useCachedFetch<{ is_admin: boolean }>('me', '/api/me')
+  const isAdmin = !!me?.is_admin
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const evRes = await fetch('/api/events', { cache: 'no-store' })
-        if (!evRes.ok) throw new Error('API error')
-        const events: Event[] = await evRes.json()
-        const active = pickActiveEvent(events)
-        setEvent(active)
-        if (active) {
-          const attRes = await fetch(`/api/attendees?event_id=${active.id}`, { cache: 'no-store' })
-          if (attRes.ok) setAttendees(await attRes.json())
-        }
-      } catch {
-        // env vars not set yet or DB unreachable — show empty state
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
-  }, [])
+  const { data: events, loading: loadingEvents } = useCachedFetch<Event[]>('events', '/api/events')
+  const event = events ? pickActiveEvent(events) : null
+
+  const { data: attData } = useCachedFetch<Attendee[]>(
+    event ? `attendees:${event.id}` : null,
+    event ? `/api/attendees?event_id=${event.id}` : null,
+    !!event,
+  )
+  const attendees = attData ?? []
+  // Spinner only when we have NO cached events yet (first ever load)
+  const loading = loadingEvents && !events
 
   const paid = attendees.filter(a => a.payment_status === 'paid')
   const pending = attendees.filter(a => a.payment_status === 'pending')

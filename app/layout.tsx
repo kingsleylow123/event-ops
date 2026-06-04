@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { isAdminEmail } from '@/lib/auth/admin'
@@ -10,6 +10,12 @@ export const revalidate = 0
 export const metadata: Metadata = {
   title: 'EventOps',
   description: 'Event attendee & payment tracking',
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation'
 import SignOutButton from './SignOutButton'
 import { useRevenueHidden } from '@/lib/useRevenueHidden'
 import { resolveInitialEvent, storeEventId, getStoredEventId } from '@/lib/event'
+import { useCachedFetch } from '@/lib/useCachedFetch'
 import type { Event } from '@/lib/supabase'
 
 interface SidebarProps {
@@ -46,20 +47,16 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
   const [mobileOpen, setMobileOpen] = useState(false)
   const [hidden, toggleRevenue] = useRevenueHidden()
 
-  // Event switcher
-  const [events, setEvents] = useState<Event[]>([])
+  // Event switcher — cached so the sidebar paints instantly on every load
+  const { data: eventsData } = useCachedFetch<Event[]>('events', '/api/events')
+  const events = eventsData ?? []
   const [eventId, setEventId] = useState('')
   useEffect(() => {
-    fetch('/api/events')
-      .then(r => r.ok ? r.json() : [])
-      .then((data: Event[]) => {
-        setEvents(data)
-        const stored = getStoredEventId()
-        const pick = (stored && data.find(e => e.id === stored)) || resolveInitialEvent(data)
-        if (pick) setEventId(pick.id)
-      })
-      .catch(() => {})
-  }, [])
+    if (!events.length) return
+    const stored = getStoredEventId()
+    const pick = (stored && events.find(e => e.id === stored)) || resolveInitialEvent(events)
+    if (pick && !eventId) setEventId(pick.id)
+  }, [events, eventId])
 
   const dashboard: Item = { href: '/', label: 'Dashboard', icon: icons.dashboard }
   const groups: { id: string; title: string; items: Item[] }[] = [

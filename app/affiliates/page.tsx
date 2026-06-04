@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import type { Event } from '@/lib/supabase'
 import { resolveInitialEvent, storeEventId } from '@/lib/event'
+import { useCachedFetch, peekCache, mutateCache } from '@/lib/useCachedFetch'
 import { useRevenueHidden } from '@/lib/useRevenueHidden'
 
 interface Affiliate {
@@ -36,25 +37,27 @@ export default function AffiliatesPage() {
   const [revenueHidden] = useRevenueHidden()
   const display = (n: number) => revenueHidden ? 'RM ••••••' : rm(n)
 
+  const { data: eventsData } = useCachedFetch<Event[]>('events', '/api/events')
   useEffect(() => {
-    fetch('/api/events')
-      .then(r => r.json())
-      .then((data: Event[]) => {
-        setEvents(data)
-        const pick = resolveInitialEvent(data)
-        if (pick) setEventId(pick.id)
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [])
+    if (!eventsData) return
+    setEvents(eventsData)
+    if (!eventId) {
+      const pick = resolveInitialEvent(eventsData)
+      if (pick) setEventId(pick.id)
+    }
+    setLoading(false)
+  }, [eventsData, eventId])
 
   const loadReport = useCallback(() => {
     if (!eventId) return
-    setLoadingReport(true)
+    const cacheKey = `affreport:${eventId}`
+    const cached = peekCache<Report>(cacheKey)
+    if (cached) { setReport(cached); setLoadingReport(false) }
+    else setLoadingReport(true)
     fetch(`/api/affiliates?event_id=${eventId}`)
       .then(r => r.json())
-      .then((d: Report) => setReport(d))
-      .catch(() => setReport(null))
+      .then((d: Report) => { setReport(d); mutateCache<Report>(cacheKey, () => d) })
+      .catch(() => { if (!cached) setReport(null) })
       .finally(() => setLoadingReport(false))
   }, [eventId])
 

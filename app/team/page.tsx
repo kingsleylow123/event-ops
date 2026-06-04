@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Event, TeamMember, TeamRole } from '@/lib/supabase'
 import { toWhatsApp, TEAM_ROLE_LABELS, TEAM_ROLE_ICONS } from '@/lib/supabase'
+import { useCachedFetch, mutateCache } from '@/lib/useCachedFetch'
 
 const ROLE_ORDER: TeamRole[] = ['speaker', 'facilitator', 'content_creator', 'videographer']
 
@@ -21,25 +22,15 @@ function membersFor(team: TeamMember[] | null | undefined, role: TeamRole): Team
 type EditingKey = { eventId: string; role: TeamRole } | null
 
 export default function TeamPage() {
+  const { data: eventsData, loading: fetching } = useCachedFetch<Event[]>('events', '/api/events')
   const [events, setEvents] = useState<Event[]>([])
-  const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<EditingKey>(null)
   const [draft, setDraft] = useState<TeamMember[]>([])
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
 
-  async function loadEvents() {
-    try {
-      const res = await fetch('/api/events', { cache: 'no-store' })
-      if (res.ok) setEvents(await res.json())
-    } catch {
-      // db not configured yet
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => { loadEvents() }, [])
+  useEffect(() => { if (eventsData) setEvents(eventsData) }, [eventsData])
+  const loading = fetching && !eventsData
 
   function openEdit(ev: Event, role: TeamRole) {
     setEditing({ eventId: ev.id, role })
@@ -80,7 +71,9 @@ export default function TeamPage() {
       body: JSON.stringify({ id: editing.eventId, team: newTeam }),
     })
     const updated = await res.json()
-    setEvents(prev => prev.map(ev => (ev.id === editing.eventId ? updated : ev)))
+    const next = events.map(ev => (ev.id === editing.eventId ? updated : ev))
+    setEvents(next)
+    mutateCache<Event[]>('events', () => next)
     setEditing(null)
     setDraft([])
     setSaving(false)

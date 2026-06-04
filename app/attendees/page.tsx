@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import type { Event, Attendee, TicketType, PaymentMethod, PaymentStatus } from '@/lib/supabase'
 import { TICKET_LABELS, TICKET_PRICES, toWhatsApp } from '@/lib/supabase'
 import { resolveInitialEvent, storeEventId } from '@/lib/event'
+import { useCachedFetch, mutateCache, peekCache, invalidateCache } from '@/lib/useCachedFetch'
 import { identityKey } from '@/lib/format'
 import { useRevenueHidden } from '@/lib/useRevenueHidden'
 
@@ -23,6 +24,8 @@ function eventLabel(ev: Event): string {
 }
 
 export default function AttendeesPage() {
+  const { data: eventsData } = useCachedFetch<Event[]>('events', '/api/events')
+  const { data: meData } = useCachedFetch<{ is_admin: boolean }>('me', '/api/me')
   const [events, setEvents] = useState<Event[]>([])
   const [selectedEventId, setSelectedEventId] = useState<string>('')
   const [attendees, setAttendees] = useState<Attendee[]>([])
@@ -48,44 +51,50 @@ export default function AttendeesPage() {
     notes: '',
   })
 
-  async function loadEvents() {
-    try {
-      const evRes = await fetch('/api/events', { cache: 'no-store' })
-      if (!evRes.ok) throw new Error()
-      const list: Event[] = await evRes.json()
-      setEvents(list)
-      if (!selectedEventId) {
-        const active = resolveInitialEvent(list)
-        if (active) setSelectedEventId(active.id)
-      }
-    } catch {
-      // db not configured yet
-    } finally {
-      setLoading(false)
-    }
-  }
-
+  // Attendees: serve from cache instantly, refresh in background. Mutations
+  // re-call loadAttendees() to stay authoritative.
   async function loadAttendees(eventId: string) {
     try {
       const res = await fetch(`/api/attendees?event_id=${eventId}`, { cache: 'no-store' })
-      if (res.ok) setAttendees(await res.json())
+      if (res.ok) {
+        const data = await res.json()
+        setAttendees(data)
+        mutateCache<Attendee[]>(`attendees:${eventId}`, () => data)
+      }
     } catch {
       // ignore
     }
   }
 
-  useEffect(() => { loadEvents() }, [])
-
+  // Events come from the shared cache; pick the active/stored event once.
   useEffect(() => {
-    if (selectedEventId) loadAttendees(selectedEventId)
+    if (!eventsData) return
+    setEvents(eventsData)
+    if (!selectedEventId) {
+      const active = resolveInitialEvent(eventsData)
+      if (active) setSelectedEventId(active.id)
+    }
+    setLoading(false)
+  }, [eventsData, selectedEventId])
+
+  useEffect(() => { if (meData) setIsAdmin(!!meData.is_admin) }, [meData])
+
+  // Keep the attendees cache in sync after any local mutation so a returning
+  // tab shows the latest (paid toggles, deletes, adds) instantly.
+  useEffect(() => {
+    if (selectedEventId && attendees.length >= 0) {
+      mutateCache<Attendee[]>(`attendees:${selectedEventId}`, () => attendees)
+    }
+  }, [attendees, selectedEventId])
+
+  // On event change: show cached attendees instantly, then refresh.
+  useEffect(() => {
+    if (!selectedEventId) return
+    const cached = peekCache<Attendee[]>(`attendees:${selectedEventId}`)
+    if (cached) setAttendees(cached)
+    loadAttendees(selectedEventId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEventId])
-
-  useEffect(() => {
-    fetch('/api/me', { cache: 'no-store' })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data) setIsAdmin(data.is_admin) })
-      .catch(() => {})
-  }, [])
 
   async function syncStripe() {
     setSyncing(true)
@@ -102,7 +111,7 @@ export default function AttendeesPage() {
       const parts = [`${data.added} added`, `${data.skipped} skipped`]
       if (data.unmatched) parts.push(`${data.unmatched} unmatched`)
       setSyncMsg(`Synced: ${parts.join(', ')}`)
-      await loadEvents()
+      invalidateCache('events')
       if (selectedEventId) await loadAttendees(selectedEventId)
     }
     setSyncing(false)
