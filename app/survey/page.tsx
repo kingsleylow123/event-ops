@@ -25,11 +25,24 @@ const INDUSTRIES = [
 
 const COMPANY_SIZES = [
   'Solo / Freelance',
-  '2–10 people',
+  '2–5 people',
+  '6–10 people',
   '11–50 people',
   '51–200 people',
   '200+ people',
 ]
+
+// Phone: strip +, spaces, dashes, parens → require 8–15 digits.
+// Accepts MY (0123456789), SG (+6591162866), UK (+44 7868872241); rejects '123', 'abc'.
+function isValidPhone(s: string): boolean {
+  const digits = s.replace(/[\s+()-]/g, '')
+  return /^\d{8,15}$/.test(digits)
+}
+
+// URL/domain only (not bare @handle). Accepts instagram.com/you, https://yourco.com.
+function isValidUrl(s: string): boolean {
+  return /^(https?:\/\/)?(www\.)?[a-z0-9-]+(\.[a-z0-9-]+)+(\/\S*)?$/i.test(s.trim())
+}
 
 function SurveyForm() {
   const searchParams = useSearchParams()
@@ -111,12 +124,12 @@ function SurveyForm() {
   const progress = Math.round((step / TOTAL_STEPS) * 100)
   const canNext: Record<number, boolean> = {
     1: form.name.trim().length > 0,
-    2: form.phone.trim().length > 0,
+    2: isValidPhone(form.phone),
     3: form.industry.length > 0,
     4: form.company_size.length > 0,
     5: form.biggest_challenge.trim().length > 0,
     6: form.workshop_goal.trim().length > 0,
-    7: form.social_link.trim().length > 0,
+    7: isValidUrl(form.social_link),
   }
 
   return (
@@ -157,11 +170,14 @@ function SurveyForm() {
               <input
                 value={form.phone}
                 onChange={e => set('phone', e.target.value)}
-                placeholder="e.g. 0123456789"
+                placeholder="e.g. 0123456789 or +65 9116 2866"
                 type="tel"
                 className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-amber-500"
                 autoFocus
               />
+              {form.phone.trim().length > 0 && !isValidPhone(form.phone) && (
+                <p className="text-xs text-red-400 mt-2">Please enter a valid phone number (digits only, with country code if outside Malaysia).</p>
+              )}
               <Nav canNext={canNext[2]} onNext={next} showBack onBack={back} />
             </Q>
           )}
@@ -234,7 +250,7 @@ function SurveyForm() {
 
           {/* Q7: Social / Website */}
           {step === 7 && (
-            <Q title="Your social media or company website" subtitle="Share your Instagram, LinkedIn, or website so we can stay connected.">
+            <Q title="Your social media or company website" subtitle="Share your Instagram, LinkedIn, or website link so we can stay connected.">
               <input
                 type="text"
                 value={form.social_link}
@@ -244,6 +260,9 @@ function SurveyForm() {
                 className="w-full px-4 py-3 rounded-xl text-sm border outline-none"
                 style={{ background: '#111', color: '#fff', borderColor: form.social_link ? '#f59e0b' : '#3f3f46' }}
               />
+              {form.social_link.trim().length > 0 && !isValidUrl(form.social_link) && (
+                <p className="text-xs text-red-400 mt-2">Please enter a valid link (e.g. instagram.com/you or yourcompany.com).</p>
+              )}
               <div className="mt-6 flex justify-between items-center">
                 <button onClick={back}
                   className="text-sm px-4 py-2 rounded-lg text-zinc-400 bg-zinc-900 border border-zinc-700">
