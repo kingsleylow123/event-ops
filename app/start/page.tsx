@@ -198,7 +198,18 @@ function StartContent() {
             {os === 'mac' && <Video id="X57PTQR45Ps" label="🍎 Install Homebrew on Mac" full />}
             {os === 'windows' && <Video id="XvBxfupKpgg" label="🪟 Install Git (& Claude) on Windows" full />}
             {!os && <div className="text-[12px] text-zinc-600 text-center py-3">👆 Pick your OS to see the right guide</div>}
-            <a href="https://docs.google.com/document/d/1-cKqYXB2loZFGbhEFpUDKdrMwTVt5VATFXFbFiSTqeU/edit" target="_blank" rel="noopener noreferrer" className="cta-ghost mt-3">📄 Full Installation Guideline</a>
+
+            {/* Prominent docs CTA */}
+            <a href="https://docs.google.com/document/d/1-cKqYXB2loZFGbhEFpUDKdrMwTVt5VATFXFbFiSTqeU/edit" target="_blank" rel="noopener noreferrer"
+              className="mt-3 flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all active:scale-[0.98]"
+              style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.18), rgba(99,102,241,0.12))', border: '1px solid rgba(99,102,241,0.35)' }}>
+              <span className="w-10 h-10 shrink-0 rounded-xl flex items-center justify-center text-lg" style={{ background: 'rgba(99,102,241,0.25)' }}>📄</span>
+              <span className="flex-1 min-w-0">
+                <span className="block text-sm font-bold text-white">Step-by-Step Installation Guide</span>
+                <span className="block text-[12px] text-indigo-200/80">Follow along — screenshots for every step</span>
+              </span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-indigo-300"><path d="M9 18l6-6-6-6" /></svg>
+            </a>
           </StepCard>
 
           {/* Step 4 */}
@@ -218,13 +229,17 @@ function StartContent() {
         {/* ── What you'll leave with ── */}
         <div className="mt-9">
           <SectionLabel>You&apos;ll walk out with</SectionLabel>
+
+          {/* Auto-rotating dashboard showcase */}
+          <div className="mt-3"><DashboardShowcase /></div>
+
           <div className="space-y-3 mt-3">
             <Glass className="p-4 flex items-start gap-3.5">
               <div className="w-11 h-11 shrink-0 rounded-2xl flex items-center justify-center text-xl"
                 style={{ background: 'linear-gradient(135deg, rgba(212,104,74,0.25), rgba(245,158,11,0.15))', border: '1px solid rgba(245,158,11,0.2)' }}>📊</div>
               <div>
                 <div className="font-bold text-[15px]">Your own personalised dashboard</div>
-                <div className="text-[13px] text-zinc-400 leading-relaxed">Built live, running on your real business data — yours to keep.</div>
+                <div className="text-[13px] text-zinc-400 leading-relaxed">Built live, running on your real business data — yours to keep. Marketing, Sales, Finance, HR, Inventory — whatever you run.</div>
               </div>
             </Glass>
             <Glass className="p-4 flex items-start gap-3.5 relative overflow-hidden">
@@ -298,6 +313,7 @@ function StartContent() {
         .cta:active { transform:scale(0.98); }
         .cta-ghost { display:flex; align-items:center; justify-content:center; gap:8px; width:100%; font-weight:600; font-size:13px; padding:11px 16px; border-radius:14px; color:#e4e4e7; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.1); }
         @keyframes slideup { from { transform: translateY(100%); opacity:0.5; } to { transform: translateY(0); opacity:1; } }
+        @keyframes fadein { from { opacity:0; transform: translateY(6px); } to { opacity:1; transform: translateY(0); } }
       `}</style>
     </div>
   )
@@ -468,6 +484,123 @@ function JarvisDemo() {
 
 function Dot({ d = 0 }: { d?: number }) {
   return <span className="w-2 h-2 rounded-full bg-zinc-500 animate-bounce" style={{ animationDelay: `${d}s` }} />
+}
+
+// ── Auto-rotating mock dashboard showcase ──────────────────────────────────────
+interface Dash {
+  key: string; title: string; emoji: string; accent: string
+  kpis: { label: string; value: string; delta: string; up: boolean }[]
+  bars: number[]; barLabel: string
+}
+const DASHBOARDS: Dash[] = [
+  {
+    key: 'marketing', title: 'Marketing', emoji: '📣', accent: '#ec4899',
+    kpis: [
+      { label: 'Reach', value: '128K', delta: '+24%', up: true },
+      { label: 'Leads', value: '342', delta: '+12%', up: true },
+      { label: 'CPL', value: 'RM 8.40', delta: '-9%', up: true },
+    ],
+    bars: [40, 55, 48, 70, 62, 85, 78], barLabel: 'Leads / week',
+  },
+  {
+    key: 'sales', title: 'Sales', emoji: '💰', accent: '#f59e0b',
+    kpis: [
+      { label: 'Revenue', value: 'RM 284K', delta: '+18%', up: true },
+      { label: 'Deals', value: '47', delta: '+6', up: true },
+      { label: 'Win rate', value: '32%', delta: '+4%', up: true },
+    ],
+    bars: [50, 62, 58, 75, 80, 72, 92], barLabel: 'Revenue / month',
+  },
+  {
+    key: 'finance', title: 'Finance', emoji: '📊', accent: '#22c55e',
+    kpis: [
+      { label: 'Cash', value: 'RM 1.2M', delta: '+8%', up: true },
+      { label: 'Burn', value: 'RM 96K', delta: '-5%', up: true },
+      { label: 'Runway', value: '13 mo', delta: '+2', up: true },
+    ],
+    bars: [70, 66, 72, 68, 74, 80, 86], barLabel: 'Net cash flow',
+  },
+  {
+    key: 'hr', title: 'HR / People', emoji: '👥', accent: '#3b82f6',
+    kpis: [
+      { label: 'Headcount', value: '64', delta: '+5', up: true },
+      { label: 'Attrition', value: '4.2%', delta: '-1.1%', up: true },
+      { label: 'eNPS', value: '+48', delta: '+7', up: true },
+    ],
+    bars: [42, 48, 45, 52, 58, 55, 64], barLabel: 'Team growth',
+  },
+  {
+    key: 'inventory', title: 'Inventory', emoji: '📦', accent: '#a855f7',
+    kpis: [
+      { label: 'SKUs', value: '1,284', delta: '+32', up: true },
+      { label: 'Stockouts', value: '7', delta: '-12', up: true },
+      { label: 'Turnover', value: '6.4×', delta: '+0.8', up: true },
+    ],
+    bars: [60, 52, 68, 64, 72, 70, 78], barLabel: 'Units moved',
+  },
+]
+
+function DashboardShowcase() {
+  const [idx, setIdx] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => setIdx(v => (v + 1) % DASHBOARDS.length), 3200)
+    return () => clearInterval(t)
+  }, [])
+  const d = DASHBOARDS[idx]
+  const maxBar = Math.max(...d.bars)
+
+  return (
+    <div className="rounded-[26px] overflow-hidden border border-white/[0.08] relative"
+      style={{ background: 'rgba(13,13,15,0.7)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', boxShadow: '0 24px 70px -28px rgba(0,0,0,0.8)' }}>
+      {/* accent glow */}
+      <div className="absolute -top-16 right-0 w-48 h-48 rounded-full blur-[70px] opacity-30 transition-all duration-700"
+        style={{ background: d.accent }} />
+
+      {/* window chrome */}
+      <div className="relative flex items-center gap-2 px-4 py-3 border-b border-white/[0.06]">
+        <span className="w-2.5 h-2.5 rounded-full bg-red-400/70" />
+        <span className="w-2.5 h-2.5 rounded-full bg-amber-400/70" />
+        <span className="w-2.5 h-2.5 rounded-full bg-green-400/70" />
+        <div key={d.key} className="ml-2 flex items-center gap-1.5 text-sm font-semibold animate-[fadein_0.5s_ease]">
+          <span>{d.emoji}</span><span>{d.title} Dashboard</span>
+        </div>
+        <span className="ml-auto text-[10px] text-zinc-600">Live</span>
+      </div>
+
+      {/* body — re-keyed to retrigger fade on each rotation */}
+      <div key={d.key} className="relative p-4 animate-[fadein_0.5s_ease]">
+        {/* KPI cards */}
+        <div className="grid grid-cols-3 gap-2 mb-4">
+          {d.kpis.map(k => (
+            <div key={k.label} className="rounded-xl p-2.5 bg-white/[0.03] border border-white/[0.06]">
+              <div className="text-[10px] text-zinc-500 truncate">{k.label}</div>
+              <div className="text-[15px] font-bold leading-tight mt-0.5">{k.value}</div>
+              <div className="text-[10px] font-semibold mt-0.5" style={{ color: d.accent }}>▲ {k.delta}</div>
+            </div>
+          ))}
+        </div>
+        {/* mini bar chart */}
+        <div className="rounded-xl p-3 bg-white/[0.02] border border-white/[0.05]">
+          <div className="text-[10px] text-zinc-500 mb-2">{d.barLabel}</div>
+          <div className="flex items-end gap-1.5 h-16">
+            {d.bars.map((b, i) => (
+              <div key={i} className="flex-1 rounded-t-md transition-all duration-500"
+                style={{ height: `${(b / maxBar) * 100}%`, background: `linear-gradient(to top, ${d.accent}, ${d.accent}66)`, opacity: 0.85 }} />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* dots */}
+      <div className="flex justify-center gap-1.5 pb-3.5">
+        {DASHBOARDS.map((dd, i) => (
+          <button key={dd.key} onClick={() => setIdx(i)} aria-label={dd.title}
+            className="h-1.5 rounded-full transition-all"
+            style={{ width: i === idx ? 18 : 6, background: i === idx ? d.accent : '#3f3f46' }} />
+        ))}
+      </div>
+    </div>
+  )
 }
 
 export default function StartPage() {
