@@ -98,12 +98,13 @@ function StartContent() {
   }
 
   return (
-    <div className="relative min-h-screen text-white overflow-x-hidden" style={{ background: '#060606' }}>
+    <div className="relative min-h-screen text-white" style={{ background: '#060606' }}>
       {/* ── Sticky countdown ── */}
       <CountdownBar target={eventDate} done={allDone} doneCount={doneCount} />
 
-      {/* Ambient liquid background */}
-      <div className="pointer-events-none fixed inset-0 -z-10">
+      {/* Ambient liquid background — clipped here (not on the root) so it can't
+          force horizontal scroll while leaving the root free for sticky. */}
+      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
         <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[680px] h-[680px] rounded-full blur-[120px] opacity-[0.22]"
           style={{ background: 'radial-gradient(circle, #D4684A 0%, transparent 65%)' }} />
         <div className="absolute top-[40%] -left-32 w-[420px] h-[420px] rounded-full blur-[120px] opacity-[0.12]"
