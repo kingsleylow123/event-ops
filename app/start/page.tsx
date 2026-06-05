@@ -259,13 +259,13 @@ function StartContent() {
         <div className="mt-9">
           <SectionLabel>Powered by AI</SectionLabel>
           <Glass className="mt-3 p-5 text-center">
-            <div className="text-2xl mb-2">🤖</div>
-            <h2 className="text-xl font-bold mb-1.5">This whole event runs on Jarvis</h2>
+            <div className="text-3xl mb-2">🐈</div>
+            <h2 className="text-xl font-bold mb-1.5">This whole event runs on <span className="text-amber-300">Jarvis Oyen</span> 🍊</h2>
             <p className="text-[13px] text-zinc-400 leading-relaxed mb-1">
-              Your registration, seating, check-in, surveys, even invoices — all managed by <b className="text-amber-300">Jarvis</b>, our AI events manager. Text it, it answers.
+              Your registration, seating, check-in, surveys, even invoices — all managed by <b className="text-amber-300">Jarvis Oyen</b>, our AI events manager. Text the cat, it answers. 🐾
             </p>
             <p className="text-[12px] text-zinc-600 leading-relaxed">
-              We&apos;re <i>not</i> building Jarvis in this half-day class — that&apos;s the next level. Today plants the seed: your first dashboard. 🌱
+              We&apos;re <i>not</i> building Jarvis Oyen in this half-day class — that&apos;s the next level. Today plants the seed: your first dashboard. 🌱
             </p>
           </Glass>
           <div className="mt-3"><JarvisDemo /></div>
@@ -451,9 +451,9 @@ function JarvisDemo() {
     <div className="rounded-[28px] overflow-hidden border border-white/[0.08]"
       style={{ background: 'rgba(13,13,15,0.7)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', boxShadow: '0 24px 70px -24px rgba(212,104,74,0.4)' }}>
       <div className="flex items-center gap-2.5 px-4 py-3 border-b border-white/[0.06]" style={{ background: 'rgba(255,255,255,0.02)' }}>
-        <div className="w-9 h-9 rounded-full flex items-center justify-center text-base" style={{ background: 'linear-gradient(135deg, #f59e0b, #D4684A)' }}>🤖</div>
+        <div className="w-9 h-9 rounded-full flex items-center justify-center text-base" style={{ background: 'linear-gradient(135deg, #f59e0b, #D4684A)' }}>🐈</div>
         <div>
-          <div className="text-sm font-semibold leading-none">Jarvis</div>
+          <div className="text-sm font-semibold leading-none">Jarvis Oyen 🍊</div>
           <div className="text-[10px] text-emerald-400 mt-1">● AI events manager · online</div>
         </div>
       </div>
@@ -488,72 +488,153 @@ function Dot({ d = 0 }: { d?: number }) {
 
 // ── Auto-rotating mock dashboard showcase ──────────────────────────────────────
 interface Dash {
-  key: string; title: string; emoji: string; accent: string
+  key: string; title: string; emoji: string; accent: string; accent2: string
   kpis: { label: string; value: string; delta: string; up: boolean }[]
-  bars: number[]; barLabel: string
+  area: number[]; areaLabel: string; areaTotal: string
+  donut: { label: string; pct: number }[]; donutCenter: string; donutCaption: string
+  rows: { label: string; value: string; pct: number }[]; rowsLabel: string
 }
 const DASHBOARDS: Dash[] = [
   {
-    key: 'marketing', title: 'Marketing', emoji: '📣', accent: '#ec4899',
+    key: 'marketing', title: 'Marketing', emoji: '📣', accent: '#ec4899', accent2: '#f472b6',
     kpis: [
       { label: 'Reach', value: '128K', delta: '+24%', up: true },
       { label: 'Leads', value: '342', delta: '+12%', up: true },
+      { label: 'Conv. rate', value: '4.8%', delta: '+0.7', up: true },
       { label: 'CPL', value: 'RM 8.40', delta: '-9%', up: true },
     ],
-    bars: [40, 55, 48, 70, 62, 85, 78], barLabel: 'Leads / week',
+    area: [40, 55, 48, 70, 62, 85, 78, 96], areaLabel: 'Leads / week', areaTotal: '342 leads',
+    donut: [{ label: 'Instagram', pct: 46 }, { label: 'TikTok', pct: 31 }, { label: 'Google', pct: 23 }],
+    donutCenter: '46%', donutCaption: 'Top channel: IG',
+    rows: [{ label: 'IG Reels', value: '184', pct: 100 }, { label: 'Stories', value: '92', pct: 50 }, { label: 'Ads', value: '66', pct: 36 }],
+    rowsLabel: 'Leads by source',
   },
   {
-    key: 'sales', title: 'Sales', emoji: '💰', accent: '#f59e0b',
+    key: 'sales', title: 'Sales', emoji: '💰', accent: '#f59e0b', accent2: '#fbbf24',
     kpis: [
       { label: 'Revenue', value: 'RM 284K', delta: '+18%', up: true },
-      { label: 'Deals', value: '47', delta: '+6', up: true },
+      { label: 'Deals won', value: '47', delta: '+6', up: true },
       { label: 'Win rate', value: '32%', delta: '+4%', up: true },
+      { label: 'Avg deal', value: 'RM 6.0K', delta: '+11%', up: true },
     ],
-    bars: [50, 62, 58, 75, 80, 72, 92], barLabel: 'Revenue / month',
+    area: [50, 62, 58, 75, 80, 72, 92, 100], areaLabel: 'Revenue / month', areaTotal: 'RM 284K',
+    donut: [{ label: 'Closed', pct: 58 }, { label: 'Negotiation', pct: 27 }, { label: 'New', pct: 15 }],
+    donutCenter: '58%', donutCaption: 'Pipeline closed',
+    rows: [{ label: 'Aiman', value: 'RM 92K', pct: 100 }, { label: 'Sarah', value: 'RM 71K', pct: 77 }, { label: 'Wei', value: 'RM 54K', pct: 59 }],
+    rowsLabel: 'Top reps',
   },
   {
-    key: 'finance', title: 'Finance', emoji: '📊', accent: '#22c55e',
+    key: 'finance', title: 'Finance', emoji: '📊', accent: '#22c55e', accent2: '#4ade80',
     kpis: [
       { label: 'Cash', value: 'RM 1.2M', delta: '+8%', up: true },
+      { label: 'MRR', value: 'RM 88K', delta: '+14%', up: true },
       { label: 'Burn', value: 'RM 96K', delta: '-5%', up: true },
       { label: 'Runway', value: '13 mo', delta: '+2', up: true },
     ],
-    bars: [70, 66, 72, 68, 74, 80, 86], barLabel: 'Net cash flow',
+    area: [70, 66, 72, 68, 74, 80, 86, 94], areaLabel: 'Net cash flow', areaTotal: '+RM 188K',
+    donut: [{ label: 'Payroll', pct: 52 }, { label: 'Ops', pct: 30 }, { label: 'Marketing', pct: 18 }],
+    donutCenter: '52%', donutCaption: 'Largest cost',
+    rows: [{ label: 'Gross margin', value: '68%', pct: 68 }, { label: 'Net margin', value: '24%', pct: 24 }, { label: 'AR overdue', value: '6%', pct: 6 }],
+    rowsLabel: 'Health ratios',
   },
   {
-    key: 'hr', title: 'HR / People', emoji: '👥', accent: '#3b82f6',
+    key: 'hr', title: 'HR / People', emoji: '👥', accent: '#3b82f6', accent2: '#60a5fa',
     kpis: [
       { label: 'Headcount', value: '64', delta: '+5', up: true },
       { label: 'Attrition', value: '4.2%', delta: '-1.1%', up: true },
       { label: 'eNPS', value: '+48', delta: '+7', up: true },
+      { label: 'Time-to-hire', value: '18d', delta: '-4', up: true },
     ],
-    bars: [42, 48, 45, 52, 58, 55, 64], barLabel: 'Team growth',
+    area: [42, 48, 45, 52, 58, 55, 64, 68], areaLabel: 'Team growth', areaTotal: '64 people',
+    donut: [{ label: 'Engineering', pct: 44 }, { label: 'GTM', pct: 34 }, { label: 'Ops', pct: 22 }],
+    donutCenter: '44%', donutCaption: 'Biggest team',
+    rows: [{ label: 'Engaged', value: '82%', pct: 82 }, { label: 'At risk', value: '11%', pct: 11 }, { label: 'New (90d)', value: '14', pct: 22 }],
+    rowsLabel: 'Engagement',
   },
   {
-    key: 'inventory', title: 'Inventory', emoji: '📦', accent: '#a855f7',
+    key: 'inventory', title: 'Inventory', emoji: '📦', accent: '#a855f7', accent2: '#c084fc',
     kpis: [
       { label: 'SKUs', value: '1,284', delta: '+32', up: true },
+      { label: 'In stock', value: '96%', delta: '+3%', up: true },
       { label: 'Stockouts', value: '7', delta: '-12', up: true },
       { label: 'Turnover', value: '6.4×', delta: '+0.8', up: true },
     ],
-    bars: [60, 52, 68, 64, 72, 70, 78], barLabel: 'Units moved',
+    area: [60, 52, 68, 64, 72, 70, 78, 88], areaLabel: 'Units moved', areaTotal: '24.6K units',
+    donut: [{ label: 'Healthy', pct: 78 }, { label: 'Low', pct: 16 }, { label: 'Out', pct: 6 }],
+    donutCenter: '78%', donutCaption: 'Stock healthy',
+    rows: [{ label: 'Best seller A', value: '4.2K', pct: 100 }, { label: 'Product B', value: '2.8K', pct: 67 }, { label: 'Product C', value: '1.9K', pct: 45 }],
+    rowsLabel: 'Top movers',
   },
 ]
+
+// SVG smooth-area path from a 0..100 series
+function areaPath(vals: number[], w: number, h: number): { line: string; fill: string } {
+  const n = vals.length
+  const max = Math.max(...vals), min = Math.min(...vals)
+  const span = max - min || 1
+  const pts = vals.map((v, i) => [(i / (n - 1)) * w, h - ((v - min) / span) * (h - 6) - 3] as const)
+  let line = `M ${pts[0][0]},${pts[0][1]}`
+  for (let i = 1; i < n; i++) {
+    const [x0, y0] = pts[i - 1], [x1, y1] = pts[i]
+    const cx = (x0 + x1) / 2
+    line += ` C ${cx},${y0} ${cx},${y1} ${x1},${y1}`
+  }
+  const fill = `${line} L ${w},${h} L 0,${h} Z`
+  return { line, fill }
+}
+
+function Donut({ segs, accent, accent2, center, caption }: { segs: { label: string; pct: number }[]; accent: string; accent2: string; center: string; caption: string }) {
+  const r = 26, c = 2 * Math.PI * r
+  const cols = [accent, accent2, '#52525b']
+  // Pre-compute cumulative offsets (no mutation during render).
+  const offsets = segs.reduce<number[]>((acc, s, i) => {
+    acc.push(i === 0 ? 0 : acc[i - 1] + (segs[i - 1].pct / 100) * c)
+    return acc
+  }, [])
+  return (
+    <div className="flex items-center gap-3">
+      <div className="relative w-[68px] h-[68px] shrink-0">
+        <svg width="68" height="68" className="-rotate-90">
+          {segs.map((s, i) => {
+            const len = (s.pct / 100) * c
+            return (
+              <circle key={i} cx="34" cy="34" r={r} fill="none" stroke={cols[i % 3]} strokeWidth="8"
+                strokeDasharray={`${len} ${c - len}`} strokeDashoffset={-offsets[i]} />
+            )
+          })}
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-[13px] font-bold leading-none">{center}</span>
+        </div>
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-[10px] text-zinc-500 mb-1">{caption}</div>
+        {segs.map((s, i) => (
+          <div key={i} className="flex items-center gap-1.5 text-[10px] text-zinc-400 leading-tight">
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: cols[i % 3] }} />
+            <span className="truncate flex-1">{s.label}</span>
+            <span className="text-zinc-500">{s.pct}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 function DashboardShowcase() {
   const [idx, setIdx] = useState(0)
   useEffect(() => {
-    const t = setInterval(() => setIdx(v => (v + 1) % DASHBOARDS.length), 3200)
+    const t = setInterval(() => setIdx(v => (v + 1) % DASHBOARDS.length), 4000)
     return () => clearInterval(t)
   }, [])
   const d = DASHBOARDS[idx]
-  const maxBar = Math.max(...d.bars)
+  const { line, fill } = areaPath(d.area, 260, 56)
 
   return (
     <div className="rounded-[26px] overflow-hidden border border-white/[0.08] relative"
-      style={{ background: 'rgba(13,13,15,0.7)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', boxShadow: '0 24px 70px -28px rgba(0,0,0,0.8)' }}>
+      style={{ background: 'rgba(13,13,15,0.72)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)', boxShadow: '0 28px 80px -30px rgba(0,0,0,0.85)' }}>
       {/* accent glow */}
-      <div className="absolute -top-16 right-0 w-48 h-48 rounded-full blur-[70px] opacity-30 transition-all duration-700"
+      <div className="absolute -top-20 right-0 w-56 h-56 rounded-full blur-[80px] opacity-[0.28] transition-all duration-700"
         style={{ background: d.accent }} />
 
       {/* window chrome */}
@@ -564,29 +645,64 @@ function DashboardShowcase() {
         <div key={d.key} className="ml-2 flex items-center gap-1.5 text-sm font-semibold animate-[fadein_0.5s_ease]">
           <span>{d.emoji}</span><span>{d.title} Dashboard</span>
         </div>
-        <span className="ml-auto text-[10px] text-zinc-600">Live</span>
+        <span className="ml-auto flex items-center gap-1 text-[10px] text-emerald-400">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />Live
+        </span>
       </div>
 
-      {/* body — re-keyed to retrigger fade on each rotation */}
-      <div key={d.key} className="relative p-4 animate-[fadein_0.5s_ease]">
-        {/* KPI cards */}
-        <div className="grid grid-cols-3 gap-2 mb-4">
+      {/* body — re-keyed to retrigger fade */}
+      <div key={d.key} className="relative p-3.5 animate-[fadein_0.5s_ease] space-y-3">
+        {/* 4 KPI cards */}
+        <div className="grid grid-cols-2 gap-2">
           {d.kpis.map(k => (
-            <div key={k.label} className="rounded-xl p-2.5 bg-white/[0.03] border border-white/[0.06]">
-              <div className="text-[10px] text-zinc-500 truncate">{k.label}</div>
-              <div className="text-[15px] font-bold leading-tight mt-0.5">{k.value}</div>
-              <div className="text-[10px] font-semibold mt-0.5" style={{ color: d.accent }}>▲ {k.delta}</div>
+            <div key={k.label} className="rounded-xl p-2.5 bg-white/[0.03] border border-white/[0.06] flex items-center justify-between">
+              <div className="min-w-0">
+                <div className="text-[10px] text-zinc-500 truncate">{k.label}</div>
+                <div className="text-[15px] font-bold leading-tight mt-0.5">{k.value}</div>
+              </div>
+              <div className="text-[10px] font-semibold shrink-0 pl-1" style={{ color: d.accent2 }}>▲{k.delta}</div>
             </div>
           ))}
         </div>
-        {/* mini bar chart */}
+
+        {/* Area trend */}
         <div className="rounded-xl p-3 bg-white/[0.02] border border-white/[0.05]">
-          <div className="text-[10px] text-zinc-500 mb-2">{d.barLabel}</div>
-          <div className="flex items-end gap-1.5 h-16">
-            {d.bars.map((b, i) => (
-              <div key={i} className="flex-1 rounded-t-md transition-all duration-500"
-                style={{ height: `${(b / maxBar) * 100}%`, background: `linear-gradient(to top, ${d.accent}, ${d.accent}66)`, opacity: 0.85 }} />
-            ))}
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[10px] text-zinc-500">{d.areaLabel}</span>
+            <span className="text-[11px] font-semibold" style={{ color: d.accent2 }}>{d.areaTotal}</span>
+          </div>
+          <svg viewBox="0 0 260 56" className="w-full h-14" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id={`ag-${d.key}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stopColor={d.accent} stopOpacity="0.35" />
+                <stop offset="1" stopColor={d.accent} stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path d={fill} fill={`url(#ag-${d.key})`} />
+            <path d={line} fill="none" stroke={d.accent} strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        </div>
+
+        {/* Donut + breakdown rows */}
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-xl p-3 bg-white/[0.02] border border-white/[0.05]">
+            <Donut segs={d.donut} accent={d.accent} accent2={d.accent2} center={d.donutCenter} caption={d.donutCaption} />
+          </div>
+          <div className="rounded-xl p-3 bg-white/[0.02] border border-white/[0.05]">
+            <div className="text-[10px] text-zinc-500 mb-2">{d.rowsLabel}</div>
+            <div className="space-y-2">
+              {d.rows.map(r => (
+                <div key={r.label}>
+                  <div className="flex justify-between text-[10px] mb-0.5">
+                    <span className="text-zinc-400 truncate">{r.label}</span>
+                    <span className="text-zinc-300 font-semibold">{r.value}</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-white/[0.05] overflow-hidden">
+                    <div className="h-full rounded-full transition-all duration-700" style={{ width: `${r.pct}%`, background: `linear-gradient(to right, ${d.accent}, ${d.accent2})` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
