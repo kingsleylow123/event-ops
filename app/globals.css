@@ -1,8 +1,32 @@
 @import "tailwindcss";
 
-:root {
+/* ── Theme tokens ─────────────────────────────────────────────────────────
+   Default = dark. `html[data-theme="light"]` flips them. Components that opt
+   into theming use these via the `theme-*` utility classes below or var().   */
+:root, html[data-theme="dark"] {
   --background: #0a0a0a;
   --foreground: #f5f5f5;
+  --surface: #111111;          /* cards / sidebar */
+  --surface-2: #1c1c1c;        /* nested surfaces */
+  --border: rgba(255,255,255,0.06);
+  --muted: #a1a1aa;            /* zinc-400 */
+  --faint: #71717a;            /* zinc-500 */
+  --hover: rgba(255,255,255,0.05);
+  --active: rgba(255,255,255,0.08);
+  --sidebar-bg: rgba(17,17,17,0.80);
+}
+
+html[data-theme="light"] {
+  --background: #f6f6f7;
+  --foreground: #18181b;
+  --surface: #ffffff;
+  --surface-2: #f4f4f5;
+  --border: rgba(0,0,0,0.08);
+  --muted: #52525b;            /* zinc-600 */
+  --faint: #71717a;
+  --hover: rgba(0,0,0,0.04);
+  --active: rgba(0,0,0,0.06);
+  --sidebar-bg: rgba(255,255,255,0.80);
 }
 
 body {
@@ -10,6 +34,16 @@ body {
   color: var(--foreground);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
+
+/* Themeable utility classes — use these on components that should follow the
+   light/dark toggle (sidebar + dashboard for now). amber accents stay constant. */
+.theme-bg { background: var(--background); }
+.theme-surface { background: var(--surface); }
+.theme-surface-2 { background: var(--surface-2); }
+.theme-text { color: var(--foreground); }
+.theme-muted { color: var(--muted); }
+.theme-faint { color: var(--faint); }
+.theme-border { border-color: var(--border); }
 
 @keyframes slidein {
   from { transform: translateX(-100%); }

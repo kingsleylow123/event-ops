@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import SignOutButton from './SignOutButton'
 import { useRevenueHidden } from '@/lib/useRevenueHidden'
+import { useTheme } from '@/lib/useTheme'
 import { resolveInitialEvent, storeEventId, getStoredEventId } from '@/lib/event'
 import { useCachedFetch } from '@/lib/useCachedFetch'
 import type { Event } from '@/lib/supabase'
@@ -46,6 +47,7 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [hidden, toggleRevenue] = useRevenueHidden()
+  const [theme, toggleTheme] = useTheme()
 
   // Event switcher — cached so the sidebar paints instantly on every load
   const { data: eventsData } = useCachedFetch<Event[]>('events', '/api/events')
@@ -106,14 +108,14 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
         key={item.href}
         href={item.href}
         onClick={() => setMobileOpen(false)}
-        className={`group relative flex items-center gap-3 rounded-xl px-3 min-h-[44px] text-sm transition-all duration-150
-          ${active ? 'text-white bg-white/[0.08]' : 'text-zinc-400 hover:text-white hover:bg-white/[0.05]'}`}
+        className={`group relative flex items-center gap-3 rounded-xl px-3 min-h-[44px] text-sm transition-all duration-150 ${active ? '' : 'theme-muted'}`}
+        style={active ? { background: 'var(--active)', color: 'var(--foreground)' } : undefined}
       >
         {active && (
           <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[2.5px] rounded-full"
             style={{ background: 'linear-gradient(to bottom, #D4684A, #f59e0b)', boxShadow: '0 0 10px 1px rgba(212,104,74,0.6)' }} />
         )}
-        <span className={active ? 'text-amber-400' : 'text-zinc-500 group-hover:text-zinc-300'}>{item.icon}</span>
+        <span className={active ? 'text-amber-500' : 'theme-faint'}>{item.icon}</span>
         <span className="truncate">{item.label}</span>
       </Link>
     )
@@ -131,8 +133,8 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
         <Link href="/" onClick={() => setMobileOpen(false)} className="flex items-center gap-2.5 mb-4">
           <Image src="/claude-logo.jpg" alt="Claude Malaysia" width={30} height={30} className="rounded-lg" />
           <div className="leading-tight">
-            <div className="text-sm font-bold text-white">Claude Malaysia</div>
-            <div className="text-[10px] text-amber-400/80 font-medium tracking-wide">EVENTOPS</div>
+            <div className="text-sm font-bold theme-text">Claude Malaysia</div>
+            <div className="text-[10px] text-amber-500 font-medium tracking-wide">EVENTOPS</div>
           </div>
         </Link>
         {events.length > 0 && (
@@ -140,7 +142,7 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
             <select
               value={eventId}
               onChange={e => { setEventId(e.target.value); storeEventId(e.target.value); window.location.reload() }}
-              className="w-full appearance-none bg-white/[0.04] border border-white/10 rounded-lg pl-3 pr-8 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500/50 cursor-pointer">
+              className="theme-surface-2 theme-text theme-border w-full appearance-none border rounded-lg pl-3 pr-8 py-2 text-xs focus:outline-none focus:border-amber-500/50 cursor-pointer">
               {events.map(e => (
                 <option key={e.id} value={e.id} className="bg-zinc-900">{e.name}{e.is_active ? ' • active' : ''}</option>
               ))}
@@ -159,7 +161,7 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
           <div key={g.id} className="pt-3">
             <button
               onClick={() => toggleGroup(g.id)}
-              className="w-full flex items-center justify-between px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-500 hover:text-zinc-300 transition-colors">
+              className="theme-faint w-full flex items-center justify-between px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest transition-colors">
               <span>{g.title}</span>
               {chevron(isOpen(g.id))}
             </button>
@@ -173,12 +175,12 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
       </nav>
 
       {/* Footer */}
-      <div className="border-t border-white/[0.06] px-3 py-3 space-y-1">
+      <div className="theme-border border-t px-3 py-3 space-y-1">
         {isAdmin && (
           <Link href="/admin" onClick={() => setMobileOpen(false)}
-            className={`flex items-center justify-between gap-3 rounded-xl px-3 min-h-[40px] text-sm transition-all
-              ${isActive('/admin') ? 'text-white bg-white/[0.08]' : 'text-zinc-400 hover:text-white hover:bg-white/[0.05]'}`}>
-            <span className="flex items-center gap-3"><span className="text-zinc-500">{icons.admin}</span>Admin</span>
+            className={`flex items-center justify-between gap-3 rounded-xl px-3 min-h-[40px] text-sm transition-all ${isActive('/admin') ? '' : 'theme-muted'}`}
+            style={isActive('/admin') ? { background: 'var(--active)', color: 'var(--foreground)' } : undefined}>
+            <span className="flex items-center gap-3"><span className="theme-faint">{icons.admin}</span>Admin</span>
             {pendingCount > 0 && (
               <span className="bg-amber-500 text-black text-[10px] font-bold rounded-full px-1.5 py-0.5 min-w-[18px] text-center">{pendingCount}</span>
             )}
@@ -186,9 +188,9 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
         )}
         <button
           onClick={toggleRevenue}
-          className="w-full flex items-center justify-between gap-3 rounded-xl px-3 min-h-[40px] text-sm text-zinc-400 hover:text-white hover:bg-white/[0.05] transition-all">
+          className="theme-muted w-full flex items-center justify-between gap-3 rounded-xl px-3 min-h-[40px] text-sm transition-all">
           <span className="flex items-center gap-3">
-            <span className="text-zinc-500">
+            <span className="theme-faint">
               {hidden
                 ? I(<><path d="M17.94 17.94A10 10 0 0 1 12 20c-7 0-11-8-11-8a18 18 0 0 1 5.06-5.94M9.9 4.24A10 10 0 0 1 12 4c7 0 11 8 11 8a18 18 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></>)
                 : I(<><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></>)}
@@ -199,9 +201,24 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
             {hidden ? 'Hidden' : 'Shown'}
           </span>
         </button>
+        <button
+          onClick={toggleTheme}
+          className="theme-muted w-full flex items-center justify-between gap-3 rounded-xl px-3 min-h-[40px] text-sm transition-all">
+          <span className="flex items-center gap-3">
+            <span className="theme-faint">
+              {theme === 'light'
+                ? I(<circle cx="12" cy="12" r="5" />)  /* sun */
+                : I(<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />)  /* moon */}
+            </span>
+            Appearance
+          </span>
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400">
+            {theme === 'light' ? 'Light' : 'Dark'}
+          </span>
+        </button>
         <div className="flex items-center justify-between gap-2 pt-2 px-1">
           {userEmail && (
-            <Link href="/profile" onClick={() => setMobileOpen(false)} className="text-[11px] text-zinc-500 hover:text-amber-400 truncate">{userEmail}</Link>
+            <Link href="/profile" onClick={() => setMobileOpen(false)} className="theme-faint text-[11px] hover:text-amber-500 truncate">{userEmail}</Link>
           )}
           <SignOutButton />
         </div>
@@ -212,30 +229,30 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
   return (
     <>
       {/* Desktop sidebar — fixed glass rail */}
-      <aside className="hidden lg:flex fixed inset-y-0 left-0 w-64 z-40 flex-col border-r border-white/[0.06]"
-        style={{ background: 'rgba(17,17,17,0.80)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
+      <aside className="hidden lg:flex fixed inset-y-0 left-0 w-64 z-40 flex-col theme-border border-r"
+        style={{ background: 'var(--sidebar-bg)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
         {SidebarBody}
       </aside>
 
       {/* Mobile top bar */}
-      <div className="lg:hidden sticky top-0 z-40 flex items-center gap-3 px-4 h-14 border-b border-white/[0.06]"
-        style={{ background: 'rgba(17,17,17,0.85)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
+      <div className="lg:hidden sticky top-0 z-40 flex items-center gap-3 px-4 h-14 theme-border border-b"
+        style={{ background: 'var(--sidebar-bg)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
         <button onClick={() => setMobileOpen(true)} aria-label="Open menu"
-          className="flex flex-col gap-1.5 p-2 -ml-2 rounded-lg active:bg-white/10">
-          <span className="block w-5 h-0.5 bg-white rounded" />
-          <span className="block w-5 h-0.5 bg-white rounded" />
-          <span className="block w-5 h-0.5 bg-white rounded" />
+          className="theme-text flex flex-col gap-1.5 p-2 -ml-2 rounded-lg">
+          <span className="block w-5 h-0.5 rounded" style={{ background: 'currentColor' }} />
+          <span className="block w-5 h-0.5 rounded" style={{ background: 'currentColor' }} />
+          <span className="block w-5 h-0.5 rounded" style={{ background: 'currentColor' }} />
         </button>
         <Image src="/claude-logo.jpg" alt="Claude Malaysia" width={26} height={26} className="rounded-md" />
-        <span className="text-sm font-bold text-white">Claude Malaysia</span>
+        <span className="text-sm font-bold theme-text">Claude Malaysia</span>
       </div>
 
       {/* Mobile drawer + scrim */}
       {mobileOpen && (
         <div className="lg:hidden fixed inset-0 z-50">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 w-[82vw] max-w-xs flex flex-col border-r border-white/[0.06] animate-[slidein_0.2s_ease]"
-            style={{ background: 'rgba(17,17,17,0.92)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}>
+          <aside className="absolute inset-y-0 left-0 w-[82vw] max-w-xs flex flex-col theme-border border-r animate-[slidein_0.2s_ease]"
+            style={{ background: 'var(--sidebar-bg)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}>
             {SidebarBody}
           </aside>
         </div>

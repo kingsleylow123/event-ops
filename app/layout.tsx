@@ -34,7 +34,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   return (
     <html lang="en">
-      <body className="min-h-screen bg-[#0a0a0a] text-white">
+      <head>
+        {/* Apply saved theme before paint to avoid a flash of the wrong theme. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{document.documentElement.dataset.theme=localStorage.getItem('eventops_theme')==='light'?'light':'dark'}catch(e){document.documentElement.dataset.theme='dark'}`,
+          }}
+        />
+      </head>
+      <body className="min-h-screen theme-bg theme-text">
         {user ? (
           <>
             <Sidebar userEmail={user.email} isAdmin={admin} pendingCount={pendingCount} />
