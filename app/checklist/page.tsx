@@ -16,6 +16,19 @@ const NEXT_STATUS: Record<ChecklistStatus, ChecklistStatus> = {
   done: 'pending',
 }
 
+// Turn bare URLs in notes into clickable links (tappable on mobile for facis).
+function linkify(text: string): React.ReactNode {
+  const parts = text.split(/(https?:\/\/[^\s]+)/g)
+  return parts.map((part, i) =>
+    /^https?:\/\//.test(part) ? (
+      <a key={i} href={part} target="_blank" rel="noopener noreferrer"
+        className="text-amber-400 hover:text-amber-300 underline break-all">{part}</a>
+    ) : (
+      <span key={i}>{part}</span>
+    )
+  )
+}
+
 const EMPTY_FORM = {
   category: CHECKLIST_CATEGORIES[0] as string,
   item: '', pic_name: '', pic_phone: '', due_date: '', notes: '',
@@ -29,6 +42,8 @@ export default function ChecklistPage() {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
+  const [seeding, setSeeding] = useState(false)
+  const [sopMsg, setSopMsg] = useState('')
 
   // Build a name → phone lookup from every team member across every event
   const teamContacts = useMemo(() => {
@@ -97,6 +112,30 @@ export default function ChecklistPage() {
     if (!confirm('Delete this item?')) return
     await fetch(`/api/checklist?id=${id}`, { method: 'DELETE' })
     setItems(prev => prev.filter(x => x.id !== id))
+  }
+
+  async function loadSop() {
+    if (!event) return
+    setSeeding(true); setSopMsg('')
+    try {
+      const res = await fetch('/api/checklist?action=seed-sop', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event_id: event.id }),
+      })
+      const d = await res.json()
+      if (res.ok) {
+        setSopMsg(`✅ Added ${d.added} SOP item(s)${d.skipped ? `, ${d.skipped} already present` : ''}.`)
+        const reload = await fetch(`/api/checklist?event_id=${event.id}`, { cache: 'no-store' })
+        if (reload.ok) setItems(await reload.json())
+      } else {
+        setSopMsg(`⚠️ ${d.error || 'Failed to load SOP template'}`)
+      }
+    } catch {
+      setSopMsg('⚠️ Failed to load SOP template')
+    } finally {
+      setSeeding(false)
+    }
   }
 
   function openCreate() {
@@ -174,11 +213,18 @@ export default function ChecklistPage() {
           <h1 className="text-xl font-bold">Event Checklist</h1>
           {event && <p className="text-sm text-zinc-400">{event.name}</p>}
         </div>
-        <button onClick={openCreate} disabled={!event}
-          className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-semibold text-sm px-4 py-2 rounded-lg">
-          + Add Item
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={loadSop} disabled={!event || seeding}
+            className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg border border-zinc-700">
+            {seeding ? 'Loading…' : '📋 Load SOP template'}
+          </button>
+          <button onClick={openCreate} disabled={!event}
+            className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-semibold text-sm px-4 py-2 rounded-lg">
+            + Add Item
+          </button>
+        </div>
       </div>
+      {sopMsg && <div className="text-sm text-zinc-300 bg-[#111] border border-zinc-800 rounded-lg px-4 py-2">{sopMsg}</div>}
 
       {showForm && (
         <div className="bg-[#111] border border-amber-500/50 rounded-xl p-5">
@@ -259,7 +305,7 @@ export default function ChecklistPage() {
                             {it.status.replace('_', ' ')}
                           </button>
                         </div>
-                        {it.notes && <p className="text-xs text-zinc-600 mb-1.5">{it.notes}</p>}
+                        {it.notes && <p className="text-xs text-zinc-500 mb-1.5">{linkify(it.notes)}</p>}
                         {/* Meta row: PIC + Due + Actions */}
                         <div className="flex items-center justify-between gap-2 flex-wrap">
                           <div className="flex items-center gap-3 text-xs text-zinc-400">

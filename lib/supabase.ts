@@ -41,7 +41,7 @@ export const TICKET_PRICES: Record<TicketType, number> = {
   standard_vip: 697,
 }
 
-export const CHECKLIST_CATEGORIES = ['Venue', 'Facilitator', 'Media / UGC Creator', 'AV/Video', 'Logistics']
+export const CHECKLIST_CATEGORIES = ['Pre-Event Comms', 'Facilitator', 'Media / UGC Creator', 'AV/Video', 'Sales/Upsell', 'Venue', 'Logistics', 'Post-Event']
 
 export const EXPENSE_CATEGORIES = [
   'Venue',
