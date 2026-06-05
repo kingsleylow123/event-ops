@@ -99,6 +99,9 @@ function StartContent() {
 
   return (
     <div className="relative min-h-screen text-white overflow-x-hidden" style={{ background: '#060606' }}>
+      {/* ── Sticky countdown ── */}
+      <CountdownBar target={eventDate} done={allDone} doneCount={doneCount} />
+
       {/* Ambient liquid background */}
       <div className="pointer-events-none fixed inset-0 -z-10">
         <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[680px] h-[680px] rounded-full blur-[120px] opacity-[0.22]"
@@ -112,7 +115,7 @@ function StartContent() {
       <div className="max-w-lg mx-auto px-5 pb-28">
 
         {/* ── Hero ── */}
-        <div className="text-center pt-12 pb-2">
+        <div className="text-center pt-8 pb-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/claude-my-logo.svg" alt="Claude Malaysia" width={60} height={60} className="mx-auto rounded-[18px] mb-6"
             style={{ boxShadow: '0 8px 40px -8px rgba(212,104,74,0.6)' }} />
@@ -259,7 +262,7 @@ function StartContent() {
         <div className="mt-9">
           <SectionLabel>Powered by AI</SectionLabel>
           <Glass className="mt-3 p-5 text-center">
-            <div className="text-3xl mb-2">🐈</div>
+            <div className="text-3xl mb-2">🐱</div>
             <h2 className="text-xl font-bold mb-1.5">This whole event runs on <span className="text-amber-300">Jarvis Oyen</span> 🍊</h2>
             <p className="text-[13px] text-zinc-400 leading-relaxed mb-1">
               Your registration, seating, check-in, surveys, even invoices — all managed by <b className="text-amber-300">Jarvis Oyen</b>, our AI events manager. Text the cat, it answers. 🐾
@@ -320,6 +323,66 @@ function StartContent() {
 }
 
 // ── Reusable liquid-glass shell ────────────────────────────────────────────────
+// ── Sticky countdown to event ──────────────────────────────────────────────────
+function CdUnit({ v, l }: { v: number; l: string }) {
+  return (
+    <span className="flex flex-col items-center">
+      <span className="text-base font-bold tabular-nums leading-none" style={{ color: '#ffd9a0' }}>{String(v).padStart(2, '0')}</span>
+      <span className="text-[8px] text-amber-200/50 tracking-widest uppercase mt-0.5">{l}</span>
+    </span>
+  )
+}
+
+function CountdownBar({ target, done, doneCount }: { target: Date | null; done: boolean; doneCount: number }) {
+  // Start ticking after mount (avoids SSR hydration mismatch + sync setState).
+  const [now, setNow] = useState(0)
+  useEffect(() => {
+    const tick = () => setNow(Date.now())
+    tick()
+    const t = setInterval(tick, 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  let body: React.ReactNode
+  if (done) {
+    body = <span className="text-sm font-semibold text-emerald-300">✅ You&apos;re ready — see you at the workshop!</span>
+  } else if (target && now > 0) {
+    const ms = target.getTime() - now
+    if (ms <= 0) {
+      body = <span className="text-sm font-semibold text-amber-300">🔴 It&apos;s workshop day — head to CO3 Puchong!</span>
+    } else {
+      const d = Math.floor(ms / 86400000)
+      const h = Math.floor((ms % 86400000) / 3600000)
+      const m = Math.floor((ms % 3600000) / 60000)
+      const s = Math.floor((ms % 60000) / 1000)
+      body = (
+        <div className="flex items-center gap-2.5">
+          <span className="text-[11px] font-semibold text-amber-200/90 mr-0.5">⏳ Finish before the workshop</span>
+          <CdUnit v={d} l="d" /><span className="text-amber-200/30 -mt-2">:</span>
+          <CdUnit v={h} l="h" /><span className="text-amber-200/30 -mt-2">:</span>
+          <CdUnit v={m} l="m" /><span className="text-amber-200/30 -mt-2">:</span>
+          <CdUnit v={s} l="s" />
+        </div>
+      )
+    }
+  } else {
+    body = <span className="text-sm font-semibold text-amber-200/90">⏳ Finish all 5 steps before the workshop</span>
+  }
+
+  return (
+    <div className="sticky top-0 z-40 border-b border-white/[0.06]"
+      style={{ background: 'rgba(20,10,6,0.72)', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)' }}>
+      <div className="max-w-lg mx-auto px-4 h-12 flex items-center justify-between gap-3">
+        {body}
+        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0"
+          style={{ background: done ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)', color: done ? '#6ee7b7' : '#fcd34d' }}>
+          {doneCount}/5
+        </span>
+      </div>
+    </div>
+  )
+}
+
 function Glass({ children, className = '', style }: { children: React.ReactNode; className?: string; style?: React.CSSProperties }) {
   return (
     <div className={`rounded-[22px] border border-white/[0.08] ${className}`}
@@ -451,7 +514,7 @@ function JarvisDemo() {
     <div className="rounded-[28px] overflow-hidden border border-white/[0.08]"
       style={{ background: 'rgba(13,13,15,0.7)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', boxShadow: '0 24px 70px -24px rgba(212,104,74,0.4)' }}>
       <div className="flex items-center gap-2.5 px-4 py-3 border-b border-white/[0.06]" style={{ background: 'rgba(255,255,255,0.02)' }}>
-        <div className="w-9 h-9 rounded-full flex items-center justify-center text-base" style={{ background: 'linear-gradient(135deg, #f59e0b, #D4684A)' }}>🐈</div>
+        <div className="w-9 h-9 rounded-full flex items-center justify-center text-base" style={{ background: 'linear-gradient(135deg, #f59e0b, #D4684A)' }}>🐱</div>
         <div>
           <div className="text-sm font-semibold leading-none">Jarvis Oyen 🍊</div>
           <div className="text-[10px] text-emerald-400 mt-1">● AI events manager · online</div>
