@@ -24,8 +24,8 @@ interface PrepSummary {
 }
 
 const PREP_STEP_LABELS: Record<string, string> = {
-  '1': 'Install Claude Code', '2': 'Get Claude Pro', '3': 'Watch setup',
-  '4': 'Fill survey', '5': 'Show up 9:30am',
+  '1': 'Install Claude Code', '2': 'Get Claude Pro', '3': 'Install dev tools',
+  '4': 'Fill survey', '5': 'Prepare data', '6': 'Show up 9:30am',
 }
 
 function count<T>(arr: T[], key: (item: T) => string | null): Record<string, number> {

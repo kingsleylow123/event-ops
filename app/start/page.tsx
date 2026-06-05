@@ -24,7 +24,7 @@ interface Facts {
   name?: string | null; date?: string | null; venue?: string | null
 }
 
-const STEP_IDS = ['1', '2', '3', '4', '5'] as const
+const STEP_IDS = ['1', '2', '3', '4', '5', '6'] as const
 type Steps = Record<string, boolean>
 type OS = 'mac' | 'windows' | null
 
@@ -33,7 +33,7 @@ function StartContent() {
   const eventId = params.get('event') || ''
 
   const [facts, setFacts] = useState<Facts | null>(null)
-  const [steps, setSteps] = useState<Steps>({ '1': false, '2': false, '3': false, '4': false, '5': false })
+  const [steps, setSteps] = useState<Steps>({ '1': false, '2': false, '3': false, '4': false, '5': false, '6': false })
   const [ipadAck, setIpadAck] = useState(false)
   const [os, setOs] = useState<OS>(null)
   const [phone, setPhone] = useState('')
@@ -60,8 +60,8 @@ function StartContent() {
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const doneCount = STEP_IDS.filter(k => steps[k]).length
-  const pct = Math.round((doneCount / 5) * 100)
-  const allDone = doneCount === 5
+  const pct = Math.round((doneCount / STEP_IDS.length) * 100)
+  const allDone = doneCount === STEP_IDS.length
 
   function persistSteps(next: Steps, ph: string) {
     try { localStorage.setItem(STEPS_KEY, JSON.stringify(next)); if (ph) localStorage.setItem(PHONE_KEY, ph) } catch { /* ignore */ }
@@ -147,7 +147,7 @@ function StartContent() {
             </span>
           </h1>
           <p className="text-zinc-400 text-[15px] leading-relaxed mb-6 max-w-sm mx-auto">
-            You&apos;re in 🎉 Five quick steps to be <span className="text-white font-medium">workshop-ready</span>. Your progress saves automatically.
+            You&apos;re in 🎉 Six quick steps to be <span className="text-white font-medium">workshop-ready</span>. Your progress saves automatically.
           </p>
 
           {/* Date + venue pills (no seat count) */}
@@ -163,7 +163,7 @@ function StartContent() {
           <div className="flex gap-3">
             <span className="text-xl">⚡</span>
             <div>
-              <div className="text-sm font-semibold text-amber-200 mb-0.5">Please finish all 5 steps before the day</div>
+              <div className="text-sm font-semibold text-amber-200 mb-0.5">Please finish all 6 steps before the day</div>
               <p className="text-[13px] text-zinc-400 leading-relaxed">If you show up un-installed, you&apos;ll <b className="text-zinc-200">delay the whole class</b> waiting on downloads — which means less hands-on building and sharing time for everyone.</p>
             </div>
           </div>
@@ -173,7 +173,7 @@ function StartContent() {
         <Glass className="mt-4 p-4 flex items-center gap-4">
           <Ring pct={pct} />
           <div className="flex-1">
-            <div className="text-sm font-semibold">{allDone ? "You're all set! 🚀" : `${doneCount} of 5 complete`}</div>
+            <div className="text-sm font-semibold">{allDone ? "You're all set! 🚀" : `${doneCount} of 6 complete`}</div>
             <div className="text-xs text-zinc-500">{allDone ? 'See you at 9:30am sharp' : 'Tap each step as you go'}</div>
           </div>
         </Glass>
@@ -237,8 +237,20 @@ function StartContent() {
             <a href={surveyUrl} target="_blank" rel="noopener noreferrer" className="cta">📝 Open the survey</a>
           </StepCard>
 
-          {/* Step 5 */}
+          {/* Step 5 — bring your data */}
           <StepCard n="5" done={steps['5']} onToggle={() => toggleStep('5')}
+            title="Prepare your business data" subtitle="Excel or Google Sheets — so we can plug it in">
+            <p className="text-[13px] text-zinc-400 mb-3 leading-relaxed">
+              Bring real numbers from <b className="text-zinc-200">your own business</b> in an <b className="text-zinc-200">Excel or Google Sheets</b> file — sales, leads, expenses, inventory, anything. We&apos;ll plug it straight into <b className="text-amber-300">your first live dashboard</b> in class.
+            </p>
+            <div className="rounded-xl px-3.5 py-3 text-[12px] text-zinc-300 leading-relaxed"
+              style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.22)' }}>
+              💡 No data ready? A simple month-by-month sheet (e.g. revenue per month) is enough to see it come alive.
+            </div>
+          </StepCard>
+
+          {/* Step 6 — show up early + venue */}
+          <StepCard n="6" done={steps['6']} onToggle={() => toggleStep('6')}
             title="Show up EARLY — 9:30am" subtitle="Watch this so you know how to find us">
             <p className="text-[13px] text-zinc-400 mb-3 leading-relaxed">Here&apos;s exactly how to get up to the venue 👇 (and a peek inside!)</p>
             <Video id="NeTd4AAxTrY" label="🎬 How to get to CO3 Puchong — Venue Guide" full />
@@ -284,7 +296,10 @@ function StartContent() {
               Your registration, seating, check-in, surveys, even invoices — all managed by <b className="text-amber-300">Jarvis Oyen</b>, our AI events manager. Text the cat, it answers. 🐾
             </p>
             <p className="text-[12px] text-zinc-600 leading-relaxed">
-              We&apos;re <i>not</i> building Jarvis Oyen in this half-day class — that&apos;s the next level. Today plants the seed: your first dashboard. 🌱
+              We&apos;re <i>not</i> building Jarvis Oyen in this half-day class — that&apos;s the next level.
+            </p>
+            <p className="text-[12px] text-zinc-600 leading-relaxed mt-1.5">
+              Today&apos;s workshop marks the start: your first dashboard. 🌱 This is what it could look like once you go live with all your data!
             </p>
           </Glass>
           <div className="mt-3"><JarvisDemo /></div>
@@ -382,7 +397,7 @@ function CountdownBar({ target, done, doneCount }: { target: Date | null; done: 
       )
     }
   } else {
-    body = <span className="text-sm font-semibold text-amber-200/90">⏳ Finish all 5 steps before the workshop</span>
+    body = <span className="text-sm font-semibold text-amber-200/90">⏳ Finish all 6 steps before the workshop</span>
   }
 
   return (
@@ -392,7 +407,7 @@ function CountdownBar({ target, done, doneCount }: { target: Date | null; done: 
         {body}
         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0"
           style={{ background: done ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)', color: done ? '#6ee7b7' : '#fcd34d' }}>
-          {doneCount}/5
+          {doneCount}/6
         </span>
       </div>
     </div>

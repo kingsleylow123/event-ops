@@ -409,14 +409,14 @@ async function fmtAffiliates(eventId: string) {
 }
 
 async function fmtPrep(eventId: string) {
-  const STEP = { '1': 'Install', '2': 'Pro', '3': 'Videos', '4': 'Survey', '5': '9:30am' } as const
+  const STEP = { '1': 'Install', '2': 'Pro', '3': 'Dev tools', '4': 'Survey', '5': 'Data', '6': '9:30am' } as const
   const { data } = await supabase
     .from('prep_progress').select('name, phone, steps, completed').eq('event_id', eventId)
   const rows = data ?? []
   if (!rows.length) return `🎓 ${b('Pre-Workshop Prep')}\nNo one has started yet. Share the /start link.`
   const started = rows.length
   const completed = rows.filter(r => r.completed).length
-  const per: Record<string, number> = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 }
+  const per: Record<string, number> = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0 }
   for (const r of rows) {
     const s = (r.steps ?? {}) as Record<string, boolean>
     for (const k of Object.keys(per)) if (s[k]) per[k]++
