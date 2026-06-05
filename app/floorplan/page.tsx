@@ -268,12 +268,9 @@ export default function FloorPlanPage() {
                 )}
                 <div className="mt-2 flex justify-center items-center gap-2 h-44">
                   {section.orientation === 'landscape' ? (
-                    <div className="flex items-center gap-1">
-                      <div className={`w-12 h-8 ${SECTION_TYPE_COLORS[section.type]} rounded`} />
-                      <div className={`w-12 h-8 ${SECTION_TYPE_COLORS[section.type]} rounded`} />
-                      <div className="w-3" />
-                      <div className={`w-12 h-8 ${SECTION_TYPE_COLORS[section.type]} rounded`} />
-                      <div className={`w-12 h-8 ${SECTION_TYPE_COLORS[section.type]} rounded`} />
+                    <div className="flex items-center gap-3">
+                      <div className={`w-16 h-10 ${SECTION_TYPE_COLORS[section.type]} rounded`} />
+                      <div className={`w-16 h-10 ${SECTION_TYPE_COLORS[section.type]} rounded`} />
                     </div>
                   ) : (
                     <>
