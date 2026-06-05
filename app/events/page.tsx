@@ -22,6 +22,7 @@ export default function EventsPage() {
   const [events, setEvents] = useState<Event[]>([])
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
 
   // Mirror cached/fetched data into local state for optimistic edits.
@@ -157,6 +158,16 @@ export default function EventsPage() {
               <p className="text-xs text-zinc-600 mt-1">Created {new Date(ev.created_at).toLocaleDateString()}</p>
             </div>
             <div className="flex gap-2 flex-shrink-0">
+              <button
+                onClick={() => {
+                  const base = typeof window !== 'undefined' ? window.location.origin : ''
+                  navigator.clipboard.writeText(`${base}/start?event=${ev.id}`)
+                  setCopiedId(ev.id)
+                  setTimeout(() => setCopiedId(null), 1500)
+                }}
+                className="text-xs border border-zinc-700 text-zinc-300 hover:border-amber-500/50 hover:text-amber-400 px-3 py-1.5 rounded-lg whitespace-nowrap">
+                {copiedId === ev.id ? '✓ Copied' : '🔗 Start Link'}
+              </button>
               <button onClick={() => openEdit(ev)}
                 className="text-xs border border-zinc-700 text-zinc-300 hover:border-amber-500/50 hover:text-amber-400 px-3 py-1.5 rounded-lg">
                 Edit

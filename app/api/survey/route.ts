@@ -47,6 +47,26 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ name: data?.name ?? null })
   }
 
+  // Public facts (?facts=1): event name/date/venue/capacity + live fill counts.
+  // No PII — for the pre-event landing page hero. Safe for unauthenticated use.
+  if (searchParams.get('facts') === '1') {
+    const { data: ev } = await supabase
+      .from('events').select('name, date, venue, capacity').eq('id', event_id).single()
+    const { count: registered } = await supabase
+      .from('attendees').select('id', { count: 'exact', head: true }).eq('event_id', event_id)
+    const { count: paid } = await supabase
+      .from('attendees').select('id', { count: 'exact', head: true })
+      .eq('event_id', event_id).eq('payment_status', 'paid')
+    return NextResponse.json({
+      name: ev?.name ?? null,
+      date: ev?.date ?? null,
+      venue: ev?.venue ?? null,
+      capacity: ev?.capacity ?? null,
+      registered: registered ?? 0,
+      paid: paid ?? 0,
+    })
+  }
+
   // Full responses list = admin/staff only (contains PII).
   const g = await requireUser('GET /api/survey'); if (g.response) return g.response
 

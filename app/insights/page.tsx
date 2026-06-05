@@ -16,6 +16,18 @@ interface SurveyResponse {
   created_at: string
 }
 
+interface PrepSummary {
+  started: number
+  completed: number
+  perStep: Record<string, number>
+  people: { name: string; completed: boolean; done: number }[]
+}
+
+const PREP_STEP_LABELS: Record<string, string> = {
+  '1': 'Install Claude Code', '2': 'Get Claude Pro', '3': 'Watch setup',
+  '4': 'Fill survey', '5': 'Show up 9:30am',
+}
+
 function count<T>(arr: T[], key: (item: T) => string | null): Record<string, number> {
   return arr.reduce((acc, item) => {
     const val = key(item) || 'Unknown'
@@ -64,6 +76,19 @@ export default function InsightsPage() {
 
     const base = typeof window !== 'undefined' ? window.location.origin : ''
     setSurveyLink(`${base}/survey?event=${selectedEventId}`)
+  }, [selectedEventId])
+
+  // Pre-workshop prep readiness
+  const [prep, setPrep] = useState<PrepSummary | null>(null)
+  const [startLink, setStartLink] = useState('')
+  useEffect(() => {
+    if (!selectedEventId) return
+    fetch(`/api/prep?event_id=${selectedEventId}&summary=1`)
+      .then(r => r.ok ? r.json() : null)
+      .then((d: PrepSummary | null) => setPrep(d))
+      .catch(() => setPrep(null))
+    const base = typeof window !== 'undefined' ? window.location.origin : ''
+    setStartLink(`${base}/start?event=${selectedEventId}`)
   }, [selectedEventId])
 
   function copyLink() {
@@ -143,6 +168,47 @@ export default function InsightsPage() {
           <button onClick={copyLink} className="text-xs text-zinc-400 hover:text-white border border-zinc-700 rounded-lg px-3 py-1.5 w-fit">📋 Copy Link</button>
         </div>
       </div>
+
+      {/* Pre-Workshop Prep readiness */}
+      {prep && prep.started > 0 && (
+        <div className="bg-[#111] border border-zinc-800 rounded-xl p-5">
+          <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+            <h2 className="font-semibold text-sm">🎓 Pre-Workshop Prep</h2>
+            <div className="flex items-center gap-3 text-xs">
+              <span className="text-zinc-400"><b className="text-white">{prep.started}</b> started</span>
+              <span className="text-amber-400"><b>{prep.completed}</b> fully ready</span>
+              {startLink && (
+                <button onClick={() => navigator.clipboard.writeText(startLink)}
+                  className="text-zinc-400 hover:text-white border border-zinc-700 rounded-lg px-2.5 py-1">📋 Copy Start Link</button>
+              )}
+            </div>
+          </div>
+          {/* per-step bars */}
+          <div className="space-y-2 mb-4">
+            {Object.keys(PREP_STEP_LABELS).map(k => {
+              const n = prep.perStep[k] ?? 0
+              const pctv = prep.started ? (n / prep.started) * 100 : 0
+              return (
+                <div key={k} className="flex items-center gap-3">
+                  <span className="text-xs text-zinc-400 w-36 shrink-0">{PREP_STEP_LABELS[k]}</span>
+                  <div className="flex-1 h-2 bg-zinc-800 rounded-full overflow-hidden">
+                    <div className="h-full bg-amber-500 rounded-full" style={{ width: `${pctv}%` }} />
+                  </div>
+                  <span className="text-xs text-zinc-400 w-8 text-right shrink-0">{n}</span>
+                </div>
+              )
+            })}
+          </div>
+          {/* who */}
+          <div className="flex flex-wrap gap-1.5">
+            {prep.people.map((p, i) => (
+              <span key={i} className={`text-[11px] px-2 py-0.5 rounded-full border ${p.completed ? 'bg-amber-500/15 border-amber-500/30 text-amber-300' : 'bg-white/[0.03] border-white/10 text-zinc-400'}`}>
+                {p.completed ? '✓ ' : `${p.done}/5 `}{p.name}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {loadingResponses ? (
         <div className="text-zinc-500 text-center py-12">Loading responses...</div>

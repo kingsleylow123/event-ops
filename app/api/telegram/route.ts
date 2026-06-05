@@ -408,6 +408,26 @@ async function fmtAffiliates(eventId: string) {
   return out
 }
 
+async function fmtPrep(eventId: string) {
+  const STEP = { '1': 'Install', '2': 'Pro', '3': 'Videos', '4': 'Survey', '5': '9:30am' } as const
+  const { data } = await supabase
+    .from('prep_progress').select('name, phone, steps, completed').eq('event_id', eventId)
+  const rows = data ?? []
+  if (!rows.length) return `🎓 ${b('Pre-Workshop Prep')}\nNo one has started yet. Share the /start link.`
+  const started = rows.length
+  const completed = rows.filter(r => r.completed).length
+  const per: Record<string, number> = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0 }
+  for (const r of rows) {
+    const s = (r.steps ?? {}) as Record<string, boolean>
+    for (const k of Object.keys(per)) if (s[k]) per[k]++
+  }
+  let out = `🎓 ${b(`Prep: ${completed}/${started} workshop-ready`)}\n${started - completed} still in progress\n`
+  out += '\n' + Object.entries(STEP).map(([k, lbl]) => `• ${esc(lbl)}: ${per[k]} ✓`).join('\n')
+  const pending = rows.filter(r => !r.completed).map(r => esc((r.name as string) || (r.phone as string)))
+  if (pending.length) out += `\n\n${b('Still pending')}:\n` + pending.slice(0, 25).map(n => `• ${n}`).join('\n')
+  return out
+}
+
 const HELP = `🤖 ${b('Jarvis')} — your EventOps assistant\n\n` +
   `${b('Quick commands')}\n` +
   `/stats — full event summary\n` +
@@ -423,6 +443,7 @@ const HELP = `🤖 ${b('Jarvis')} — your EventOps assistant\n\n` +
   `/duplicates — flag duplicate entries\n` +
   `/affiliates — creator commission payout\n` +
   `/leads — master leads (affiliate vs Kingsley)\n` +
+  `/prep — pre-workshop readiness\n` +
   `/find &lt;name&gt; — look up an attendee\n\n` +
   `Or just ${b('ask anything')} in plain English 👇\n` +
   `<i>e.g. "who hasn't paid?", "how full are we vs capacity?", "which paid attendees skipped the survey?"</i>\n\n` +
@@ -638,6 +659,7 @@ async function handle(text: string, ev: Row, d: Awaited<ReturnType<typeof loadAl
   if (cmd === '/duplicates') return fmtDuplicates(d.attendees)
   if (cmd === '/affiliates') return await fmtAffiliates(ev.id as string)
   if (cmd === '/leads') return await fmtLeads()
+  if (cmd === '/prep') return await fmtPrep(ev.id as string)
   if (cmd.startsWith('/find ')) return fmtFind(d.attendees, text.slice(6).trim())
   return '' // signal: natural language
 }
