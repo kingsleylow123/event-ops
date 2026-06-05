@@ -56,7 +56,7 @@ function StartContent() {
     if (ph) {
       fetch('/api/prep', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event_id: eventId, phone: ph, steps: next }),
+        body: JSON.stringify({ event_id: eventId, phone: ph, steps: { ...next, ipad_ack: ipadAck } }),
       }).catch(() => {})
     }
   }
@@ -69,7 +69,15 @@ function StartContent() {
     const next = { ...steps, [id]: !steps[id] }
     setSteps(next); persistSteps(next, phone)
   }
-  function setAck(v: boolean) { setIpadAck(v); persistMisc({ ipadAck: v, os }) }
+  function setAck(v: boolean) {
+    setIpadAck(v); persistMisc({ ipadAck: v, os })
+    if (phone) {
+      fetch('/api/prep', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event_id: eventId, phone, steps: { ...steps, ipad_ack: v } }),
+      }).catch(() => {})
+    }
+  }
   function chooseOs(v: OS) { setOs(v); persistMisc({ ipadAck, os: v }) }
 
   function submitPhone() {

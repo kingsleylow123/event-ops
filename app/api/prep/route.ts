@@ -23,9 +23,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'invalid phone' }, { status: 400, headers: NO_STORE })
   }
 
-  // Normalize steps to a clean { '1': bool, ... } map
+  // Normalize steps to a clean { '1': bool, ... } map. Also persist the iPad
+  // acknowledgment ('ipad_ack') for the record — completion still = the 5 steps.
   const cleanSteps: Record<string, boolean> = {}
   for (const k of STEP_KEYS) cleanSteps[k] = !!steps?.[k]
+  if (steps?.ipad_ack != null) cleanSteps.ipad_ack = !!steps.ipad_ack
   const completed = STEP_KEYS.every(k => cleanSteps[k])
 
   // Try to resolve a name from the event's attendees by matching normalized phone.
