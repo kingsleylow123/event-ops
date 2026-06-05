@@ -28,8 +28,8 @@ export async function POST(req: NextRequest) {
   const rawPhoneDigits = (phone ?? '').replace(/\D/g, '')
   const phoneDigits = rawPhoneDigits.startsWith('60') ? rawPhoneDigits.slice(2) : rawPhoneDigits
 
-  // Phone must be at least 9 digits (Malaysian mobile = 10-11 digits)
-  const phoneProvided = phoneDigits.length >= 9
+  // Phone: at least 8 digits to avoid accidental matches
+  const phoneProvided = phoneDigits.length >= 8
 
   const { data, error } = await supabase
     .from('attendees')

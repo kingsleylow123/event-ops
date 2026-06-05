@@ -98,7 +98,7 @@ export default function CheckinPage() {
           Check-in
         </div>
         <h1 className="text-3xl font-bold text-white leading-tight">Thanks for coming!</h1>
-        <p className="text-zinc-500 text-sm mt-2">Enter your phone number to check in</p>
+        <p className="text-zinc-500 text-sm mt-2">Enter your <span style={{color:'#e8563a'}}>phone number</span> or name to check in</p>
       </div>
 
       {/* Card */}
@@ -106,7 +106,7 @@ export default function CheckinPage() {
 
         {/* FORM */}
         {(state.status === 'idle' || state.status === 'loading') && (
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-3">
             <div>
               <label className="block text-xs text-zinc-500 mb-1.5 uppercase tracking-wider">Phone Number</label>
               <input
@@ -114,7 +114,24 @@ export default function CheckinPage() {
                 type="tel"
                 value={phone}
                 onChange={e => setPhone(e.target.value)}
-                placeholder="e.g. 012-345 6789"
+                placeholder="e.g. 0123456789"
+                disabled={state.status === 'loading'}
+                className="w-full rounded-xl px-4 py-3.5 text-white text-base outline-none disabled:opacity-50"
+                style={{ background: '#1a1a1a', border: '1px solid #333' }}
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px" style={{ background: '#2a2a2a' }} />
+              <span className="text-zinc-600 text-xs uppercase tracking-widest">or</span>
+              <div className="flex-1 h-px" style={{ background: '#2a2a2a' }} />
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-500 mb-1.5 uppercase tracking-wider">Your Name</label>
+              <input
+                type="text"
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="e.g. Sarah"
                 disabled={state.status === 'loading'}
                 className="w-full rounded-xl px-4 py-3.5 text-white text-base outline-none disabled:opacity-50"
                 style={{ background: '#1a1a1a', border: '1px solid #333' }}
@@ -122,7 +139,7 @@ export default function CheckinPage() {
             </div>
             <button
               type="submit"
-              disabled={state.status === 'loading' || !phone.trim()}
+              disabled={state.status === 'loading' || (!phone.trim() && !name.trim())}
               className="w-full py-3.5 rounded-xl font-bold text-base text-white disabled:opacity-50 transition-opacity"
               style={{ background: state.status === 'loading' ? '#a33c29' : '#e8563a' }}
             >
