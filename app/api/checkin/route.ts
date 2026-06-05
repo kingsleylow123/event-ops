@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     .select('id, name, phone, ticket_type, payment_amount, attendance_confirmed, notes')
     .eq('event_id', eventId)
     .in('payment_status', ['paid', 'free'])
-    .not('notes', 'eq', 'upgrade_payment')
+    .or('notes.is.null,notes.neq.upgrade_payment')
 
   if (error) {
     console.error('checkin select error:', error)
