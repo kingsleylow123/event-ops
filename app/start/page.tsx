@@ -133,7 +133,7 @@ function StartContent() {
         {/* ── Hero ── */}
         <div className="text-center pt-8 pb-2">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/claude-my-logo.svg" alt="Claude Malaysia" width={60} height={60} className="mx-auto rounded-[18px] mb-6"
+          <img src="/claude-logo.jpg" alt="Claude Malaysia" width={60} height={60} className="mx-auto rounded-[18px] mb-6"
             style={{ boxShadow: '0 8px 40px -8px rgba(212,104,74,0.6)' }} />
           <div className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.15em] text-amber-300/90 uppercase mb-4 px-3 py-1 rounded-full"
             style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.18)' }}>

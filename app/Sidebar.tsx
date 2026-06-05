@@ -129,7 +129,7 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
       {/* Header: logo + event switcher */}
       <div className="px-4 pt-5 pb-4">
         <Link href="/" onClick={() => setMobileOpen(false)} className="flex items-center gap-2.5 mb-4">
-          <Image src="/claude-my-logo.svg" alt="Claude Malaysia" width={30} height={30} className="rounded-lg" />
+          <Image src="/claude-logo.jpg" alt="Claude Malaysia" width={30} height={30} className="rounded-lg" />
           <div className="leading-tight">
             <div className="text-sm font-bold text-white">Claude Malaysia</div>
             <div className="text-[10px] text-amber-400/80 font-medium tracking-wide">EVENTOPS</div>
@@ -226,7 +226,7 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
           <span className="block w-5 h-0.5 bg-white rounded" />
           <span className="block w-5 h-0.5 bg-white rounded" />
         </button>
-        <Image src="/claude-my-logo.svg" alt="Claude Malaysia" width={26} height={26} className="rounded-md" />
+        <Image src="/claude-logo.jpg" alt="Claude Malaysia" width={26} height={26} className="rounded-md" />
         <span className="text-sm font-bold text-white">Claude Malaysia</span>
       </div>
 
