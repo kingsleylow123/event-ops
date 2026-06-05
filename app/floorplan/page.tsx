@@ -255,8 +255,8 @@ export default function FloorPlanPage() {
             </div>
           </div>
 
-          {/* Sections grid — always 3 columns to match the seating layout */}
-          <div className="grid grid-cols-3 gap-5">
+          {/* Sections grid — responsive: 1 col mobile, 2 col tablet, 3 col desktop */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {(display.sections ?? []).map((section, idx) => (
               <div key={section.id} className="text-center">
                 {editing ? (
@@ -355,7 +355,7 @@ export default function FloorPlanPage() {
           </div>
 
           {/* Bottom row: Registration · Main Door · F&B */}
-          <div className="grid grid-cols-3 gap-3 pt-6 border-t border-zinc-800">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-6 border-t border-zinc-800">
             <div className="bg-amber-50/5 border border-amber-500/30 rounded-lg p-3 text-center">
               <p className="text-xs text-amber-400 uppercase tracking-wider">📋 Registration</p>
               {editing ? (
@@ -440,8 +440,8 @@ export default function FloorPlanPage() {
               </div>
             </div>
 
-            {/* Sections — 3-column grid matching the seating layout */}
-            <div className="grid grid-cols-3 gap-4">
+            {/* Sections — responsive grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {(currentPlan.sections ?? []).map(section => (
                 <div key={section.id} className="text-center">
                   <h3 className="text-orange-400 text-xs uppercase tracking-widest font-bold mb-2">{section.label}</h3>
@@ -481,7 +481,7 @@ export default function FloorPlanPage() {
             </div>
 
             {/* Bottom row — 3 columns matching the layout */}
-            <div className="grid grid-cols-3 gap-3 pt-6 border-t border-zinc-800">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-6 border-t border-zinc-800">
               <div className="bg-amber-50/5 border border-amber-500/30 rounded-lg p-3 text-center">
                 <p className="text-xs text-amber-400 uppercase tracking-wider">📋 Registration</p>
                 <p className="text-white text-sm mt-1">{currentPlan.registration || '—'}</p>
