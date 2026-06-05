@@ -594,10 +594,39 @@ async function askClaude(question: string, ev: Row, d: Awaited<ReturnType<typeof
     }
   })
 
+  // Master leads (CRM) — affiliate-tagged vs Kingsley's own. Summarized so Claude
+  // can answer "how many affiliate leads from angel" etc. without dumping 1000+ rows.
+  let leadsSummary: {
+    total: number; affiliate: number; kingsley: number
+    by_affiliate: { handle: string; leads: number }[]
+  } | null = null
+  try {
+    const { data: leadRows } = await supabase.from('leads').select('owner, affiliate_handle')
+    if (leadRows) {
+      const byHandle: Record<string, number> = {}
+      let aff = 0
+      for (const r of leadRows) {
+        if (r.owner === 'affiliate') {
+          aff++
+          const h = (r.affiliate_handle as string) || '(unknown)'
+          byHandle[h] = (byHandle[h] || 0) + 1
+        }
+      }
+      leadsSummary = {
+        total: leadRows.length,
+        affiliate: aff,
+        kingsley: leadRows.length - aff,
+        by_affiliate: Object.entries(byHandle).map(([handle, leads]) => ({ handle, leads })).sort((a, b) => b.leads - a.leads),
+      }
+    }
+  } catch { /* leads optional */ }
+
   const snapshot = {
     today: new Date().toISOString().slice(0, 10),
     upcoming_event_id: ev.id,
     events: eventsSnapshot,
+    // Master leads database (affiliate referrals vs Kingsley's own), summarized.
+    leads_summary: leadsSummary,
     // Active-event-only data that doesn't make sense to load globally
     active_event_checklist: d.checklist.map(c => ({ category: c.category, item: c.item, status: c.status, pic: c.pic_name, due: c.due_date })),
     active_event_survey: d.survey.map(s => ({ name: s.name, industry: s.industry, company_size: s.company_size, challenge: s.biggest_challenge, goal: s.workshop_goal })),
@@ -614,6 +643,7 @@ Rules:
 - If data isn't present, say so plainly.
 - If the admin asks to send, generate, create, or make an invoice for someone, CALL the generate_invoice tool — do not just describe what you would do. Infer mode='balance' only if they mention a deposit, partial payment, or balance; otherwise use mode='quick'.
 - The snapshot below contains EVERY event (past and future). When the admin asks about a specific event (e.g. "1st June", "last month", "Claude Malaysia Workshop"), match by name OR date and answer from THAT event's data. Do NOT say "no data" just because an event is in the past — the data is right here in events[].
+- AFFILIATE LEADS: leads_summary holds the master CRM. by_affiliate lists each affiliate handle and their lead count. Affiliate handles look like "angel1643", "queenie7946", "chloe3536". When the admin names an affiliate loosely (e.g. "angel", "queenie"), match it to the handle that STARTS WITH or CONTAINS that name and report that handle's lead count. NEVER say "I don't have affiliate lead data" — it's in leads_summary. "kingsley" / owner=kingsley = Kingsley's own (non-affiliate) leads.
 
 LIVE DATA:
 ${JSON.stringify(snapshot)}`
