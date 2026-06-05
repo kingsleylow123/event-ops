@@ -8,6 +8,18 @@ function isValidPhone(s: string): boolean {
   return /^\d{8,15}$/.test(digits)
 }
 
+// Countdown deadline = midnight (00:00) at the START of the event's calendar
+// day, in Malaysia time (UTC+8). Take the event's date as seen in Asia/
+// Kuala_Lumpur, then pin to 00:00 +08:00 — so the timer hits zero at 12am on
+// the day of the event regardless of the viewer's own timezone.
+function startOfEventDayMYT(d: Date): Date {
+  const ymd = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kuala_Lumpur',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(d) // 'YYYY-MM-DD'
+  return new Date(`${ymd}T00:00:00+08:00`)
+}
+
 interface Facts {
   name?: string | null; date?: string | null; venue?: string | null
 }
@@ -90,6 +102,9 @@ function StartContent() {
   }
 
   const eventDate = facts?.date ? new Date(facts.date) : null
+  // Countdown ends at 12am on the day of the event (Malaysia time), not the
+  // event's start time — so prep is "due" by midnight the day-of.
+  const countdownTarget = eventDate ? startOfEventDayMYT(eventDate) : null
   const dateStr = eventDate ? eventDate.toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long' }) : null
   const surveyUrl = eventId ? `/survey?event=${eventId}` : '#'
 
@@ -100,7 +115,7 @@ function StartContent() {
   return (
     <div className="relative min-h-screen text-white" style={{ background: '#060606' }}>
       {/* ── Sticky countdown ── */}
-      <CountdownBar target={eventDate} done={allDone} doneCount={doneCount} />
+      <CountdownBar target={countdownTarget} done={allDone} doneCount={doneCount} />
 
       {/* Ambient liquid background — clipped here (not on the root) so it can't
           force horizontal scroll while leaving the root free for sticky. */}
