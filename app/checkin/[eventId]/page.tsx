@@ -24,7 +24,7 @@ export default function CheckinPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!phone.trim()) return
+    if (!phone.trim() && !name.trim()) return
     setState({ status: 'loading' })
     try {
       const res = await fetch('/api/checkin', {
