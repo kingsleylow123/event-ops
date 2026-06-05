@@ -123,6 +123,7 @@ export interface FloorPlanSection {
   type: FloorPlanSectionType
   pax: number
   note?: string | null
+  orientation?: 'portrait' | 'landscape'
 }
 
 export interface FloorPlan {

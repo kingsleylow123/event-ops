@@ -266,9 +266,21 @@ export default function FloorPlanPage() {
                 ) : (
                   <h3 className="text-orange-400 text-xs uppercase tracking-widest font-bold">{section.label}</h3>
                 )}
-                <div className="mt-2 flex justify-center gap-2 h-44">
-                  <div className={`w-14 h-full ${SECTION_TYPE_COLORS[section.type]} rounded`} />
-                  <div className={`w-14 h-full ${SECTION_TYPE_COLORS[section.type]} rounded`} />
+                <div className="mt-2 flex justify-center items-center gap-2 h-44">
+                  {section.orientation === 'landscape' ? (
+                    <div className="flex items-center gap-1">
+                      <div className={`w-12 h-8 ${SECTION_TYPE_COLORS[section.type]} rounded`} />
+                      <div className={`w-12 h-8 ${SECTION_TYPE_COLORS[section.type]} rounded`} />
+                      <div className="w-3" />
+                      <div className={`w-12 h-8 ${SECTION_TYPE_COLORS[section.type]} rounded`} />
+                      <div className={`w-12 h-8 ${SECTION_TYPE_COLORS[section.type]} rounded`} />
+                    </div>
+                  ) : (
+                    <>
+                      <div className={`w-14 h-full ${SECTION_TYPE_COLORS[section.type]} rounded`} />
+                      <div className={`w-14 h-full ${SECTION_TYPE_COLORS[section.type]} rounded`} />
+                    </>
+                  )}
                 </div>
                 {editing ? (
                   <div className="mt-2 space-y-1">
@@ -297,6 +309,11 @@ export default function FloorPlanPage() {
                           className="text-xs text-zinc-500 hover:text-amber-400 disabled:opacity-30 px-2 py-1 border border-zinc-700 rounded">←</button>
                         <button type="button" onClick={() => moveSection(idx, 1)} disabled={idx === display.sections.length - 1}
                           className="text-xs text-zinc-500 hover:text-amber-400 disabled:opacity-30 px-2 py-1 border border-zinc-700 rounded">→</button>
+                        <button type="button" onClick={() => updateSection(idx, { orientation: section.orientation === 'landscape' ? 'portrait' : 'landscape' })}
+                          title={section.orientation === 'landscape' ? 'Switch to portrait' : 'Switch to landscape'}
+                          className="text-xs text-zinc-500 hover:text-amber-400 px-2 py-1 border border-zinc-700 rounded">
+                          {section.orientation === 'landscape' ? '⬌' : '⬍'}
+                        </button>
                       </div>
                       <button type="button" onClick={() => removeSection(idx)}
                         className="text-xs text-red-400 hover:text-red-300 px-2 py-1 border border-red-500/30 hover:border-red-500/60 rounded">Remove</button>
@@ -431,9 +448,21 @@ export default function FloorPlanPage() {
               {(currentPlan.sections ?? []).map(section => (
                 <div key={section.id} className="text-center">
                   <h3 className="text-orange-400 text-xs uppercase tracking-widest font-bold mb-2">{section.label}</h3>
-                  <div className="flex justify-center gap-2 h-44">
-                    <div className={`w-14 h-full ${SECTION_TYPE_COLORS[section.type]} rounded`} />
-                    <div className={`w-14 h-full ${SECTION_TYPE_COLORS[section.type]} rounded`} />
+                  <div className="flex justify-center items-center gap-2 h-44">
+                    {section.orientation === 'landscape' ? (
+                      <div className="flex items-center gap-1">
+                        <div className={`w-12 h-8 ${SECTION_TYPE_COLORS[section.type]} rounded`} />
+                        <div className={`w-12 h-8 ${SECTION_TYPE_COLORS[section.type]} rounded`} />
+                        <div className="w-3" />
+                        <div className={`w-12 h-8 ${SECTION_TYPE_COLORS[section.type]} rounded`} />
+                        <div className={`w-12 h-8 ${SECTION_TYPE_COLORS[section.type]} rounded`} />
+                      </div>
+                    ) : (
+                      <>
+                        <div className={`w-14 h-full ${SECTION_TYPE_COLORS[section.type]} rounded`} />
+                        <div className={`w-14 h-full ${SECTION_TYPE_COLORS[section.type]} rounded`} />
+                      </>
+                    )}
                   </div>
                   <p className="text-sm mt-2 text-zinc-300">
                     <span className="text-orange-400 font-bold text-base">{section.pax}</span>{' '}
