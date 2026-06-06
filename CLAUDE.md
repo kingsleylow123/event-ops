@@ -50,7 +50,7 @@ Deploy: push to `master` → Vercel auto-deploys. Supabase migrations in `supaba
 
 ## Supabase
 
-- Project: `wdkljqckvhzovnzkmisg` ("Content System", Tokyo / ap-northeast-1)
+- Project: `hxqpcicdrjgdjabkwlfu` (EventOps — the project the live code actually uses). Note: `wdkljqckvhzovnzkmisg` ("Content System") is a DIFFERENT project (freebie-maker / Content System), not this app.
 - Events live in Supabase; survey responses, attendees, leads, affiliates all DB-backed
 - Use `mcp__supabase__execute_sql` for reads, `apply_migration` for schema changes
 

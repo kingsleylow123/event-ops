@@ -5,6 +5,8 @@ import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
 import { buildReport } from '@/lib/affiliates'
 import { renderInvoicePDF, type InvoiceData, type InvoiceLineItem, type InvoicePayment } from '@/lib/invoice-pdf'
 import { findAttendeesByName, type AttendeeMatch } from '@/lib/invoice-lookup'
+import { pickActiveEvent } from '@/lib/event'
+import type { Event } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -118,12 +120,15 @@ async function sendDocument(chatId: number, fileName: string, pdfBuffer: Buffer,
 
 // ── Data loading ──────────────────────────────────────────────────────────────
 async function getActiveEvent() {
-  const now = new Date().toISOString()
+  // Honor the is_active flag the admin sets in the dashboard (same rule as the
+  // web app via pickActiveEvent: is_active → soonest upcoming → most recent).
+  // This stops Jarvis disagreeing with the dashboard and prevents the day-of
+  // flip to the next (empty) event that a date-only heuristic caused.
   const { data, error } = await supabase
-    .from('events').select('*')
-    .gte('date', now).order('date', { ascending: true }).limit(1)
+    .from('events').select('*').order('date', { ascending: false })
   if (error) throw new Error(`events: ${error.message}`)
-  return data?.[0] ?? null
+  // Cast back to the Row shape the rest of this file uses for `ev`.
+  return pickActiveEvent((data ?? []) as Event[]) as unknown as Row | null
 }
 
 // Load ALL events the admin has (past + future) for natural-language queries.
@@ -515,6 +520,7 @@ async function executeInvoiceTool(
 ): Promise<string> {
   const matches = await findAttendeesByName(input.attendee_name, ev.id as string)
   // Fall back to all events if nothing matches in active event
+  const fromOtherEvent = matches.length === 0
   const finalMatches = matches.length ? matches : await findAttendeesByName(input.attendee_name)
 
   if (finalMatches.length === 0) {
@@ -528,6 +534,10 @@ async function executeInvoiceTool(
   const a = finalMatches[0]
   const mode = input.mode || 'quick'
   const amount = input.override_amount ?? a.payment_amount
+  // Guard against a zero / negative / non-numeric invoice total before we render a PDF.
+  if (!Number.isFinite(amount) || (amount as number) <= 0) {
+    return `Can't invoice ${a.name}: the amount is RM ${amount}. Give me an amount, e.g. "invoice ${a.name} RM497".`
+  }
   const desc = input.description || `[${a.ticket_label}] Claude Workshop`
 
   let lineItems: InvoiceLineItem[]
@@ -545,14 +555,20 @@ async function executeInvoiceTool(
     date: new Date(),
     lineItems,
     payments,
-    note: mode === 'quick' ? '[non refundable' : undefined,
+    note: mode === 'quick' ? 'Non-refundable.' : undefined,
   }
+
+  // If the name only matched outside the active event, flag it — Kingsley may
+  // have meant someone in the current event, not a past attendee with that name.
+  const warn = fromOtherEvent
+    ? `\n⚠️ No "${esc(input.attendee_name)}" in the active event — this match is from another event.`
+    : ''
 
   await sendUploadingDoc(chatId)
   const pdfBuffer = await renderInvoicePDF(invoice)
   const safeName = a.name.replace(/[^a-zA-Z0-9 _-]/g, '').replace(/\s+/g, '-')
   await sendDocument(chatId, `Invoice-${safeName}.pdf`, pdfBuffer,
-    `🧾 <b>Invoice</b> for ${esc(a.name)} — RM ${amount.toLocaleString('en-MY')}`)
+    `🧾 <b>Invoice</b> for ${esc(a.name)} — RM ${amount.toLocaleString('en-MY')}${warn}`)
 
   return `Invoice PDF sent to the chat for ${a.name} (RM ${amount}).`
 }
@@ -568,6 +584,12 @@ async function askClaude(question: string, ev: Row, d: Awaited<ReturnType<typeof
   const eventsSnapshot = allEvents.map(e => {
     const att = across.attendees.filter(a => a.event_id === e.id)
     const exp = across.expenses.filter(x => x.event_id === e.id)
+    // Per-event survey + meetings were already loaded by loadAcrossEvents but
+    // previously discarded — without them Claude had NO survey data for any
+    // non-active event and would confabulate another event's numbers. Wire them
+    // in so every event's survey/meetings are answerable from events[].
+    const svy = across.survey.filter(s => s.event_id === e.id)
+    const mtg = across.meetings.filter(m => m.event_id === e.id)
     return {
       id: e.id,
       name: e.name,
@@ -584,6 +606,8 @@ async function askClaude(question: string, ev: Row, d: Awaited<ReturnType<typeof
         confirmed: att.filter(a => a.attendance_confirmed).length,
         revenue_rm: revenue(att),
         expenses_rm: totalExpenses(exp),
+        survey_responses: svy.length,
+        meetings: mtg.length,
       },
       attendees: att.map(a => ({
         name: a.name, ticket: a.ticket_type, payment: a.payment_status,
@@ -591,6 +615,13 @@ async function askClaude(question: string, ev: Row, d: Awaited<ReturnType<typeof
         confirmed: a.attendance_confirmed, phone: a.phone, email: a.email, notes: a.notes,
       })),
       expenses: exp.map(x => ({ desc: x.description, amount: x.amount, category: x.category })),
+      // Survey rows for THIS event. COUNT these to answer "how many surveys" —
+      // never report another event's numbers when this array is what was asked.
+      survey: svy.map(s => ({
+        name: s.name, industry: s.industry, company_size: s.company_size,
+        challenge: s.biggest_challenge, goal: s.workshop_goal,
+      })),
+      meetings: mtg.map(m => ({ title: m.title, date: m.meeting_date, attendance: m.attendance })),
     }
   })
 
@@ -641,6 +672,8 @@ Rules:
 - When listing people, use • bullets on separate lines.
 - Do the math when asked (counts, %, revenue gaps, who's missing from X). Cross-reference survey vs attendees by name/phone when relevant.
 - If data isn't present, say so plainly.
+- SURVEY DATA lives PER-EVENT in events[].survey (and events[].totals.survey_responses is the count), plus active_event_survey for the active event. To answer "how many surveys / survey results for <event>": find that event in events[], COUNT events[].survey, and summarise THOSE rows. NEVER say a survey is empty when that event's survey array has rows. If a specific event's survey array is genuinely empty, say "no survey responses loaded for <event>" — do NOT substitute or invent another event's numbers. Never mix one event's survey rows into another event's answer.
+- REFUNDS: there is no refund tracking in this data. "revenue_rm" / paid totals are GROSS (sum of paid amounts). If asked about refunds or net revenue, say refunds aren't tracked and the figure shown is gross.
 - If the admin asks to send, generate, create, or make an invoice for someone, CALL the generate_invoice tool — do not just describe what you would do. Infer mode='balance' only if they mention a deposit, partial payment, or balance; otherwise use mode='quick'.
 - The snapshot below contains EVERY event (past and future). When the admin asks about a specific event (e.g. "1st June", "last month", "Claude Malaysia Workshop"), match by name OR date and answer from THAT event's data. Do NOT say "no data" just because an event is in the past — the data is right here in events[].
 - AFFILIATE LEADS: leads_summary holds the master CRM. by_affiliate lists each affiliate handle and their lead count. Affiliate handles look like "angel1643", "queenie7946", "chloe3536". When the admin names an affiliate loosely (e.g. "angel", "queenie"), match it to the handle that STARTS WITH or CONTAINS that name and report that handle's lead count. NEVER say "I don't have affiliate lead data" — it's in leads_summary. "kingsley" / owner=kingsley = Kingsley's own (non-affiliate) leads.
@@ -698,7 +731,9 @@ async function handle(text: string, ev: Row, d: Awaited<ReturnType<typeof loadAl
 export async function POST(req: NextRequest) {
   // Always ack with 200 so Telegram never retries (prevents duplicate-reply storms)
   try {
-    if (WEBHOOK_SECRET && req.headers.get('x-telegram-bot-api-secret-token') !== WEBHOOK_SECRET) {
+    // Fail CLOSED: require the webhook secret to be configured AND match. A
+    // missing secret is a misconfiguration, not a reason to accept anonymous posts.
+    if (!WEBHOOK_SECRET || req.headers.get('x-telegram-bot-api-secret-token') !== WEBHOOK_SECRET) {
       return NextResponse.json({ ok: false }, { status: 401 })
     }
 
@@ -710,8 +745,15 @@ export async function POST(req: NextRequest) {
     const userId = String(message.from?.id ?? '')
     const chatId = message.chat.id as number
 
-    // Auth BEFORE transcription so Whisper credits are never spent on strangers
-    if (ALLOWED_IDS.length && !ALLOWED_IDS.includes(userId)) {
+    // Auth BEFORE transcription so Whisper credits are never spent on strangers.
+    // Fail CLOSED: an empty allow-list is a misconfiguration → refuse everyone,
+    // never "allow anyone who finds the bot" (it can read all PII/revenue/invoices).
+    if (!ALLOWED_IDS.length) {
+      console.error('[telegram] TELEGRAM_ALLOWED_USER_IDS is empty — refusing all messages (fail-closed)')
+      await sendMessage(chatId, '🚫 Bot access is not configured (TELEGRAM_ALLOWED_USER_IDS missing).')
+      return NextResponse.json({ ok: true })
+    }
+    if (!ALLOWED_IDS.includes(userId)) {
       await sendMessage(chatId, `🚫 Not authorised.\n\nYour Telegram ID: <code>${esc(userId)}</code>`)
       return NextResponse.json({ ok: true })
     }

@@ -9,9 +9,11 @@ export const maxDuration = 60
 // Daily Vercel Cron (06:00 MYT) → (1) auto-match affiliates, then (2) ping admins
 // about any NEW affiliate-attributed buyers. Guarded by CRON_SECRET.
 export async function GET(req: NextRequest) {
+  // Fail CLOSED: require CRON_SECRET to be set AND match. Vercel Cron auto-sends
+  // the bearer header when the env var is set, so this only closes the unset hole.
   const secret = process.env.CRON_SECRET
   const auth = req.headers.get('authorization')
-  if (secret && auth !== `Bearer ${secret}`) {
+  if (!secret || auth !== `Bearer ${secret}`) {
     return NextResponse.json({ ok: false }, { status: 401 })
   }
 
