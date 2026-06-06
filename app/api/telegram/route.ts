@@ -5,7 +5,8 @@ import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
 import { buildReport } from '@/lib/affiliates'
 import { renderInvoicePDF, type InvoiceData, type InvoiceLineItem, type InvoicePayment } from '@/lib/invoice-pdf'
 import { findAttendeesByName, type AttendeeMatch } from '@/lib/invoice-lookup'
-import { pickActiveEvent } from '@/lib/event'
+import { pickActiveEvent, matchEvent } from '@/lib/event'
+import { loadMemory, appendTurn, setPending, clearPending, recentTurnsForPrompt } from '@/lib/jarvis-memory'
 import type { Event } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -60,17 +61,28 @@ function esc(v: unknown): string {
 const b = (v: unknown) => `<b>${esc(v)}</b>`
 
 // ── Telegram helpers ──────────────────────────────────────────────────────────
+// One bounded retry with backoff on 429/5xx or network throw. Capped at a
+// single retry on purpose: sendMessage isn't idempotent on Telegram's side, so
+// aggressive retries risk duplicate replies. 4xx (other than 429) never retry.
 async function tg(method: string, body: Row) {
-  try {
-    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${method}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    if (!res.ok) console.error(`[telegram] ${method} failed`, await res.text())
-    return res
-  } catch (e) {
-    console.error(`[telegram] ${method} threw`, e)
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${method}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (res.ok) return res
+      const retryable = res.status === 429 || res.status >= 500
+      if (!retryable || attempt === 1) {
+        console.error(`[telegram] ${method} failed (${res.status})`, await res.text())
+        return res
+      }
+      await new Promise(r => setTimeout(r, 400 * (attempt + 1)))
+    } catch (e) {
+      if (attempt === 1) { console.error(`[telegram] ${method} threw`, e); return }
+      await new Promise(r => setTimeout(r, 400 * (attempt + 1)))
+    }
   }
 }
 
@@ -197,6 +209,83 @@ function daysUntil(date: string) {
   if (d > 0) return `${d}d ${h}h`
   if (ms > 0) return `${h}h`
   return 'now / past'
+}
+
+// ── Affiliate buyer-summary per event (for Jarvis snapshot + /affiliate) ──────
+// Folds buildReport().summary[].buyer_list (already deduped + sorted) into a
+// lean handle→buyers map. Returns null when there are no attributions.
+async function affiliateBuyersForEvent(eventId: string) {
+  let rep
+  try { rep = await buildReport(eventId) } catch { return null }
+  if (!rep.summary.length) return null
+  const byHandle: Record<string, { buyers: { name: string; amount: number }[]; revenue: number; commission: number }> = {}
+  for (const s of rep.summary) {
+    byHandle[s.handle] = {
+      buyers: s.buyer_list.map(x => ({ name: x.name, amount: x.amount })),
+      revenue: s.revenue,
+      commission: s.commission,
+    }
+  }
+  return {
+    by_handle: byHandle,
+    total_commission: rep.totals.total_commission,
+    unattributed_rm: rep.totals.unattributed_revenue,
+  }
+}
+
+// ── Prep readiness aggregate (active event only) — mirrors GET /api/prep ──────
+const PREP_STEP_LABELS = { '1': 'Install', '2': 'Pro', '3': 'Dev tools', '4': 'Survey', '5': 'Data', '6': '9:30am' } as const
+async function prepAggregate(eventId: string) {
+  const { data } = await supabase
+    .from('prep_progress').select('name, phone, steps, completed').eq('event_id', eventId)
+  const rows = data ?? []
+  if (!rows.length) return null
+  const per: Record<string, number> = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0 }
+  for (const r of rows) {
+    const s = (r.steps ?? {}) as Record<string, boolean>
+    for (const k of Object.keys(per)) if (s[k]) per[k]++
+  }
+  return {
+    started: rows.length,
+    completed: rows.filter(r => r.completed).length,
+    per_step: Object.fromEntries(Object.entries(PREP_STEP_LABELS).map(([k, lbl]) => [lbl, per[k]])),
+    still_pending: rows.filter(r => !r.completed).map(r => (r.name as string) || (r.phone as string)),
+  }
+}
+
+// Static half-day workshop run-of-show. There is no agenda column on `events`
+// yet — this constant is the single source. Times anchor on the 9:30am call
+// time (matches prep step 6). If events ever gets a run_of_show JSON column,
+// fmtAgenda already falls through to it.
+const DEFAULT_AGENDA: Array<{ time: string; item: string }> = [
+  { time: '9:30',  item: 'Doors / registration / check-in' },
+  { time: '10:00', item: 'Welcome + intro — Kingsley' },
+  { time: '10:15', item: 'Workshop block 1 — setup & first build' },
+  { time: '11:30', item: 'Break (F&B)' },
+  { time: '11:45', item: 'Workshop block 2 — build something real' },
+  { time: '13:00', item: 'Lunch' },
+  { time: '14:00', item: 'Workshop block 3 — apply to your business' },
+  { time: '15:30', item: 'Q&A + implementation-call offer' },
+  { time: '16:00', item: 'Wrap / networking' },
+]
+
+// ── 60s in-memory snapshot cache for askClaude (T3.4) ─────────────────────────
+// Cuts repeat Supabase round-trips when the admin fires several questions in a
+// row. Keyed on a constant — there is exactly one admin tenant. Stored at module
+// scope; survives across warm invocations on the same Vercel lambda instance.
+type SnapshotBundle = {
+  allEvents: Awaited<ReturnType<typeof getAllEvents>>
+  across: Awaited<ReturnType<typeof loadAcrossEvents>>
+}
+let _snapCache: { at: number; data: SnapshotBundle } | null = null
+const SNAP_TTL_MS = 60_000
+async function getSnapshotBundle(): Promise<SnapshotBundle> {
+  if (_snapCache && Date.now() - _snapCache.at < SNAP_TTL_MS) return _snapCache.data
+  const allEvents = await getAllEvents()
+  const across = await loadAcrossEvents(allEvents.map(e => e.id as string))
+  const data = { allEvents, across }
+  _snapCache = { at: Date.now(), data }
+  return data
 }
 
 // ── Command formatters (HTML) ─────────────────────────────────────────────────
@@ -413,6 +502,38 @@ async function fmtAffiliates(eventId: string) {
   return out
 }
 
+// /affiliate <handle> — paid buyers brought by ONE affiliate for an event.
+async function fmtAffiliate(eventId: string, query: string) {
+  const q = query.trim().toLowerCase().replace(/^@/, '')
+  if (q.length < 2) return 'Give me an affiliate handle: /affiliate &lt;handle&gt;'
+  const rep = await buildReport(eventId)
+  const money = (n: number) => 'RM ' + n.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  // Match: exact handle first, else starts-with, else contains.
+  const s =
+    rep.summary.find(r => r.handle.toLowerCase() === q) ||
+    rep.summary.find(r => r.handle.toLowerCase().startsWith(q)) ||
+    rep.summary.find(r => r.handle.toLowerCase().includes(q))
+  if (!s) {
+    const known = rep.summary.map(r => esc(r.handle)).join(', ') || 'none with paid buyers yet'
+    return `❌ No affiliate matching "${esc(query)}" with paid buyers for this event.\n<i>With sales: ${known}</i>`
+  }
+  if (!s.buyer_list.length) return `🤝 ${b(s.handle)} — no paid buyers yet for this event.`
+  const lines = s.buyer_list.map(buyer => `• ${esc(buyer.name)} — ${money(buyer.amount)}`).join('\n')
+  let out = `🤝 ${b(s.handle)} — ${s.buyers} paid buyer${s.buyers !== 1 ? 's' : ''}\n${lines}`
+  out += `\n\n${b('Revenue')}: ${money(s.revenue)}   ${b('Commission')}: ${money(s.commission)}`
+  if (s.paid_at) out += `\n<i>✅ Paid out ${esc(new Date(s.paid_at).toLocaleDateString('en-MY', { day: 'numeric', month: 'short' }))}</i>`
+  return out
+}
+
+// /agenda — workshop run-of-show. Reads a run_of_show field if one ever lands
+// on the event, else falls back to DEFAULT_AGENDA.
+function fmtAgenda(ev: Row) {
+  const custom = ev.run_of_show as Array<{ time: string; item: string }> | undefined
+  const rows = Array.isArray(custom) && custom.length ? custom : DEFAULT_AGENDA
+  const note = (Array.isArray(custom) && custom.length) ? '' : '\n<i>(default agenda — no run-of-show set on this event)</i>'
+  return `🗓 ${b('Run of Show')} — ${esc(ev.name)}${note}\n\n` + rows.map(r => `<b>${esc(r.time)}</b>  ${esc(r.item)}`).join('\n')
+}
+
 async function fmtPrep(eventId: string) {
   const STEP = { '1': 'Install', '2': 'Pro', '3': 'Dev tools', '4': 'Survey', '5': 'Data', '6': '9:30am' } as const
   const { data } = await supabase
@@ -433,6 +554,32 @@ async function fmtPrep(eventId: string) {
   return out
 }
 
+// One-time: register the slash-command menu shown in Telegram's "/" picker.
+// Called from the GET health check (idempotent, additive, never auto-sends).
+async function registerCommands() {
+  return tg('setMyCommands', {
+    commands: [
+      { command: 'stats',      description: 'Full event summary' },
+      { command: 'money',      description: 'Revenue, expenses, profit' },
+      { command: 'checkins',   description: "Who's checked in" },
+      { command: 'pending',    description: 'Unpaid attendees' },
+      { command: 'vip',        description: 'VIP list' },
+      { command: 'checklist',  description: 'Tasks + overdue + PIC' },
+      { command: 'team',       description: 'Team roster + phones' },
+      { command: 'floorplan',  description: 'Seating layout' },
+      { command: 'agenda',     description: 'Workshop run-of-show' },
+      { command: 'survey',     description: 'Audience insights' },
+      { command: 'meetings',   description: 'Meeting attendance' },
+      { command: 'duplicates', description: 'Flag duplicate entries' },
+      { command: 'affiliates', description: 'Creator commission payout' },
+      { command: 'affiliate',  description: "One affiliate's paid buyers" },
+      { command: 'leads',      description: 'Master leads (affiliate vs Kingsley)' },
+      { command: 'prep',       description: 'Pre-workshop readiness' },
+      { command: 'find',       description: 'Look up an attendee' },
+    ],
+  })
+}
+
 const HELP = `🤖 ${b('Jarvis')} — your EventOps assistant\n\n` +
   `${b('Quick commands')}\n` +
   `/stats — full event summary\n` +
@@ -447,9 +594,12 @@ const HELP = `🤖 ${b('Jarvis')} — your EventOps assistant\n\n` +
   `/meetings — meeting attendance\n` +
   `/duplicates — flag duplicate entries\n` +
   `/affiliates — creator commission payout\n` +
+  `/affiliate &lt;handle&gt; — one affiliate's paid buyers + total\n` +
+  `/agenda — workshop run-of-show\n` +
   `/leads — master leads (affiliate vs Kingsley)\n` +
   `/prep — pre-workshop readiness\n` +
   `/find &lt;name&gt; — look up an attendee\n\n` +
+  `<i>Tip: add an event to any command, e.g. "/stats 7 june" or "/survey 1jun".</i>\n\n` +
   `Or just ${b('ask anything')} in plain English 👇\n` +
   `<i>e.g. "who hasn't paid?", "how full are we vs capacity?", "which paid attendees skipped the survey?"</i>\n\n` +
   `${b('🧾 Invoices')}\n` +
@@ -574,12 +724,33 @@ async function executeInvoiceTool(
 }
 
 // ── Claude natural-language fallback ──────────────────────────────────────────
-async function askClaude(question: string, ev: Row, d: Awaited<ReturnType<typeof loadAll>>, chatId: number) {
+async function askClaude(question: string, ev: Row, d: Awaited<ReturnType<typeof loadAll>>, chatId: number, focusEvent?: Row) {
   // Load every event (past + future) and their attendees so Claude can
   // answer questions about ANY event, not just the upcoming one.
-  const allEvents = await getAllEvents()
-  const eventIds = allEvents.map(e => e.id as string)
-  const across = await loadAcrossEvents(eventIds)
+  // 60s cache: repeat questions in a burst reuse one fetch (T3.4).
+  const { allEvents, across } = await getSnapshotBundle()
+
+  // The "focus" event gets full per-attendee detail; every other event keeps
+  // totals + survey only, so the payload stays lean as events accumulate (T2.6).
+  // focusEvent is the matchEvent-resolved event for a "/cmd 7jun"-style query,
+  // else the active event.
+  const focusId = (focusEvent?.id ?? ev.id) as string
+
+  // Affiliate buyer attribution — only for the focus event + recently-past
+  // events (≤30d), so we don't fire buildReport()×4-queries for every event.
+  const recentCutoff = Date.now() - 30 * 86400000
+  const affiliateByEvent: Record<string, NonNullable<Awaited<ReturnType<typeof affiliateBuyersForEvent>>>> = {}
+  await Promise.all(
+    allEvents
+      .filter(e => e.id === focusId || (e.date && new Date(e.date as string).getTime() >= recentCutoff))
+      .map(async e => {
+        const a = await affiliateBuyersForEvent(e.id as string)
+        if (a) affiliateByEvent[e.id as string] = a
+      }),
+  )
+
+  // Prep readiness for the FOCUS event only.
+  const prep = await prepAggregate(focusId)
 
   const eventsSnapshot = allEvents.map(e => {
     const att = across.attendees.filter(a => a.event_id === e.id)
@@ -590,7 +761,8 @@ async function askClaude(question: string, ev: Row, d: Awaited<ReturnType<typeof
     // in so every event's survey/meetings are answerable from events[].
     const svy = across.survey.filter(s => s.event_id === e.id)
     const mtg = across.meetings.filter(m => m.event_id === e.id)
-    return {
+    const isFocus = e.id === focusId
+    const entry: Record<string, unknown> = {
       id: e.id,
       name: e.name,
       date: e.date,
@@ -609,20 +781,28 @@ async function askClaude(question: string, ev: Row, d: Awaited<ReturnType<typeof
         survey_responses: svy.length,
         meetings: mtg.length,
       },
-      attendees: att.map(a => ({
-        name: a.name, ticket: a.ticket_type, payment: a.payment_status,
-        method: a.payment_method, amount: a.payment_amount,
-        confirmed: a.attendance_confirmed, phone: a.phone, email: a.email, notes: a.notes,
-      })),
-      expenses: exp.map(x => ({ desc: x.description, amount: x.amount, category: x.category })),
-      // Survey rows for THIS event. COUNT these to answer "how many surveys" —
-      // never report another event's numbers when this array is what was asked.
+      // Survey rows for THIS event (kept for ALL events — the T1.1 fix). COUNT
+      // these to answer "how many surveys"; never substitute another event's.
       survey: svy.map(s => ({
         name: s.name, industry: s.industry, company_size: s.company_size,
         challenge: s.biggest_challenge, goal: s.workshop_goal,
       })),
-      meetings: mtg.map(m => ({ title: m.title, date: m.meeting_date, attendance: m.attendance })),
     }
+    // Heavy per-attendee + expense + meeting detail ONLY for the focus event —
+    // other events stay at totals+survey to bound the payload (T2.6).
+    if (isFocus) {
+      entry.attendees = att.map(a => ({
+        name: a.name, ticket: a.ticket_type, payment: a.payment_status,
+        method: a.payment_method, amount: a.payment_amount,
+        confirmed: a.attendance_confirmed, phone: a.phone, email: a.email, notes: a.notes,
+      }))
+      entry.expenses = exp.map(x => ({ desc: x.description, amount: x.amount, category: x.category }))
+      entry.meetings = mtg.map(m => ({ title: m.title, date: m.meeting_date, attendance: m.attendance }))
+    }
+    // Affiliate buyer-attribution, where present (focus + recent events only).
+    const aff = affiliateByEvent[e.id as string]
+    if (aff) entry.affiliate_buyers = aff
+    return entry
   })
 
   // Master leads (CRM) — affiliate-tagged vs Kingsley's own. Summarized so Claude
@@ -655,49 +835,95 @@ async function askClaude(question: string, ev: Row, d: Awaited<ReturnType<typeof
   const snapshot = {
     today: new Date().toISOString().slice(0, 10),
     upcoming_event_id: ev.id,
+    focus_event_id: focusId,
     events: eventsSnapshot,
     // Master leads database (affiliate referrals vs Kingsley's own), summarized.
     leads_summary: leadsSummary,
+    // Pre-workshop readiness for the FOCUS event (null if nobody started).
+    active_event_prep: prep,
     // Active-event-only data that doesn't make sense to load globally
     active_event_checklist: d.checklist.map(c => ({ category: c.category, item: c.item, status: c.status, pic: c.pic_name, due: c.due_date })),
     active_event_survey: d.survey.map(s => ({ name: s.name, industry: s.industry, company_size: s.company_size, challenge: s.biggest_challenge, goal: s.workshop_goal })),
     active_event_meetings: d.meetings.map(m => ({ title: m.title, date: m.meeting_date, attendance: m.attendance })),
   }
 
-  const system = `You are Jarvis — the EventOps assistant, an internal ops bot for the event organiser (a single trusted admin). You are sharp, concise, and quietly witty (think Tony Stark's Jarvis) — but never waste the admin's time with fluff. Answer questions about the event using the live JSON data below. Today is ${new Date().toISOString().slice(0, 10)}.
+  // Recent conversation so Jarvis has short-term memory (T3.3).
+  const recent = await recentTurnsForPrompt(chatId)
+  const recentBlock = recent ? `\nRecent conversation (oldest→newest):\n${recent}\n` : ''
 
+  const system = `You are Jarvis — the EventOps assistant, an internal ops bot for the event organiser (a single trusted admin). You are sharp, concise, and quietly witty (think Tony Stark's Jarvis) — but never waste the admin's time with fluff. Answer questions about the event using the live JSON data below. Today is ${new Date().toISOString().slice(0, 10)}.
+${recentBlock}
 Rules:
 - Be concise and direct. This is Telegram — short answers, no preamble.
 - You may use these HTML tags ONLY: <b>, <i>. No markdown, no other tags, no headers.
 - When listing people, use • bullets on separate lines.
 - Do the math when asked (counts, %, revenue gaps, who's missing from X). Cross-reference survey vs attendees by name/phone when relevant.
 - If data isn't present, say so plainly.
-- SURVEY DATA lives PER-EVENT in events[].survey (and events[].totals.survey_responses is the count), plus active_event_survey for the active event. To answer "how many surveys / survey results for <event>": find that event in events[], COUNT events[].survey, and summarise THOSE rows. NEVER say a survey is empty when that event's survey array has rows. If a specific event's survey array is genuinely empty, say "no survey responses loaded for <event>" — do NOT substitute or invent another event's numbers. Never mix one event's survey rows into another event's answer.
+- Use Recent conversation above to resolve follow-ups like "and her?", "what about the next one?", "same for June 7" — carry the prior subject/event forward.
+- FOCUS EVENT: full per-attendee detail (events[].attendees, .expenses, .meetings) is present ONLY on the event whose id === focus_event_id. For every OTHER event you have totals + survey only — if asked for a per-person breakdown of a non-focus event, say which event to switch to (e.g. "ask with the event name, like '/stats 7 june'"). Never invent attendee rows for a non-focus event.
+- SURVEY DATA lives PER-EVENT in events[].survey (and events[].totals.survey_responses is the count) for EVERY event, plus active_event_survey for the active event. To answer "how many surveys / survey results for <event>": find that event in events[], COUNT events[].survey, and summarise THOSE rows. NEVER say a survey is empty when that event's survey array has rows. If a specific event's survey array is genuinely empty, say "no survey responses loaded for <event>" — do NOT substitute or invent another event's numbers. Never mix one event's survey rows into another event's answer.
+- AFFILIATE BUYERS: events[].affiliate_buyers (present only when there are attributions) holds, per affiliate handle, the buyers who actually PAID: { by_handle: { "<handle>": { buyers: [{name, amount}], revenue, commission } }, total_commission, unattributed_rm }. Amounts are RM. For "who did <affiliate> bring" or "<affiliate>'s payout", read by_handle for that event; match a loose name (e.g. "angel") to the handle that starts-with/contains it. These are PAID buyers only — lead counts (not buyers) live in leads_summary.
+- PREP READINESS: active_event_prep (null if nobody started) = { started, completed, per_step: { Install, Pro, "Dev tools", Survey, Data, "9:30am": count }, still_pending: [names] }. Use it for "how many are workshop-ready", "who hasn't finished prep". "completed" = all 6 steps done. Do NOT confuse prep completion with payment status.
 - REFUNDS: there is no refund tracking in this data. "revenue_rm" / paid totals are GROSS (sum of paid amounts). If asked about refunds or net revenue, say refunds aren't tracked and the figure shown is gross.
-- If the admin asks to send, generate, create, or make an invoice for someone, CALL the generate_invoice tool — do not just describe what you would do. Infer mode='balance' only if they mention a deposit, partial payment, or balance; otherwise use mode='quick'.
+- If the admin asks to send, generate, create, or make an invoice for someone, CALL the generate_invoice tool — do not just describe what you would do. Infer mode='balance' only if they mention a deposit, partial payment, or balance; otherwise use mode='quick'. After you call it, I will ask the admin to reply YES before the invoice is actually issued — so phrase any text as if it still needs confirmation.
 - The snapshot below contains EVERY event (past and future). When the admin asks about a specific event (e.g. "1st June", "last month", "Claude Malaysia Workshop"), match by name OR date and answer from THAT event's data. Do NOT say "no data" just because an event is in the past — the data is right here in events[].
 - AFFILIATE LEADS: leads_summary holds the master CRM. by_affiliate lists each affiliate handle and their lead count. Affiliate handles look like "angel1643", "queenie7946", "chloe3536". When the admin names an affiliate loosely (e.g. "angel", "queenie"), match it to the handle that STARTS WITH or CONTAINS that name and report that handle's lead count. NEVER say "I don't have affiliate lead data" — it's in leads_summary. "kingsley" / owner=kingsley = Kingsley's own (non-affiliate) leads.
 
 LIVE DATA:
 ${JSON.stringify(snapshot)}`
 
+  // Intent-based model routing (T2.2). Analytical / comparison questions, or
+  // questions touching 2+ events, escalate to Sonnet with a bigger budget;
+  // simple lookups and invoice requests stay on cheap+fast Haiku.
+  const analytical = /\b(compare|comparison|gap|which|missing|vs|versus|why|most|least|trend|difference|better|worse|each event|across)\b/i.test(question)
+  const eventHits = allEvents.filter(e =>
+    (e.name && question.toLowerCase().includes((e.name as string).toLowerCase())) ||
+    (e.date && matchEvent(question, [e as unknown as Event]) !== null),
+  ).length
+  const escalate = analytical || eventHits >= 2
+  const model = escalate ? 'claude-sonnet-4-6' : 'claude-haiku-4-5'
+  const maxTokens = escalate ? 2048 : 1024
+
   // First turn: let Claude either answer directly OR call generate_invoice
   const first = await anthropic.messages.create({
-    model: 'claude-haiku-4-5',
-    max_tokens: 1024,
+    model,
+    max_tokens: maxTokens,
     system,
     tools: [GENERATE_INVOICE_TOOL],
     messages: [{ role: 'user', content: question }],
   })
 
-  // If Claude chose to call the invoice tool, execute it
+  // If Claude chose to call the invoice tool, STAGE it for confirmation instead
+  // of issuing the PDF immediately (T3.3). Money never moves without a YES.
   const toolUse = first.content.find(x => x.type === 'tool_use')
   if (toolUse && toolUse.type === 'tool_use' && toolUse.name === 'generate_invoice') {
-    const status = await executeInvoiceTool(toolUse.input as InvoiceToolInput, chatId, ev)
-    // We already sent the PDF (via sendDocument). Return empty so the caller
-    // doesn't double-send. Errors / multi-match prompts come back through `status`.
-    if (status.startsWith('Invoice PDF sent')) return ''
-    return status
+    const inv = toolUse.input as InvoiceToolInput
+    // Validate the attendee + amount up front so we don't ask the admin to
+    // confirm something that will fail. We do the SAME lookup executeInvoiceTool
+    // does, but render nothing yet.
+    const matches = await findAttendeesByName(inv.attendee_name, focusId)
+    const finalMatches = matches.length ? matches : await findAttendeesByName(inv.attendee_name)
+    if (finalMatches.length === 0) return `No attendee matching "${esc(inv.attendee_name)}". Try a different spelling or check /find.`
+    if (finalMatches.length > 1) {
+      const list = finalMatches.slice(0, 5).map((m: AttendeeMatch) => `• ${esc(m.name)} (${esc(m.ticket_label)}, RM ${m.payment_amount})`).join('\n')
+      return `Multiple matches for "${esc(inv.attendee_name)}":\n${list}\nReply with a more specific name.`
+    }
+    const a = finalMatches[0]
+    const amount = inv.override_amount ?? a.payment_amount
+    if (!Number.isFinite(amount) || (amount as number) <= 0) {
+      return `Can't invoice ${esc(a.name)}: the amount is RM ${esc(amount)}. Give me an amount, e.g. "invoice ${esc(a.name)} RM497".`
+    }
+    // Stash the resolved tool input so the YES handler renders the exact same
+    // invoice (no re-inference). created_at lets us expire stale confirms.
+    await setPending(chatId, {
+      kind: 'invoice',
+      attendee_name: a.name,
+      amount: amount as number,
+      mode: inv.mode || 'quick',
+      created_at: new Date().toISOString(),
+      tool_input: { ...inv, attendee_name: a.name, override_amount: amount as number },
+    })
+    return `🧾 Issue a ${esc(inv.mode === 'balance' ? 'balance' : 'quick')} invoice for ${b(a.name)} — RM ${(amount as number).toLocaleString('en-MY')}?\nReply <b>YES</b> to send, anything else to cancel.`
   }
 
   // Otherwise just return Claude's text reply
@@ -706,29 +932,93 @@ ${JSON.stringify(snapshot)}`
 }
 
 // ── Command router ────────────────────────────────────────────────────────────
-async function handle(text: string, ev: Row, d: Awaited<ReturnType<typeof loadAll>>): Promise<string> {
-  const cmd = text.toLowerCase()
+// Returns '' to signal "fall through to natural language (askClaude)".
+// allEvents lets data-scoped commands target a non-active event via matchEvent;
+// chatId is needed to resolve a pending "YES" invoice confirmation.
+async function handle(
+  text: string,
+  ev: Row,
+  d: Awaited<ReturnType<typeof loadAll>>,
+  allEvents: Awaited<ReturnType<typeof getAllEvents>>,
+  chatId: number,
+): Promise<string> {
+  const trimmed = text.trim()
+  const cmd = trimmed.toLowerCase()
+
+  // ── Pending-action confirmation (T3.3) ──────────────────────────────────────
+  // A bare YES/Y resolves a staged invoice; anything else cancels it.
+  const mem = await loadMemory(chatId)
+  if (mem.pending && mem.pending.kind === 'invoice') {
+    await clearPending(chatId)
+    if (/^(yes|y|confirm|ok|okay|go)$/i.test(trimmed)) {
+      const ti = (mem.pending.tool_input as InvoiceToolInput) ?? {
+        attendee_name: mem.pending.attendee_name as string,
+        override_amount: mem.pending.amount as number,
+        mode: (mem.pending.mode as 'quick' | 'balance') || 'quick',
+      }
+      const status = await executeInvoiceTool(ti, chatId, ev)
+      // PDF already sent inside executeInvoiceTool — swallow the success string.
+      return status.startsWith('Invoice PDF sent') ? '' : status
+    }
+    return '❎ Invoice cancelled.'
+  }
+
   if (cmd === '/start' || cmd === '/help') return HELP
-  if (cmd === '/stats') return fmtStats(ev, d.attendees, d.expenses)
-  if (cmd === '/money') return fmtMoney(d.attendees, d.expenses)
-  if (cmd === '/checkins') return fmtCheckins(d.attendees)
-  if (cmd === '/pending') return fmtPending(d.attendees)
-  if (cmd === '/vip') return fmtVip(d.attendees)
-  if (cmd === '/checklist') return fmtChecklist(d.checklist)
-  if (cmd === '/team') return fmtTeam(ev)
-  if (cmd === '/floorplan') return fmtFloorplan(ev)
-  if (cmd === '/survey') return fmtSurvey(d.survey, d.attendees)
-  if (cmd === '/meetings') return fmtMeetings(d.meetings)
-  if (cmd === '/duplicates') return fmtDuplicates(d.attendees)
-  if (cmd === '/affiliates') return await fmtAffiliates(ev.id as string)
-  if (cmd === '/leads') return await fmtLeads()
-  if (cmd === '/prep') return await fmtPrep(ev.id as string)
-  if (cmd.startsWith('/find ')) return fmtFind(d.attendees, text.slice(6).trim())
+
+  // ── Resolve an optional trailing event token for data-scoped commands ────────
+  // e.g. "/survey 1jun", "/stats 7 june". The first word is the command; the
+  // rest (if any) is fed to matchEvent against ALL events. Falls back to the
+  // active event when there's no token or no confident match.
+  const sp = trimmed.indexOf(' ')
+  const base = sp === -1 ? cmd : cmd.slice(0, sp)
+  const arg = sp === -1 ? '' : trimmed.slice(sp + 1).trim()
+  const DATA_SCOPED = new Set(['/stats', '/money', '/checkins', '/pending', '/vip', '/checklist', '/survey', '/meetings', '/duplicates', '/affiliates', '/affiliate', '/prep', '/team', '/floorplan', '/agenda'])
+
+  // Resolve the event this command runs against + a banner. matchEvent only
+  // fires when there IS an arg, so plain "/stats" stays on the active event.
+  let target = ev
+  let scoped: Awaited<ReturnType<typeof loadAll>> = d
+  if (DATA_SCOPED.has(base) && arg && base !== '/affiliate' && base !== '/find') {
+    const matched = matchEvent(arg, allEvents as Event[])
+    if (!matched) return `🤔 I couldn't match "${esc(arg)}" to an event. Try the date (e.g. "7 june") or the event name.`
+    if ((matched.id as string) !== (ev.id as string)) {
+      target = matched as unknown as Row
+      scoped = await loadAll(matched.id as string) // load THAT event's data
+    }
+  }
+  const banner = (target.id as string) !== (ev.id as string)
+    ? `📌 ${b(target.name)} — ${esc(target.date ? new Date(target.date as string).toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' }) : '—')}\n\n`
+    : ''
+
+  if (base === '/stats') return banner + fmtStats(target, scoped.attendees, scoped.expenses)
+  if (base === '/money') return banner + fmtMoney(scoped.attendees, scoped.expenses)
+  if (base === '/checkins') return banner + fmtCheckins(scoped.attendees)
+  if (base === '/pending') return banner + fmtPending(scoped.attendees)
+  if (base === '/vip') return banner + fmtVip(scoped.attendees)
+  if (base === '/checklist') return banner + fmtChecklist(scoped.checklist)
+  if (base === '/team') return banner + fmtTeam(target)
+  if (base === '/floorplan') return banner + fmtFloorplan(target)
+  if (base === '/agenda') return banner + fmtAgenda(target)
+  if (base === '/survey') return banner + fmtSurvey(scoped.survey, scoped.attendees)
+  if (base === '/meetings') return banner + fmtMeetings(scoped.meetings)
+  if (base === '/duplicates') return banner + fmtDuplicates(scoped.attendees)
+  if (base === '/affiliates') return banner + await fmtAffiliates(target.id as string)
+  if (base === '/prep') return banner + await fmtPrep(target.id as string)
+  // /affiliate <handle> — the arg is a handle, NOT an event token.
+  if (base === '/affiliate') {
+    if (!arg) return 'Give me an affiliate handle: /affiliate &lt;handle&gt;'
+    return await fmtAffiliate(ev.id as string, arg)
+  }
+  if (base === '/leads') return await fmtLeads()
+  if (base === '/find') return fmtFind(d.attendees, arg)
   return '' // signal: natural language
 }
 
 // ── Main webhook ──────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
+  // Hoisted so the catch block can notify the admin even if we throw after the
+  // request body has already been consumed (T3.4).
+  let chatId: number | null = null
   // Always ack with 200 so Telegram never retries (prevents duplicate-reply storms)
   try {
     // Fail CLOSED: require the webhook secret to be configured AND match. A
@@ -743,7 +1033,7 @@ export async function POST(req: NextRequest) {
     if (!message?.text && !voice) return NextResponse.json({ ok: true })
 
     const userId = String(message.from?.id ?? '')
-    const chatId = message.chat.id as number
+    chatId = message.chat.id as number // hoisted (declared before try) so catch can notify (T3.4)
 
     // Auth BEFORE transcription so Whisper credits are never spent on strangers.
     // Fail CLOSED: an empty allow-list is a misconfiguration → refuse everyone,
@@ -785,28 +1075,41 @@ export async function POST(req: NextRequest) {
     }
 
     const data = await loadAll(ev.id as string)
+    // Load all events once here so handle() can resolve "/cmd <event>" tokens
+    // and askClaude can reuse the cached bundle (no double active-event load).
+    const allEvents = await getAllEvents()
 
-    let reply = await handle(text, ev, data)
+    let reply = await handle(text, ev, data, allEvents, chatId)
     if (!reply) {
+      // "On it…" ack before potentially-long Claude work (T3.4). typing alone
+      // disappears after a few seconds; a one-liner reassures the admin.
       await sendTyping(chatId)
       reply = await askClaude(text, ev, data, chatId)
     }
 
-    // Empty reply = the handler already sent something (e.g. an invoice PDF)
-    if (reply) await sendMessage(chatId, reply)
+    // Empty reply = the handler already sent something (e.g. an invoice PDF).
+    if (reply) {
+      await sendMessage(chatId, reply)
+      // Persist the exchange for short-term memory (T3.3). Only store plain
+      // text turns — invoice PDFs / staged confirmations carry their own state.
+      await appendTurn(chatId, text, reply)
+    }
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('[telegram] unhandled', err)
-    // Best-effort error reply to the admin, but still 200 to stop retries
-    try {
-      const u = await req.json().catch(() => null)
-      const cid = u?.message?.chat?.id
-      if (cid) await sendMessage(cid, '⚠️ Something went wrong handling that. Try again or use /help.')
-    } catch { /* ignore */ }
+    // Best-effort error reply to the admin, but still 200 to stop retries.
+    // chatId was hoisted before the body was consumed, so this actually works
+    // now (the old code re-read an already-consumed req.json() → always null).
+    if (chatId !== null) {
+      await sendMessage(chatId, '⚠️ Something went wrong handling that. Try again or use /help.')
+    }
     return NextResponse.json({ ok: true })
   }
 }
 
 export async function GET() {
+  // Fire-and-forget: refresh the Telegram "/" command menu on health checks /
+  // deploys. Never blocks or fails the health response (T2.5).
+  if (BOT_TOKEN) void registerCommands()
   return NextResponse.json({ ok: true, service: 'jarvis-eventops-bot' })
 }
