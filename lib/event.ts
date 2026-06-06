@@ -123,14 +123,18 @@ function _validMD(month: number, day: number): boolean {
   return month >= 1 && month <= 12 && day >= 1 && day <= 31
 }
 
-// Among candidate events, prefer is_active=true, then soonest date.
+// Among candidate events, prefer is_active=true, then the event NEAREST to today.
+// Nearest-to-now (not earliest) matters for year-omitted dates like "7 june":
+// with recurring same-day-of-month workshops it resolves to the relevant year
+// instead of silently picking some old event.
 function _preferActive(candidates: Event[]): Event {
   const active = candidates.find(e => e.is_active)
   if (active) return active
+  const now = Date.now()
   return candidates.slice().sort((a, b) => {
-    const ta = a.date ? new Date(a.date).getTime() : Infinity
-    const tb = b.date ? new Date(b.date).getTime() : Infinity
-    return ta - tb
+    const da = a.date ? Math.abs(new Date(a.date).getTime() - now) : Infinity
+    const db = b.date ? Math.abs(new Date(b.date).getTime() - now) : Infinity
+    return da - db
   })[0]
 }
 
