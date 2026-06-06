@@ -44,8 +44,13 @@ export function matchEvent(text: string, events: Event[]): Event | null {
       if (!e.date) return false
       const d = new Date(e.date)
       if (isNaN(d.getTime())) return false
-      const matchYear = year === null || d.getFullYear() === year
-      return d.getMonth() + 1 === month && d.getDate() === day && matchYear
+      // Compare on the Malaysia (UTC+8) CIVIL date, not the server's local/UTC
+      // date. event.date is a UTC timestamp; an evening MYT event (e.g. 17:00+00
+      // = 01:00 MYT next day) would otherwise resolve to the wrong calendar day
+      // on a UTC server. Shift +8h then read UTC parts = the MYT wall date.
+      const myt = new Date(d.getTime() + 8 * 3600000)
+      const matchYear = year === null || myt.getUTCFullYear() === year
+      return myt.getUTCMonth() + 1 === month && myt.getUTCDate() === day && matchYear
     })
     if (byDate.length === 1) return byDate[0]
     if (byDate.length > 1) return _preferActive(byDate)
