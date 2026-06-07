@@ -44,6 +44,15 @@ const EVENT_PRICE_MAP: Record<string, PriceConfig> = {
       647: 'early_bird_vip',
     },
   },
+  'glcc': {
+    amounts: [2299, 2499, 2899, 3199],
+    ticketTypeByAmount: {
+      2299: 'early_bird_general',
+      2499: 'standard_general',
+      2899: 'early_bird_vip',
+      3199: 'standard_vip',
+    },
+  },
 }
 
 // Cutoff: payments after this date go to June 7th+, not June 1st
@@ -58,6 +67,7 @@ function slugForEvent(event: Event): string | null {
   if (year === 2026 && month === 4) return 'may-16'
   if (year === 2026 && month === 5 && day === 1) return 'june-1'
   if (year === 2026 && month === 5 && day === 7) return 'june-7'
+  if (year === 2026 && month === 5 && day === 20) return 'glcc'
   return null
 }
 
