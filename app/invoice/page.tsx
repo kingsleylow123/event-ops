@@ -336,11 +336,12 @@ function InvoiceContent() {
             <div className="inv-billing">
               <div>
                 <div className="inv-lbl">Invoice To</div>
-                <input
+                <textarea
                   className="inv-edit inv-name"
                   value={name}
                   onChange={e => setName(e.target.value)}
-                  style={{ minWidth: 200 }}
+                  rows={2}
+                  style={{ minWidth: 200, width: 240, resize: 'both', fontFamily: 'inherit', lineHeight: 1.3 }}
                 />
               </div>
               <div className="inv-company-right">
