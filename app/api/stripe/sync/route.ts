@@ -39,7 +39,7 @@ const EVENT_PRICE_MAP: Record<string, PriceConfig> = {
     ticketTypeByAmount: {
       297: 'super_early_bird_general',
       347: 'early_bird_general',
-      397: 'standard_vip',
+      397: 'standard_general',
       547: 'super_early_bird_vip',
       647: 'early_bird_vip',
     },
