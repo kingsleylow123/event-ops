@@ -569,6 +569,29 @@ async function fmtPrep(eventId: string) {
   return out
 }
 
+async function fmtPipeline(eventId: string) {
+  const { data } = await supabase
+    .from('deal_leads')
+    .select('client_name, client_phone, needs, rep_name, status, created_at')
+    .eq('event_id', eventId).order('created_at', { ascending: false })
+  const rows = data ?? []
+  if (!rows.length) return `🔥 ${b('Sales Pipeline')}\nNo leads captured yet. Blast the /capture link to the closing team.`
+  const LABEL: Record<string, string> = { new: 'New', contacted: 'Contacted', meeting: 'Meeting', won: 'Won', lost: 'Lost' }
+  const byStatus: Record<string, number> = { new: 0, contacted: 0, meeting: 0, won: 0, lost: 0 }
+  for (const r of rows) { const s = r.status as string; if (s in byStatus) byStatus[s]++ }
+  let out = `🔥 ${b(`Sales Pipeline — ${rows.length} lead${rows.length !== 1 ? 's' : ''}`)}\n`
+  out += Object.entries(byStatus).filter(([, n]) => n > 0).map(([k, n]) => `${LABEL[k]}: ${b(n)}`).join('   ') + '\n'
+  const hot = rows.filter(r => r.status === 'new' || r.status === 'contacted').slice(0, 15)
+  if (hot.length) {
+    out += `\n${b('Latest hot leads')}\n`
+    out += hot.map(r =>
+      `• ${b(esc(r.client_name))} — ${esc(r.needs as string)}\n` +
+      `   ${esc((r.client_phone as string) || '')} · ${esc(r.rep_name as string)} · ${LABEL[r.status as string] || esc(r.status as string)}`,
+    ).join('\n')
+  }
+  return out
+}
+
 // One-time: register the slash-command menu shown in Telegram's "/" picker.
 // Called from the GET health check (idempotent, additive, never auto-sends).
 async function registerCommands() {
@@ -590,6 +613,7 @@ async function registerCommands() {
       { command: 'affiliate',  description: "One affiliate's paid buyers" },
       { command: 'leads',      description: 'Master leads (affiliate vs Kingsley)' },
       { command: 'prep',       description: 'Pre-workshop readiness' },
+      { command: 'pipeline',   description: 'Sales pipeline — hot leads' },
       { command: 'find',       description: 'Look up an attendee' },
     ],
   })
@@ -613,6 +637,7 @@ const HELP = `🤖 ${b('Jarvis')} — your EventOps assistant\n\n` +
   `/agenda — workshop run-of-show\n` +
   `/leads — master leads (affiliate vs Kingsley)\n` +
   `/prep — pre-workshop readiness\n` +
+  `/pipeline — sales pipeline (hot leads from the team)\n` +
   `/find &lt;name&gt; — look up an attendee\n\n` +
   `<i>Tip: add an event to any command, e.g. "/stats 7 june" or "/survey 1jun".</i>\n\n` +
   `Or just ${b('ask anything')} in plain English 👇\n` +
@@ -1033,7 +1058,7 @@ async function handle(
   const sp = trimmed.indexOf(' ')
   const base = sp === -1 ? cmd : cmd.slice(0, sp)
   const arg = sp === -1 ? '' : trimmed.slice(sp + 1).trim()
-  const DATA_SCOPED = new Set(['/stats', '/money', '/checkins', '/pending', '/vip', '/checklist', '/survey', '/meetings', '/duplicates', '/affiliates', '/affiliate', '/prep', '/team', '/floorplan', '/agenda'])
+  const DATA_SCOPED = new Set(['/stats', '/money', '/checkins', '/pending', '/vip', '/checklist', '/survey', '/meetings', '/duplicates', '/affiliates', '/affiliate', '/prep', '/pipeline', '/team', '/floorplan', '/agenda'])
 
   // Resolve the event this command runs against + a banner. matchEvent only
   // fires when there IS an arg, so plain "/stats" stays on the active event.
@@ -1065,6 +1090,7 @@ async function handle(
   if (base === '/duplicates') return banner + fmtDuplicates(scoped.attendees)
   if (base === '/affiliates') return banner + await fmtAffiliates(target.id as string)
   if (base === '/prep') return banner + await fmtPrep(target.id as string)
+  if (base === '/pipeline') return banner + await fmtPipeline(target.id as string)
   // /affiliate <handle> — the arg is a handle, NOT an event token. Always the
   // ACTIVE event; show a header so the scope (which event's payout) is explicit.
   if (base === '/affiliate') {

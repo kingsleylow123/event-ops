@@ -41,6 +41,7 @@ const icons = {
   invoice: I(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" /></>),
   monthend: I(<><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M16 2v4M8 2v4M3 10h18M9 16l2 2 4-4" /></>),
   admin: I(<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />),
+  pipeline: I(<path d="M3 4h18l-7 8v6l-4 2v-8z" />),
 }
 
 export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarProps) {
@@ -81,6 +82,7 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
     },
     ...(isAdmin ? [{
       id: 'post', title: 'Post-Event', items: [
+        { href: '/pipeline', label: 'Pipeline', icon: icons.pipeline },
         { href: '/revenue', label: 'Revenue', icon: icons.revenue },
         { href: '/affiliates', label: 'Affiliates', icon: icons.affiliates },
         { href: '/payout', label: 'Payout', icon: icons.payout },
