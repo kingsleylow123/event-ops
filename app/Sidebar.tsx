@@ -40,6 +40,7 @@ const icons = {
   payment: I(<><rect x="1" y="4" width="22" height="16" rx="2" /><path d="M1 10h22" /></>),
   invoice: I(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" /></>),
   monthend: I(<><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M16 2v4M8 2v4M3 10h18M9 16l2 2 4-4" /></>),
+  bukku: I(<><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /><path d="M9 7h7M9 11h5" /></>),
   admin: I(<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />),
   pipeline: I(<path d="M3 4h18l-7 8v6l-4 2v-8z" />),
 }
@@ -88,6 +89,7 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
         { href: '/payout', label: 'Payout', icon: icons.payout },
         { href: '/payment-template', label: 'Payment', icon: icons.payment },
         { href: '/invoice', label: 'Invoice', icon: icons.invoice },
+        { href: '/bukku', label: 'Bukku', icon: icons.bukku },
         { href: '/month-end', label: 'Month-End', icon: icons.monthend },
       ],
     }] : []),

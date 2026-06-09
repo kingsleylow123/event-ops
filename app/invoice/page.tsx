@@ -91,6 +91,60 @@ function InvoiceContent() {
   // ── PDF export
   const [exporting, setExporting] = useState(false)
 
+  // ── Push to Bukku (writes a real sales invoice to the books)
+  const [pushing, setPushing] = useState(false)
+  const [pushMsg, setPushMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  async function pushToBukku() {
+    const isBalance = mode === 'balance'
+    const total = isBalance ? subtotal : amountNum
+    if (!name || name.trim().toUpperCase() === 'CLIENT NAME') {
+      setPushMsg({ ok: false, text: 'Enter the client name first.' })
+      return
+    }
+    if (total <= 0) {
+      setPushMsg({ ok: false, text: 'Add a line with a non-zero amount first.' })
+      return
+    }
+    const summary = isBalance
+      ? `Create a Bukku invoice for ${name}: ${rm(subtotal)}` +
+        (payments.length ? ` · ${payments.length} payment(s) · balance ${rm(Math.max(0, balanceDue))}` : '')
+      : `Create a Bukku invoice for ${name}: ${rm(amountNum)}`
+    if (!window.confirm(`${summary}\n\nThis writes to your REAL Bukku books. Continue?`)) return
+
+    setPushing(true)
+    setPushMsg(null)
+    try {
+      const payload = isBalance
+        ? {
+            client_name: name,
+            date,
+            mode: 'balance' as const,
+            lines: lineItems.map(li => ({ desc: li.desc, qty: num(li.qty), unit: num(li.unit) })),
+            payments: payments.map(p => ({ label: p.label, amount: num(p.amount) })),
+          }
+        : { client_name: name, date, mode: 'quick' as const, description: desc, amount: amountNum }
+
+      const res = await fetch('/api/bukku/invoice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json()
+      if (!res.ok && res.status !== 207) {
+        setPushMsg({ ok: false, text: data.error ? `${data.error}${data.details ? ' — ' + data.details : ''}` : `Failed (${res.status})` })
+      } else {
+        const ref = data.bukku_invoice_number || data.bukku_invoice_id
+        const bal = data.balance_due != null ? ` · balance due ${rm(data.balance_due)}` : ''
+        setPushMsg({ ok: true, text: `✅ Booked in Bukku as ${ref}${bal}${data.partial ? ' (deposit needs a manual check)' : ''}` })
+      }
+    } catch (e) {
+      setPushMsg({ ok: false, text: (e as Error).message })
+    } finally {
+      setPushing(false)
+    }
+  }
+
   async function exportPDF() {
     const el = document.getElementById('invoice-page-printable')
     if (!el) return
@@ -311,7 +365,24 @@ function InvoiceContent() {
           </div>
 
           <button onClick={exportPDF}>📄 Save as PDF</button>
+          <button onClick={pushToBukku} disabled={pushing}>
+            {pushing ? '⏳ Pushing…' : '📒 Push to Bukku'}
+          </button>
           <button className="secondary" onClick={() => window.close()}>Close</button>
+
+          {pushMsg && (
+            <div
+              style={{
+                flexBasis: '100%',
+                textAlign: 'center',
+                fontSize: 13,
+                fontWeight: 600,
+                color: pushMsg.ok ? '#2c7a2f' : '#c0271f',
+              }}
+            >
+              {pushMsg.text}
+            </div>
+          )}
         </div>
 
         {/* ── Invoice page (A4) ── */}

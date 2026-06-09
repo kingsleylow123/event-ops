@@ -33,7 +33,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   }
 
   return (
-    <html lang="en">
+    // The inline theme script below sets data-theme on <html> before React
+    // hydrates, which would otherwise trip a hydration mismatch (and, downstream,
+    // the "script tag while rendering" warning). suppressHydrationWarning is the
+    // standard, safe fix for pre-paint theme scripts — visuals/behaviour unchanged.
+    <html lang="en" suppressHydrationWarning>
       <head>
         {/* Apply saved theme before paint to avoid a flash of the wrong theme. */}
         <script
