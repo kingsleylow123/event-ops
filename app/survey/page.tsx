@@ -117,7 +117,19 @@ function SurveyForm() {
           <h2 className="text-2xl font-bold text-white mb-2">You're all set!</h2>
           <p className="text-zinc-400 text-sm">Thanks for filling this in. We'll tailor the workshop based on your answers. See you there!</p>
 
-          <div className="mt-8 bg-[#111] border border-zinc-800 rounded-2xl p-5">
+          <a
+            href="https://chat.whatsapp.com/GSONh9iwgvPIYDV16fOALM?s=cl&p=i&ilr=1&amv=1"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-8 flex items-center justify-center gap-2 w-full px-4 py-3.5 rounded-xl font-bold text-sm text-white"
+            style={{ background: '#25D366' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M.057 24l1.687-6.163a11.867 11.867 0 01-1.587-5.945C.16 5.335 5.495 0 12.05 0a11.817 11.817 0 018.413 3.488 11.824 11.824 0 013.48 8.414c-.003 6.557-5.338 11.892-11.893 11.892a11.9 11.9 0 01-5.688-1.448L.057 24zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884a9.86 9.86 0 001.519 5.26l-.999 3.648 3.97-1.042 .969 .335zm5.474-7.518c-.149-.248-.546-.397-1.142-.695-.595-.298-3.522-1.738-4.067-1.937-.546-.198-.943-.298-1.34.298-.396.595-1.537 1.937-1.884 2.334-.347.397-.694.446-1.29.149-.595-.298-2.512-.926-4.785-2.953-1.768-1.578-2.962-3.528-3.31-4.123-.347-.595-.037-.916.261-1.213.268-.267.595-.694.892-1.042.297-.347.396-.595.595-.992.198-.396.099-.744-.05-1.042-.149-.298-1.34-3.23-1.835-4.42-.484-1.162-.976-1.004-1.34-1.022l-1.142-.02c-.397 0-1.04.149-1.585.744-.546.595-2.083 2.034-2.083 4.966 0 2.931 2.133 5.762 2.43 6.16.297.397 4.197 6.407 10.166 8.984 1.42.612 2.527.979 3.391 1.253 1.425.452 2.722.389 3.747.236 1.143-.171 3.522-1.439 4.018-2.829.495-1.389 .495-2.579 .347-2.829z"/>
+            </svg>
+            Join the Claude Malaysia WhatsApp →
+          </a>
+
+          <div className="mt-4 bg-[#111] border border-zinc-800 rounded-2xl p-5">
             <p className="text-sm text-white font-medium mb-1">One more thing 👇</p>
             <p className="text-xs text-zinc-400 mb-4">Follow <span className="text-amber-400">@claudemalaysiaofficial</span> and tag us in your event photos!</p>
             <a
