@@ -15,13 +15,16 @@
 // exported functions, which throw a clear error if Bukku is disabled.
 
 const TOKEN = process.env.BUKKU_API_TOKEN || ''
-const SUBDOMAIN = process.env.BUKKU_SUBDOMAIN || ''
-// Default to STAGING so we never accidentally hit production before ready.
-// Set BUKKU_BASE_URL=https://api.bukku.my in .env.local to use real books.
-const BASE_URL = process.env.BUKKU_BASE_URL || 'https://api.bukku.fyi'
+// Subdomain + base URL are NOT secrets (the subdomain is literally inside the
+// token's issuer URL), so they default here. That means the ONLY thing the
+// deployment environment needs is the secret BUKKU_API_TOKEN — safe for this
+// public repo. Override either via env vars if you ever switch company/staging.
+const SUBDOMAIN = process.env.BUKKU_SUBDOMAIN || 'cmmy'
+const BASE_URL = process.env.BUKKU_BASE_URL || 'https://api.bukku.my'
 
 export function bukkuEnabled(): boolean {
-  return process.env.BUKKU_ENABLED === 'true' && !!TOKEN && !!SUBDOMAIN
+  // On as soon as the API token is present (subdomain/base have safe defaults).
+  return !!TOKEN && !!SUBDOMAIN
 }
 
 export function bukkuStatus() {
