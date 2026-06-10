@@ -41,6 +41,20 @@ export default function Dashboard() {
     }, {})
   )
 
+  // Customer details (one row per unique name) — this is exactly what gets
+  // pushed into Bukku Contacts as customers.
+  const customers = (() => {
+    const seen = new Set<string>()
+    const out: Attendee[] = []
+    for (const a of attendees) {
+      const key = (a.name ?? '').trim().toLowerCase()
+      if (!key || seen.has(key)) continue
+      seen.add(key)
+      out.push(a)
+    }
+    return out
+  })()
+
   async function syncCustomersToBukku() {
     if (!event) return
     const named = attendees.filter(a => a.name && a.name.trim())
@@ -155,19 +169,43 @@ export default function Dashboard() {
 
       {isAdmin && event && (
         <div className="theme-surface theme-border border rounded-xl p-4 sm:p-5">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
             <div>
-              <h2 className="text-sm font-semibold theme-text">Customers → Bukku</h2>
-              <p className="text-xs theme-faint mt-0.5">Add these {attendees.length} attendees to your Bukku Contacts as customers (name · phone · email).</p>
+              <h2 className="text-sm font-semibold theme-text">Customer Details</h2>
+              <p className="text-xs theme-faint mt-0.5">{customers.length} customer{customers.length === 1 ? '' : 's'} · name · phone · email — push them into your Bukku Contacts.</p>
             </div>
-            <button onClick={syncCustomersToBukku} disabled={bukkuBusy || attendees.length === 0}
+            <button onClick={syncCustomersToBukku} disabled={bukkuBusy || customers.length === 0}
               className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-semibold px-4 py-2 rounded-lg text-sm whitespace-nowrap">
-              {bukkuBusy ? '⏳ Syncing…' : '📇 Add customers to Bukku'}
+              {bukkuBusy ? '⏳ Syncing…' : '📇 Add to Bukku'}
             </button>
           </div>
           {bukkuMsg && (
-            <div className={`mt-3 text-sm font-medium rounded-lg px-3 py-2 border ${bukkuMsg.ok ? 'text-emerald-500 border-emerald-500/30 bg-emerald-500/10' : 'text-red-500 border-red-500/30 bg-red-500/10'}`}>
+            <div className={`mb-3 text-sm font-medium rounded-lg px-3 py-2 border ${bukkuMsg.ok ? 'text-emerald-500 border-emerald-500/30 bg-emerald-500/10' : 'text-red-500 border-red-500/30 bg-red-500/10'}`}>
               {bukkuMsg.text}
+            </div>
+          )}
+          {customers.length === 0 ? (
+            <p className="text-xs theme-faint py-4 text-center">No customers for this event yet.</p>
+          ) : (
+            <div className="overflow-x-auto theme-border border rounded-lg">
+              <table className="w-full text-sm min-w-[420px]">
+                <thead>
+                  <tr className="theme-faint theme-border text-left border-b">
+                    <th className="px-3 py-2 font-medium">Name</th>
+                    <th className="px-3 py-2 font-medium">Phone</th>
+                    <th className="px-3 py-2 font-medium">Email</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {customers.map(c => (
+                    <tr key={c.id} className="theme-border border-b last:border-0">
+                      <td className="px-3 py-2 theme-text">{c.name}</td>
+                      <td className="px-3 py-2 theme-muted">{c.phone ?? '—'}</td>
+                      <td className="px-3 py-2 theme-muted">{c.email ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
