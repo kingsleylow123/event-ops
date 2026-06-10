@@ -66,6 +66,7 @@ function SurveyForm() {
   const [submitting, setSubmitting] = useState(false)
   const [eventName, setEventName] = useState('')
   const [format, setFormat] = useState('workshop')
+  const [memberNo, setMemberNo] = useState<number | null>(null)
   const [form, setForm] = useState({
     name: prefillName,
     phone: '',
@@ -84,6 +85,8 @@ function SurveyForm() {
   useEffect(() => {
     if (localStorage.getItem(`survey_done_${eventId}_${attendeeId}`)) {
       setSubmitted(true)
+      const savedMember = localStorage.getItem(`survey_member_${eventId}_${attendeeId}`)
+      if (savedMember) setMemberNo(Number(savedMember))
     }
     if (eventId) {
       fetch(`/api/survey?event_id=${eventId}&name=1`)
@@ -111,7 +114,12 @@ function SurveyForm() {
       body: JSON.stringify({ ...form, event_id: eventId, attendee_id: attendeeId || null }),
     })
     if (res.ok) {
+      const d = await res.json().catch(() => ({}))
       localStorage.setItem(`survey_done_${eventId}_${attendeeId}`, '1')
+      if (d?.member_no != null) {
+        setMemberNo(d.member_no)
+        localStorage.setItem(`survey_member_${eventId}_${attendeeId}`, String(d.member_no))
+      }
       setSubmitted(true)
     } else {
       alert('Something went wrong. Please try again.')
@@ -134,6 +142,16 @@ function SurveyForm() {
           <div className="text-5xl mb-4">🎉</div>
           <h2 className="text-2xl font-bold text-white mb-2">You're all set!</h2>
           <p className="text-zinc-400 text-sm">Thanks for filling this in. We'll tailor the {isWebinar ? 'webinar' : 'workshop'} based on your answers. See you there!</p>
+
+          {/* Member ID — assigned (or recalled) by phone on submit */}
+          {memberNo != null && (
+            <div className="mt-6 rounded-2xl p-5 border"
+              style={{ background: 'linear-gradient(135deg, rgba(245,158,11,0.12), rgba(212,104,74,0.08))', borderColor: 'rgba(245,158,11,0.3)' }}>
+              <p className="text-[11px] uppercase tracking-[0.15em] text-amber-300/80 font-semibold">Your Claude Malaysia Member ID</p>
+              <p className="text-3xl font-extrabold text-white mt-1 tracking-wider tabular-nums">CM-{String(memberNo).padStart(4, '0')}</p>
+              <p className="text-xs text-zinc-400 mt-1.5">Save this — it&apos;s your member number for events &amp; perks.</p>
+            </div>
+          )}
 
           <a
             href="https://chat.whatsapp.com/GSONh9iwgvPIYDV16fOALM?s=cl&p=i&ilr=1&amv=1"

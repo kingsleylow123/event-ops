@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
 import { requireUser } from '@/lib/auth/guard'
+import { normPhone } from '@/lib/format'
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
@@ -29,7 +30,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  return NextResponse.json({ success: true, id: data.id })
+  // Assign (or fetch) a Claude Malaysia member number, keyed by phone. Upsert on
+  // phone_norm keeps it stable — existing members keep their number, new ones get
+  // the next. Best-effort: never fail the survey on a member-registry hiccup.
+  let member_no: number | null = null
+  const phone_norm = normPhone(phone)
+  if (phone_norm) {
+    try {
+      const { data: m } = await supabase
+        .from('members')
+        .upsert({ name, phone: phone || null, phone_norm }, { onConflict: 'phone_norm' })
+        .select('member_no')
+        .single()
+      member_no = (m?.member_no as number) ?? null
+    } catch { /* registry hiccup — survey still succeeds */ }
+  }
+
+  return NextResponse.json({ success: true, id: data.id, member_no })
 }
 
 export async function GET(req: NextRequest) {
