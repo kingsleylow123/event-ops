@@ -131,6 +131,29 @@ type ContactInput = {
 }
 
 /**
+ * Bukku validates phone_no as an international (E.164) number and just prepends
+ * a "+" to whatever it's given — so a local Malaysian "0123456789" becomes
+ * "+0123456789" and is rejected. Normalise to "+60…" first.
+ *  - "+63…" / already-international → kept (only stripped of spaces/dashes)
+ *  - "60123…" → "+60123…"
+ *  - "0123…" → "+60123…"  (drop the trunk 0)
+ *  - bare local digits → assume Malaysian, prefix "+60"
+ */
+function toBukkuPhone(raw?: string): string | undefined {
+  if (!raw) return undefined
+  const trimmed = raw.trim()
+  if (trimmed.startsWith('+')) {
+    const d = trimmed.slice(1).replace(/\D/g, '')
+    return d ? '+' + d : undefined
+  }
+  const d = trimmed.replace(/\D/g, '')
+  if (!d) return undefined
+  if (d.startsWith('60')) return '+' + d
+  if (d.startsWith('0')) return '+60' + d.slice(1)
+  return '+60' + d
+}
+
+/**
  * Like findOrCreateContact, but reports whether the contact was newly created
  * (`created: true`) or an existing one was reused (`created: false`). Used by
  * the attendee → contacts sync so it can show "X added, Y already there".
@@ -154,15 +177,30 @@ export async function findOrCreateContactDetailed(c: ContactInput): Promise<{ id
     // search not critical — fall through to create
   }
 
-  const created = await call('POST', '/contacts', {
-    legal_name: name,
-    types,
-    entity_type: c.entity_type ?? 'GENERAL_PUBLIC',
-    email: c.email || undefined,
-    phone_no: c.phone || undefined,
-    reg_no: c.reg_no || undefined,
-    bank_account_no: c.bank_account_no || undefined,
-  })
+  const phone = toBukkuPhone(c.phone)
+  const create = (withPhone: boolean) =>
+    call('POST', '/contacts', {
+      legal_name: name,
+      types,
+      entity_type: c.entity_type ?? 'GENERAL_PUBLIC',
+      email: c.email || undefined,
+      phone_no: withPhone ? phone : undefined,
+      reg_no: c.reg_no || undefined,
+      bank_account_no: c.bank_account_no || undefined,
+    })
+
+  let created: Json
+  try {
+    created = await create(true)
+  } catch (e) {
+    // A malformed phone (e.g. too few digits) shouldn't lose the whole contact —
+    // retry once without it so at least name + email land in Bukku.
+    if (phone && e instanceof BukkuError && /phone/i.test(String((e as Error).message))) {
+      created = await create(false)
+    } else {
+      throw e
+    }
+  }
   return { id: pickId(created), created: true }
 }
 
