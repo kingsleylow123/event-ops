@@ -55,21 +55,15 @@ export default function Dashboard() {
     return out
   })()
 
-  async function syncCustomersToBukku() {
-    if (!event) return
-    const named = attendees.filter(a => a.name && a.name.trim())
-    if (named.length === 0) { setBukkuMsg({ ok: false, text: 'No customers to add for this event.' }); return }
-    if (!window.confirm(
-      `Add ${named.length} customer${named.length === 1 ? '' : 's'} to your Bukku Contacts.\n\n` +
-      `This writes to your REAL Bukku books. Continue?`
-    )) return
+  async function runBukkuSync(payload: { event_id?: string; all?: boolean }, confirmText: string) {
+    if (!window.confirm(`${confirmText}\n\nThis writes to your REAL Bukku books. Continue?`)) return
     setBukkuBusy(true)
     setBukkuMsg(null)
     try {
       const res = await fetch('/api/bukku/contacts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event_id: event.id }),
+        body: JSON.stringify(payload),
       })
       const data = await res.json()
       if (!res.ok || data.error) {
@@ -85,6 +79,11 @@ export default function Dashboard() {
       setBukkuBusy(false)
     }
   }
+
+  const syncThisEvent = () =>
+    runBukkuSync({ event_id: event!.id }, `Add ${customers.length} customer${customers.length === 1 ? '' : 's'} from "${event!.name}" to your Bukku Contacts.`)
+  const syncAllEvents = () =>
+    runBukkuSync({ all: true }, 'Add customers from ALL your events to your Bukku Contacts (deduped by name).')
 
   if (loading) return <div className="text-zinc-500 mt-20 text-center">Loading...</div>
 
@@ -172,12 +171,18 @@ export default function Dashboard() {
           <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
             <div>
               <h2 className="text-sm font-semibold theme-text">Customer Details</h2>
-              <p className="text-xs theme-faint mt-0.5">{customers.length} customer{customers.length === 1 ? '' : 's'} · name · phone · email — push them into your Bukku Contacts.</p>
+              <p className="text-xs theme-faint mt-0.5">{customers.length} customer{customers.length === 1 ? '' : 's'} in this event · name · phone · email — push them into your Bukku Contacts.</p>
             </div>
-            <button onClick={syncCustomersToBukku} disabled={bukkuBusy || customers.length === 0}
-              className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-semibold px-4 py-2 rounded-lg text-sm whitespace-nowrap">
-              {bukkuBusy ? '⏳ Syncing…' : '📇 Add to Bukku'}
-            </button>
+            <div className="flex gap-2 flex-wrap">
+              <button onClick={syncThisEvent} disabled={bukkuBusy || customers.length === 0}
+                className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white border border-zinc-700 font-semibold px-4 py-2 rounded-lg text-sm whitespace-nowrap">
+                {bukkuBusy ? '⏳ Syncing…' : '📇 This event'}
+              </button>
+              <button onClick={syncAllEvents} disabled={bukkuBusy}
+                className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-semibold px-4 py-2 rounded-lg text-sm whitespace-nowrap">
+                {bukkuBusy ? '⏳ Syncing…' : '🌐 ALL events'}
+              </button>
+            </div>
           </div>
           {bukkuMsg && (
             <div className={`mb-3 text-sm font-medium rounded-lg px-3 py-2 border ${bukkuMsg.ok ? 'text-emerald-500 border-emerald-500/30 bg-emerald-500/10' : 'text-red-500 border-red-500/30 bg-red-500/10'}`}>
