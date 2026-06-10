@@ -1,9 +1,54 @@
 import { NextRequest, NextResponse } from 'next/server'
+import Anthropic from '@anthropic-ai/sdk'
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
 import { requireUser } from '@/lib/auth/guard'
 import { normPhone } from '@/lib/format'
 
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+// One personalised ops recommendation (~50 words) from the person's answers.
+// Best-effort: returns null on any error / missing key so the survey never breaks.
+async function generateRecommendation(a: {
+  name?: string; industry?: string; company_size?: string
+  biggest_challenge?: string; workshop_goal?: string
+}): Promise<string | null> {
+  if (!process.env.ANTHROPIC_API_KEY) return null
+  if (!a.biggest_challenge && !a.workshop_goal) return null
+  try {
+    const msg = await anthropic.messages.create({
+      model: 'claude-haiku-4-5',
+      max_tokens: 220,
+      system:
+        'You are an AI operations advisor for Claude Malaysia, helping Malaysian business owners use Claude and AI to run leaner, faster operations. ' +
+        'Voice: direct, warm, practical, specific — no hype, no fluff, no emoji. ' +
+        "Given one person's survey answers, write ONE personalised recommendation of 40–55 words: a concrete first move with Claude/AI that tackles their biggest operations challenge and points at their goal. " +
+        'Name a specific workflow or first step. Address them as "you". Output ONLY the recommendation as a single plain-text paragraph — no preamble, heading, markdown, or lists.',
+      messages: [{
+        role: 'user',
+        content:
+          `Industry: ${a.industry || '—'}\n` +
+          `Team size: ${a.company_size || '—'}\n` +
+          `Biggest operations challenge: ${a.biggest_challenge || '—'}\n` +
+          `Their 10/10 operations goal: ${a.workshop_goal || '—'}`,
+      }],
+    }, { timeout: 12000 })
+    const block = msg.content.find(c => c.type === 'text')
+    return block && block.type === 'text' ? block.text.trim() : null
+  } catch {
+    return null
+  }
+}
+
 export async function POST(req: NextRequest) {
+  const { searchParams } = new URL(req.url)
+
+  // ?action=recommend — generate the personalised tip only (no DB write). Fired
+  // by the completion screen so "You're all set!" shows instantly while this runs.
+  if (searchParams.get('action') === 'recommend') {
+    const a = await req.json().catch(() => ({}))
+    return NextResponse.json({ recommendation: await generateRecommendation(a) })
+  }
+
   const body = await req.json()
   const { event_id, attendee_id, name, phone, industry, company_size, biggest_challenge, workshop_goal } = body
 

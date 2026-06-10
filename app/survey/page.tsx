@@ -67,6 +67,8 @@ function SurveyForm() {
   const [eventName, setEventName] = useState('')
   const [format, setFormat] = useState('workshop')
   const [memberNo, setMemberNo] = useState<number | null>(null)
+  const [recommendation, setRecommendation] = useState<string | null>(null)
+  const [recLoading, setRecLoading] = useState(false)
   const [form, setForm] = useState({
     name: prefillName,
     phone: '',
@@ -87,6 +89,8 @@ function SurveyForm() {
       setSubmitted(true)
       const savedMember = localStorage.getItem(`survey_member_${eventId}_${attendeeId}`)
       if (savedMember) setMemberNo(Number(savedMember))
+      const savedRec = localStorage.getItem(`survey_rec_${eventId}_${attendeeId}`)
+      if (savedRec) setRecommendation(savedRec)
     }
     if (eventId) {
       fetch(`/api/survey?event_id=${eventId}&name=1`)
@@ -121,9 +125,33 @@ function SurveyForm() {
         localStorage.setItem(`survey_member_${eventId}_${attendeeId}`, String(d.member_no))
       }
       setSubmitted(true)
+      fetchRecommendation() // personalised tip — runs after the success screen shows
     } else {
       alert('Something went wrong. Please try again.')
       setSubmitting(false)
+    }
+  }
+
+  async function fetchRecommendation() {
+    setRecLoading(true)
+    try {
+      const res = await fetch('/api/survey?action=recommend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          industry: form.industry,
+          company_size: form.company_size,
+          biggest_challenge: form.biggest_challenge,
+          workshop_goal: form.workshop_goal,
+        }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (d?.recommendation) {
+        setRecommendation(d.recommendation)
+        localStorage.setItem(`survey_rec_${eventId}_${attendeeId}`, d.recommendation)
+      }
+    } catch { /* tip is a bonus — ignore failures */ } finally {
+      setRecLoading(false)
     }
   }
 
@@ -149,7 +177,18 @@ function SurveyForm() {
               style={{ background: 'linear-gradient(135deg, rgba(245,158,11,0.12), rgba(212,104,74,0.08))', borderColor: 'rgba(245,158,11,0.3)' }}>
               <p className="text-[11px] uppercase tracking-[0.15em] text-amber-300/80 font-semibold">Your Claude Malaysia Member ID</p>
               <p className="text-3xl font-extrabold text-white mt-1 tracking-wider tabular-nums">CM-{String(memberNo).padStart(4, '0')}</p>
-              <p className="text-xs text-zinc-400 mt-1.5">Save this — it&apos;s your member number for events &amp; perks.</p>
+              <p className="text-xs text-amber-200/90 font-medium mt-2">📸 Screenshot this &amp; share your Member ID in the WhatsApp group!</p>
+            </div>
+          )}
+
+          {/* Personalised recommendation — Claude reads their answers */}
+          {(recommendation || recLoading) && (
+            <div className="mt-4 rounded-2xl p-5 border text-left"
+              style={{ background: 'rgba(255,255,255,0.03)', borderColor: 'rgba(255,255,255,0.1)' }}>
+              <p className="text-[11px] uppercase tracking-[0.15em] text-amber-300/80 font-semibold mb-2">✨ Your personalised recommendation</p>
+              {recommendation
+                ? <p className="text-sm text-zinc-200 leading-relaxed">{recommendation}</p>
+                : <p className="text-sm text-zinc-500 animate-pulse">Claude is reading your answers…</p>}
             </div>
           )}
 
