@@ -120,7 +120,7 @@ export async function listAccounts(): Promise<Json> {
 // ── Contacts ────────────────────────────────────────────────────────────────────
 export type ContactType = 'customer' | 'supplier'
 
-export async function findOrCreateContact(c: {
+type ContactInput = {
   name: string
   types?: ContactType[]
   email?: string
@@ -128,7 +128,14 @@ export async function findOrCreateContact(c: {
   entity_type?: string
   reg_no?: string
   bank_account_no?: string
-}): Promise<string> {
+}
+
+/**
+ * Like findOrCreateContact, but reports whether the contact was newly created
+ * (`created: true`) or an existing one was reused (`created: false`). Used by
+ * the attendee → contacts sync so it can show "X added, Y already there".
+ */
+export async function findOrCreateContactDetailed(c: ContactInput): Promise<{ id: string; created: boolean }> {
   const name = c.name.trim()
   const types = c.types ?? ['customer']
 
@@ -141,7 +148,7 @@ export async function findOrCreateContact(c: {
       const match = list.find(
         x => (x.display_name ?? '').trim().toLowerCase() === lc || (x.legal_name ?? '').trim().toLowerCase() === lc,
       )
-      if (match?.id != null) return String(match.id)
+      if (match?.id != null) return { id: String(match.id), created: false }
     }
   } catch {
     // search not critical — fall through to create
@@ -156,7 +163,11 @@ export async function findOrCreateContact(c: {
     reg_no: c.reg_no || undefined,
     bank_account_no: c.bank_account_no || undefined,
   })
-  return pickId(created)
+  return { id: pickId(created), created: true }
+}
+
+export async function findOrCreateContact(c: ContactInput): Promise<string> {
+  return (await findOrCreateContactDetailed(c)).id
 }
 
 // ── Sales invoice ────────────────────────────────────────────────────────────────

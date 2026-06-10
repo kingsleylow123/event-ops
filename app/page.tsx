@@ -1,4 +1,5 @@
 'use client'
+import { useState } from 'react'
 import Link from 'next/link'
 import type { Event, Attendee } from '@/lib/supabase'
 import { TICKET_LABELS } from '@/lib/supabase'
@@ -9,6 +10,8 @@ import { useCachedFetch } from '@/lib/useCachedFetch'
 
 export default function Dashboard() {
   const [revenueHidden, toggleRevenue] = useRevenueHidden()
+  const [bukkuBusy, setBukkuBusy] = useState(false)
+  const [bukkuMsg, setBukkuMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   const { data: me } = useCachedFetch<{ is_admin: boolean }>('me', '/api/me')
   const isAdmin = !!me?.is_admin
@@ -37,6 +40,37 @@ export default function Dashboard() {
       return acc
     }, {})
   )
+
+  async function syncCustomersToBukku() {
+    if (!event) return
+    const named = attendees.filter(a => a.name && a.name.trim())
+    if (named.length === 0) { setBukkuMsg({ ok: false, text: 'No customers to add for this event.' }); return }
+    if (!window.confirm(
+      `Add ${named.length} customer${named.length === 1 ? '' : 's'} to your Bukku Contacts.\n\n` +
+      `This writes to your REAL Bukku books. Continue?`
+    )) return
+    setBukkuBusy(true)
+    setBukkuMsg(null)
+    try {
+      const res = await fetch('/api/bukku/contacts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event_id: event.id }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        setBukkuMsg({ ok: false, text: data.error ? `${data.error}${data.details ? ' — ' + data.details : ''}` : `Failed (${res.status})` })
+      } else {
+        const parts = [`${data.created} added`, `${data.reused} already there`]
+        if (data.failed_count) parts.push(`${data.failed_count} failed`)
+        setBukkuMsg({ ok: true, text: `✅ ${parts.join(', ')}` })
+      }
+    } catch (e) {
+      setBukkuMsg({ ok: false, text: (e as Error).message })
+    } finally {
+      setBukkuBusy(false)
+    }
+  }
 
   if (loading) return <div className="text-zinc-500 mt-20 text-center">Loading...</div>
 
@@ -116,6 +150,26 @@ export default function Dashboard() {
             </tbody>
           </table>
           </div>
+        </div>
+      )}
+
+      {isAdmin && event && (
+        <div className="theme-surface theme-border border rounded-xl p-4 sm:p-5">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="text-sm font-semibold theme-text">Customers → Bukku</h2>
+              <p className="text-xs theme-faint mt-0.5">Add these {attendees.length} attendees to your Bukku Contacts as customers (name · phone · email).</p>
+            </div>
+            <button onClick={syncCustomersToBukku} disabled={bukkuBusy || attendees.length === 0}
+              className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-semibold px-4 py-2 rounded-lg text-sm whitespace-nowrap">
+              {bukkuBusy ? '⏳ Syncing…' : '📇 Add customers to Bukku'}
+            </button>
+          </div>
+          {bukkuMsg && (
+            <div className={`mt-3 text-sm font-medium rounded-lg px-3 py-2 border ${bukkuMsg.ok ? 'text-emerald-500 border-emerald-500/30 bg-emerald-500/10' : 'text-red-500 border-red-500/30 bg-red-500/10'}`}>
+              {bukkuMsg.text}
+            </div>
+          )}
         </div>
       )}
 
