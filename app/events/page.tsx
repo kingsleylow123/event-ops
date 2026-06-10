@@ -8,6 +8,7 @@ const EMPTY_FORM = {
   date: '',
   venue: '',
   capacity: '',
+  format: 'workshop',
 }
 
 function toDatetimeLocalValue(iso: string | null): string {
@@ -48,6 +49,7 @@ export default function EventsPage() {
       date: toDatetimeLocalValue(ev.date),
       venue: ev.venue ?? '',
       capacity: ev.capacity != null ? String(ev.capacity) : '',
+      format: ev.format ?? 'workshop',
     })
     setShowForm(true)
   }
@@ -65,6 +67,7 @@ export default function EventsPage() {
       date: form.date || null,
       venue: form.venue || null,
       capacity: form.capacity ? Number(form.capacity) : null,
+      format: form.format || 'workshop',
     }
 
     if (editingId) {
@@ -126,9 +129,16 @@ export default function EventsPage() {
               <input value={form.venue} onChange={e => setForm(f => ({ ...f, venue: e.target.value }))}
                 placeholder="Venue" className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm" />
             </div>
-            <input type="number" value={form.capacity} onChange={e => setForm(f => ({ ...f, capacity: e.target.value }))}
-              placeholder="Capacity (optional)" className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm" />
-            <p className="text-xs text-zinc-500">Manage Host / Facilitator / Content Creator from the <span className="text-amber-400">Team</span> tab.</p>
+            <div className="grid grid-cols-2 gap-3">
+              <input type="number" value={form.capacity} onChange={e => setForm(f => ({ ...f, capacity: e.target.value }))}
+                placeholder="Capacity (optional)" className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm" />
+              <select value={form.format} onChange={e => setForm(f => ({ ...f, format: e.target.value }))}
+                className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm">
+                <option value="workshop">Workshop (in-person survey)</option>
+                <option value="webinar">Webinar (ops survey)</option>
+              </select>
+            </div>
+            <p className="text-xs text-zinc-500">Format sets which pre-event survey questions show. Manage Host / Facilitator / Content Creator from the <span className="text-amber-400">Team</span> tab.</p>
             <div className="flex gap-2">
               <button type="submit" className="bg-amber-500 hover:bg-amber-400 text-black font-semibold px-4 py-2 rounded-lg text-sm">
                 {editingId ? 'Save Changes' : 'Create Event'}

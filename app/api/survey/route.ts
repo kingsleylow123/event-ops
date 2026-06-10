@@ -40,11 +40,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'event_id required' }, { status: 400 })
   }
 
-  // Public mode (?name=1): return ONLY the event name for the survey form header.
-  // No PII — safe for the unauthenticated public survey page.
+  // Public mode (?name=1): return the event name + format for the survey form
+  // header and variant selection. No PII — safe for the public survey page.
   if (searchParams.get('name') === '1') {
-    const { data } = await supabase.from('events').select('name').eq('id', event_id).single()
-    return NextResponse.json({ name: data?.name ?? null })
+    const { data } = await supabase.from('events').select('name, format').eq('id', event_id).single()
+    return NextResponse.json({ name: data?.name ?? null, format: data?.format ?? 'workshop' })
   }
 
   // Public facts (?facts=1): event name/date/venue/capacity + live fill counts.

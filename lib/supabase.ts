@@ -143,6 +143,7 @@ export interface Event {
   venue: string | null
   capacity: number | null
   is_active: boolean
+  format?: string // 'workshop' (default) | 'webinar' — drives the survey variant
   team: TeamMember[]
   floor_plan?: FloorPlan
   // Legacy single-member columns — kept for back-compat, no longer used by UI

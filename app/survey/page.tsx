@@ -32,6 +32,17 @@ const COMPANY_SIZES = [
   '200+ people',
 ]
 
+// Webinar uses finer ops-team buckets.
+const WEBINAR_TEAM_SIZES = [
+  'Solo',
+  '2–5',
+  '6–10',
+  '10–20',
+  '20–30',
+  '30–50',
+  '50+',
+]
+
 // Phone: strip +, spaces, dashes, parens → require 8–15 digits.
 // Accepts MY (0123456789), SG (+6591162866), UK (+44 7868872241); rejects '123', 'abc'.
 function isValidPhone(s: string): boolean {
@@ -54,6 +65,7 @@ function SurveyForm() {
   const [submitted, setSubmitted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [eventName, setEventName] = useState('')
+  const [format, setFormat] = useState('workshop')
   const [form, setForm] = useState({
     name: prefillName,
     phone: '',
@@ -64,7 +76,10 @@ function SurveyForm() {
     social_link: '',
   })
 
-  const TOTAL_STEPS = 7
+  const isWebinar = format === 'webinar'
+  const teamSizes = isWebinar ? WEBINAR_TEAM_SIZES : COMPANY_SIZES
+  // Webinar = 6 questions (no social-link step); workshop = 7.
+  const TOTAL_STEPS = isWebinar ? 6 : 7
 
   useEffect(() => {
     if (localStorage.getItem(`survey_done_${eventId}_${attendeeId}`)) {
@@ -73,7 +88,10 @@ function SurveyForm() {
     if (eventId) {
       fetch(`/api/survey?event_id=${eventId}&name=1`)
         .then(r => r.json())
-        .then((d: { name?: string }) => { if (d?.name) setEventName(d.name) })
+        .then((d: { name?: string; format?: string }) => {
+          if (d?.name) setEventName(d.name)
+          if (d?.format) setFormat(d.format)
+        })
         .catch(() => {})
     }
   }, [eventId, attendeeId])
@@ -115,7 +133,7 @@ function SurveyForm() {
         <div className="text-center max-w-sm">
           <div className="text-5xl mb-4">🎉</div>
           <h2 className="text-2xl font-bold text-white mb-2">You're all set!</h2>
-          <p className="text-zinc-400 text-sm">Thanks for filling this in. We'll tailor the workshop based on your answers. See you there!</p>
+          <p className="text-zinc-400 text-sm">Thanks for filling this in. We'll tailor the {isWebinar ? 'webinar' : 'workshop'} based on your answers. See you there!</p>
 
           <a
             href="https://chat.whatsapp.com/GSONh9iwgvPIYDV16fOALM?s=cl&p=i&ilr=1&amv=1"
@@ -230,7 +248,7 @@ function SurveyForm() {
           {step === 4 && (
             <Q title="How big is your team?">
               <div className="flex flex-col gap-2">
-                {COMPANY_SIZES.map(size => (
+                {teamSizes.map(size => (
                   <button key={size} onClick={() => set('company_size', size)}
                     className="w-full text-left px-4 py-3 rounded-xl text-sm font-medium transition-all border"
                     style={{
@@ -248,11 +266,13 @@ function SurveyForm() {
 
           {/* Q5: Biggest challenge */}
           {step === 5 && (
-            <Q title="What's your biggest challenge right now?" subtitle="Be specific — this helps us make the workshop relevant to you.">
+            <Q
+              title={isWebinar ? "What's your biggest challenge in operations to grow your business?" : "What's your biggest challenge right now?"}
+              subtitle={isWebinar ? 'Be specific — this is what we want to solve for you live.' : 'Be specific — this helps us make the workshop relevant to you.'}>
               <textarea
                 value={form.biggest_challenge}
                 onChange={e => set('biggest_challenge', e.target.value)}
-                placeholder="e.g. I spend 3 hours a day on manual reports and can't keep up with follow-ups..."
+                placeholder={isWebinar ? 'e.g. Manual reporting eats 3 hours a day and follow-ups slip through the cracks...' : 'e.g. I spend 3 hours a day on manual reports and can\'t keep up with follow-ups...'}
                 rows={5}
                 className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-amber-500 resize-none"
                 autoFocus
@@ -261,23 +281,38 @@ function SurveyForm() {
             </Q>
           )}
 
-          {/* Q6: Workshop goal */}
+          {/* Q6: 10/10 goal */}
           {step === 6 && (
-            <Q title="What would make this workshop a 10/10 for you?" subtitle="Tell us what outcome would make it worth your time.">
+            <Q
+              title={isWebinar ? "What's your 10/10 goal for your operations?" : 'What would make this workshop a 10/10 for you?'}
+              subtitle={isWebinar ? 'If your ops ran perfectly, what would that look like?' : 'Tell us what outcome would make it worth your time.'}>
               <textarea
                 value={form.workshop_goal}
                 onChange={e => set('workshop_goal', e.target.value)}
-                placeholder="e.g. Walk away with one AI workflow I can use in my business this week..."
+                placeholder={isWebinar ? 'e.g. Every report auto-generated, my team freed up to focus on growth...' : 'e.g. Walk away with one AI workflow I can use in my business this week...'}
                 rows={5}
                 className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-amber-500 resize-none"
                 autoFocus
               />
-              <Nav canNext={canNext[6]} onNext={next} showBack onBack={back} />
+              {isWebinar ? (
+                <div className="mt-6 flex justify-between items-center">
+                  <button onClick={back}
+                    className="text-sm px-4 py-2 rounded-lg text-zinc-400 bg-zinc-900 border border-zinc-700">
+                    ← Back
+                  </button>
+                  <button onClick={submit} disabled={!canNext[6] || submitting}
+                    className="px-8 py-3 rounded-xl font-semibold text-sm transition-all bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed text-black">
+                    {submitting ? 'Submitting...' : 'Submit →'}
+                  </button>
+                </div>
+              ) : (
+                <Nav canNext={canNext[6]} onNext={next} showBack onBack={back} />
+              )}
             </Q>
           )}
 
-          {/* Q7: Social / Website */}
-          {step === 7 && (
+          {/* Q7: Social / Website (workshop only) */}
+          {step === 7 && !isWebinar && (
             <Q title="Your social media or company website" subtitle="Share your Instagram, LinkedIn, or website link so we can stay connected.">
               <input
                 type="text"
