@@ -1087,6 +1087,18 @@ async function handle(
     if (expired) await clearPending(chatId)
   }
 
+  // No invoice is staged: a bare "yes/ok/confirm" has nothing to act on. Answer
+  // plainly instead of letting it fall through to the LLM, which could otherwise
+  // narrate a fake "Invoice sent / PDF delivered" (e.g. when a prior preview was
+  // lost to a 10-min expiry or a mid-rollout deploy). Defense-in-depth behind the
+  // forced-tool fix.
+  if (!mem.pending) {
+    const aff = trimmed.toLowerCase().replace(/[.!?\s]+$/g, '')
+    if (/^(yes|yes please|y|yeah|yep|yup|ya|ok|okay|sure|confirm|confirmed|go|go ahead|send it|do it)$/.test(aff)) {
+      return `Nothing's staged to confirm right now. To make an invoice, say e.g. <i>"invoice Jon Lai RM497"</i>.`
+    }
+  }
+
   if (cmd === '/start' || cmd === '/help') return HELP
 
   // ── Resolve an optional trailing event token for data-scoped commands ────────
