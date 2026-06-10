@@ -17,12 +17,13 @@ async function generateRecommendation(a: {
   try {
     const msg = await anthropic.messages.create({
       model: 'claude-haiku-4-5',
-      max_tokens: 220,
+      max_tokens: 130,
       system:
         'You are an AI operations advisor for Claude Malaysia, helping Malaysian business owners use Claude and AI to run leaner, faster operations. ' +
         'Voice: direct, warm, practical, specific — no hype, no fluff, no emoji. ' +
-        "Given one person's survey answers, write ONE personalised recommendation of 40–55 words: a concrete first move with Claude/AI that tackles their biggest operations challenge and points at their goal. " +
-        'Name a specific workflow or first step. Address them as "you". Output ONLY the recommendation as a single plain-text paragraph — no preamble, heading, markdown, or lists.',
+        "Given one person's survey answers, write ONE personalised recommendation. " +
+        'HARD LIMIT: 50 words, two sentences maximum. Be a concrete first move with Claude/AI that tackles their biggest operations challenge and points at their goal — name a specific workflow or first step. ' +
+        'Address them as "you". Output ONLY the recommendation as one tight plain-text paragraph — no preamble, heading, markdown, or lists.',
       messages: [{
         role: 'user',
         content:
