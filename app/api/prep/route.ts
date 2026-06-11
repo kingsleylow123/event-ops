@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
 import { requireUser } from '@/lib/auth/guard'
 import { normPhone } from '@/lib/format'
+import { rateLimit, clientIp, tooManyResponse } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 const NO_STORE = { 'Cache-Control': 'no-store, no-cache, must-revalidate' } as const
@@ -11,11 +12,15 @@ const STEP_KEYS = ['1', '2', '3', '4', '5', '6'] as const
 // POST (public): save a participant's prep progress, keyed by normalized phone.
 // Matches to an attendee of the event (by phone) to fill the name for the dashboard.
 export async function POST(req: NextRequest) {
+  // Burst protection. Generous: each checkbox toggle saves, and a venue's
+  // shared wifi IP can carry many attendees at once.
+  if (!rateLimit(`prep:${clientIp(req)}`, 30)) return tooManyResponse()
+
   const body = await req.json().catch(() => ({}))
   const { event_id, phone, steps } = body as {
     event_id?: string; phone?: string; steps?: Record<string, boolean>
   }
-  if (!event_id || !phone) {
+  if (!event_id || !phone || phone.length > 40) {
     return NextResponse.json({ error: 'event_id and phone required' }, { status: 400, headers: NO_STORE })
   }
   const phone_norm = normPhone(phone)

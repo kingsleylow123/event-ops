@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
-import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
+import { supabaseAdmin as supabase, fetchAllRows } from '@/lib/supabase-admin'
 import { buildReport } from '@/lib/affiliates'
 import { renderInvoicePDF, type InvoiceData, type InvoiceLineItem, type InvoicePayment } from '@/lib/invoice-pdf'
 import { findAttendeesByName, type AttendeeMatch } from '@/lib/invoice-lookup'
@@ -495,9 +495,10 @@ function fmtDuplicates(att: Row[]) {
 }
 
 async function fmtLeads() {
-  const { data, error } = await supabase.from('leads').select('owner, affiliate_handle')
+  // Paged — PostgREST caps single responses at 1000 rows; leads table is 1,296+.
+  const { rows, error } = await fetchAllRows<{ owner: string; affiliate_handle: string | null }>(
+    (from, to) => supabase.from('leads').select('owner, affiliate_handle').order('id').range(from, to))
   if (error) return `🗂 ${b('Leads')}\nCould not load leads.`
-  const rows = data ?? []
   const total = rows.length
   const affiliate = rows.filter(r => r.owner === 'affiliate').length
   const kingsley = total - affiliate
@@ -893,8 +894,10 @@ async function askClaude(question: string, ev: Row, d: Awaited<ReturnType<typeof
     by_affiliate: { handle: string; leads: number }[]
   } | null = null
   try {
-    const { data: leadRows } = await supabase.from('leads').select('owner, affiliate_handle')
-    if (leadRows) {
+    // Paged — PostgREST caps single responses at 1000 rows; leads table is 1,296+.
+    const { rows: leadRows } = await fetchAllRows<{ owner: string; affiliate_handle: string | null }>(
+      (from, to) => supabase.from('leads').select('owner, affiliate_handle').order('id').range(from, to))
+    if (leadRows.length) {
       const byHandle: Record<string, number> = {}
       let aff = 0
       for (const r of leadRows) {

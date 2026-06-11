@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { readFileSync } from 'fs'
 import { join } from 'path'
-import { supabaseAdmin } from '@/lib/supabase-admin'
+import { supabaseAdmin, fetchAllRows } from '@/lib/supabase-admin'
 import { requireAdmin } from '@/lib/auth/guard'
 import { syncLeadTags } from '@/lib/affiliates'
 
@@ -33,23 +33,29 @@ export async function GET(req: NextRequest) {
   const q = searchParams.get('q')
   const limit = Math.min(Number(searchParams.get('limit') ?? 2000), 5000)
 
-  let query = supabaseAdmin.from('leads').select('*').order('name', { ascending: true }).limit(limit)
-  if (owner) query = query.eq('owner', owner)
-  if (handle) query = query.eq('affiliate_handle', handle)
-  if (source) query = query.contains('sources', [source])
-  if (q) query = query.or(`name.ilike.%${q}%,phone.ilike.%${q}%`)
-
-  const { data, error } = await query
-  if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE_HEADERS })
+  // Paged via fetchAllRows — PostgREST caps single responses at 1000 rows,
+  // which silently truncated the 1,296-lead table (list AND summary counts).
+  const buildQuery = () => {
+    let query = supabaseAdmin.from('leads').select('*').order('name', { ascending: true })
+    if (owner) query = query.eq('owner', owner)
+    if (handle) query = query.eq('affiliate_handle', handle)
+    if (source) query = query.contains('sources', [source])
+    if (q) query = query.or(`name.ilike.%${q}%,phone.ilike.%${q}%`)
+    return query
+  }
+  const { rows: data, error } = await fetchAllRows<Record<string, unknown>>(
+    (from, to) => buildQuery().range(from, to), limit)
+  if (error) return NextResponse.json({ error }, { status: 500, headers: NO_STORE_HEADERS })
 
   // Summary across the WHOLE table (not just the filtered page)
-  const { data: all } = await supabaseAdmin.from('leads').select('owner, affiliate_handle')
+  const { rows: all } = await fetchAllRows<{ owner: string; affiliate_handle: string | null }>(
+    (from, to) => supabaseAdmin.from('leads').select('owner, affiliate_handle').order('id').range(from, to))
   const summary = { total: 0, affiliate: 0, kingsley: 0, byHandle: {} as Record<string, number> }
-  for (const r of all ?? []) {
+  for (const r of all) {
     summary.total++
     if (r.owner === 'affiliate') {
       summary.affiliate++
-      const h = (r.affiliate_handle as string) || '?'
+      const h = r.affiliate_handle || '?'
       summary.byHandle[h] = (summary.byHandle[h] ?? 0) + 1
     } else {
       summary.kingsley++

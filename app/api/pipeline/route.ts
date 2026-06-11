@@ -3,6 +3,7 @@ import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
 import { requireUser } from '@/lib/auth/guard'
 import { normPhone } from '@/lib/format'
 import { notifyAdmins, esc, b } from '@/lib/telegram'
+import { rateLimit, clientIp, tooManyResponse, tooLong } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 const NO_STORE = { 'Cache-Control': 'no-store, no-cache, must-revalidate' } as const
@@ -15,6 +16,10 @@ type Status = (typeof STATUSES)[number]
 // role (bypasses RLS), auto-links the client to an attendee by phone, and pings
 // the admins on Telegram instantly so deals can be closed at the back table.
 export async function POST(req: NextRequest) {
+  // Burst protection — each POST pings the founder's Telegram, so floods are
+  // doubly costly. 20/min covers several closers sharing the venue IP.
+  if (!rateLimit(`pipeline:${clientIp(req)}`, 20)) return tooManyResponse()
+
   const body = await req.json().catch(() => ({}))
   const { event_id, rep_name, rep_phone, client_name, client_phone, needs } = body as {
     event_id?: string; rep_name?: string; rep_phone?: string
@@ -26,6 +31,13 @@ export async function POST(req: NextRequest) {
       { error: 'event_id, rep_name, client_name, client_phone and needs are required' },
       { status: 400, headers: NO_STORE },
     )
+  }
+  const oversized = tooLong({
+    rep_name: [rep_name, 80], rep_phone: [rep_phone, 40],
+    client_name: [client_name, 120], client_phone: [client_phone, 40], needs: [needs, 2000],
+  })
+  if (oversized) {
+    return NextResponse.json({ error: `${oversized} too long` }, { status: 400, headers: NO_STORE })
   }
 
   const client_phone_norm = normPhone(client_phone)

@@ -2,10 +2,14 @@ import { NextResponse } from 'next/server'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { isAdminEmail } from '@/lib/auth/admin'
 
-// Phase 1 = log-but-allow. Set AUTH_ENFORCE=true (Vercel env) to flip to
-// hard 401/403 once logs confirm only expected callers hit each route.
+// Fail closed: guards enforce hard 401/403 unless explicitly disabled.
+// AUTH_ENFORCE=false (or unset in local dev) gives log-but-allow for
+// debugging; a MISSING var in production still enforces — losing the env
+// var must never silently open every guarded API.
 function enforcing() {
-  return process.env.AUTH_ENFORCE === 'true'
+  if (process.env.AUTH_ENFORCE === 'false') return false
+  if (process.env.AUTH_ENFORCE === 'true') return true
+  return process.env.NODE_ENV === 'production'
 }
 
 export interface GuardResult {

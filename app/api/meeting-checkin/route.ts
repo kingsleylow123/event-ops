@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
 import type { MeetingAttendee } from '@/lib/supabase'
+import { rateLimit, clientIp, tooManyResponse } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,10 +17,14 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  // Burst protection — this endpoint AUTO-CREATES attendance entries on
+  // unknown names, so unthrottled bots could flood the roster.
+  if (!rateLimit(`mcheckin:${clientIp(req)}`, 30)) return tooManyResponse()
+
   const body = await req.json()
   const { meetingId, name } = body as { meetingId?: string; name?: string }
 
-  if (!meetingId || !name?.trim()) {
+  if (!meetingId || !name?.trim() || name.length > 120) {
     return NextResponse.json({ success: false, error: 'missing_params' }, { status: 400, headers: NO_STORE_HEADERS })
   }
 

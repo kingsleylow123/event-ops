@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
 import { TICKET_PRICES } from '@/lib/supabase'
 import type { TicketType } from '@/lib/supabase'
+import { rateLimit, clientIp, tooManyResponse, tooLong } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,10 +16,17 @@ function isDouble(ticketType: TicketType, paymentAmount: number): boolean {
 }
 
 export async function POST(req: NextRequest) {
+  // Burst protection. 60/min is far above any real arrival burst (40 pax over
+  // ~15 min on the venue's SHARED wifi IP) but stops bot floods cold.
+  if (!rateLimit(`checkin:${clientIp(req)}`, 60)) return tooManyResponse()
+
   const body = await req.json()
   const { eventId, name, phone } = body as { eventId?: string; name?: string; phone?: string }
 
   if (!eventId || (!name?.trim() && !phone?.trim())) {
+    return NextResponse.json({ success: false, error: 'missing_params' }, { status: 400, headers: NO_STORE_HEADERS })
+  }
+  if (tooLong({ name: [name, 120], phone: [phone, 40] })) {
     return NextResponse.json({ success: false, error: 'missing_params' }, { status: 400, headers: NO_STORE_HEADERS })
   }
 
