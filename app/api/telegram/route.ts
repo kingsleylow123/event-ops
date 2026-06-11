@@ -5,7 +5,7 @@ import { supabaseAdmin as supabase, fetchAllRows } from '@/lib/supabase-admin'
 import { buildReport } from '@/lib/affiliates'
 import { renderInvoicePDF, type InvoiceData, type InvoiceLineItem, type InvoicePayment } from '@/lib/invoice-pdf'
 import { findAttendeesByName, type AttendeeMatch } from '@/lib/invoice-lookup'
-import { pickActiveEvent, matchEvent } from '@/lib/event'
+import { pickActiveEvent, matchEvent, matchEventLoose } from '@/lib/event'
 import { normPhone, normEmail } from '@/lib/format'
 import { loadMemory, appendTurn, setPending, clearPending, recentTurnsForPrompt } from '@/lib/jarvis-memory'
 import type { Event } from '@/lib/supabase'
@@ -916,6 +916,17 @@ async function askClaude(question: string, ev: Row, d: Awaited<ReturnType<typeof
     }
   } catch { /* leads optional */ }
 
+  // Checklist for the FOCUS event. d.checklist was loaded for the ACTIVE event;
+  // when the question focuses a different event (loose match), fetch that
+  // event's checklist so "what's left on the checklist for the webinar?" never
+  // silently answers from the active event's list.
+  let focusChecklist = d.checklist
+  if (focusId !== (ev.id as string)) {
+    const { data: fc } = await supabase
+      .from('checklist_items').select('*').eq('event_id', focusId).order('category')
+    focusChecklist = fc ?? []
+  }
+
   const snapshot = {
     today: new Date().toISOString().slice(0, 10),
     upcoming_event_id: ev.id,
@@ -924,11 +935,11 @@ async function askClaude(question: string, ev: Row, d: Awaited<ReturnType<typeof
     // Master leads database (affiliate referrals vs Kingsley's own), summarized.
     leads_summary: leadsSummary,
     // Pre-workshop readiness for the FOCUS event (null if nobody started).
-    active_event_prep: prep,
-    // Checklist for the ACTIVE event (the is_active one). Survey/meetings are NOT
-    // duplicated here — they live per-event in events[].survey / events[].meetings
-    // for the focus event, so there's a single source and no double-counting.
-    active_event_checklist: d.checklist.map(c => ({ category: c.category, item: c.item, status: c.status, pic: c.pic_name, due: c.due_date })),
+    focus_event_prep: prep,
+    // Checklist for the FOCUS event. Survey/meetings are NOT duplicated here —
+    // they live per-event in events[].survey / events[].meetings for the focus
+    // event, so there's a single source and no double-counting.
+    focus_event_checklist: focusChecklist.map(c => ({ category: c.category, item: c.item, status: c.status, pic: c.pic_name, due: c.due_date })),
   }
 
   // Recent conversation so Jarvis has short-term memory (T3.3).
@@ -949,7 +960,8 @@ Rules:
 - DEFAULT TO THE FOCUS EVENT. For ANY question about people OR aggregates — "who", "them", "our attendees/buyers", "who would buy/upsell", survey respondents, "top industries", "average company size", "how many said X", "most common goal" — answer from the FOCUS event ONLY. "them"/"our" = THIS workshop's people, NEVER everyone in the database, and NEVER someone from a past event. Other events' per-person/survey rows are in the payload ONLY when you explicitly asked to compare or said "all events"; if they're absent, that is intentional — do not guess or pool. When you legitimately span events, LABEL each person/number with its event. Begin any count/aggregate answer by stating the event (name + date) you computed it from.
 - SURVEY: events[].totals.survey_responses is the per-event COUNT (present for EVERY event). The survey ROWS (events[].survey) are present only for the FOCUS event (or for all events on an explicit cross-event question). To answer "survey results for <event>", that event must be the focus (name it) — then COUNT/summarise its events[].survey rows. Never substitute or pool another event's survey rows.
 - AFFILIATE BUYERS: events[].affiliate_buyers (present only when there are attributions) holds, per affiliate handle, the buyers who actually PAID: { by_handle: { "<handle>": { buyers: [{name, amount}], revenue, commission } }, total_commission, unattributed_rm }. Amounts are RM. For "who did <affiliate> bring" or "<affiliate>'s payout" with NO event named, use ONLY the focus event's affiliate_buyers — never sum a handle's commission across events into one payout. Match a loose name (e.g. "angel") to the handle that starts-with/contains it. When spanning events, label each by event. These are PAID buyers only — lead counts (not buyers) live in leads_summary.
-- PREP READINESS: active_event_prep (null if nobody started) = { started, completed, per_step: { Install, Pro, "Dev tools", Survey, Data, "9:30am": count }, still_pending: [names] }. Use it for "how many are workshop-ready", "who hasn't finished prep". "completed" = all 6 steps done. Do NOT confuse prep completion with payment status.
+- PREP READINESS: focus_event_prep (null if nobody started) = { started, completed, per_step: { Install, Pro, "Dev tools", Survey, Data, "9:30am": count }, still_pending: [names] }. Use it for "how many are workshop-ready", "who hasn't finished prep". "completed" = all 6 steps done. Do NOT confuse prep completion with payment status.
+- CHECKLIST: focus_event_checklist is the FOCUS event's run-sheet (category, item, status, pic, due). Both focus_event_prep and focus_event_checklist belong to the FOCUS event only — never present them as another event's.
 - REFUNDS: there is no refund tracking in this data. "revenue_rm" / paid totals are GROSS (sum of paid amounts). If asked about refunds or net revenue, say refunds aren't tracked and the figure shown is gross.
 - If the admin asks to send, generate, create, or make an invoice for someone, CALL the generate_invoice tool — do not just describe what you would do. Infer mode='balance' only if they mention a deposit, partial payment, or balance; otherwise use mode='quick'. After you call it, I will ask the admin to reply YES before the invoice is actually issued — so phrase any text as if it still needs confirmation. NEVER fabricate the invoice flow in text: do not write an "Invoice preview", never say "Invoice sent" or "PDF delivered to chat", and never claim a file/PDF was attached. You cannot send files yourself — ONLY the generate_invoice tool produces and delivers the PDF. If you genuinely cannot call the tool, say so plainly rather than pretending an invoice was sent.
 - The snapshot below contains EVERY event (past and future). When the admin asks about a specific event (e.g. "1st June", "last month", "Claude Malaysia Workshop"), match by name OR date and answer from THAT event's data. Do NOT say "no data" just because an event is in the past — the data is right here in events[].
@@ -1042,7 +1054,7 @@ DATA>>>`
 
 // ── Command router ────────────────────────────────────────────────────────────
 // Returns '' to signal "fall through to natural language (askClaude)".
-// allEvents lets data-scoped commands target a non-active event via matchEvent;
+// allEvents lets data-scoped commands target a non-active event via matchEventLoose;
 // chatId is needed to resolve a pending "YES" invoice confirmation.
 async function handle(
   text: string,
@@ -1106,20 +1118,20 @@ async function handle(
 
   // ── Resolve an optional trailing event token for data-scoped commands ────────
   // e.g. "/survey 1jun", "/stats 7 june". The first word is the command; the
-  // rest (if any) is fed to matchEvent against ALL events. Falls back to the
+  // rest (if any) is fed to matchEventLoose against ALL events. Falls back to the
   // active event when there's no token or no confident match.
   const sp = trimmed.indexOf(' ')
   const base = sp === -1 ? cmd : cmd.slice(0, sp)
   const arg = sp === -1 ? '' : trimmed.slice(sp + 1).trim()
   const DATA_SCOPED = new Set(['/stats', '/money', '/checkins', '/pending', '/vip', '/checklist', '/survey', '/meetings', '/duplicates', '/affiliates', '/affiliate', '/prep', '/pipeline', '/team', '/floorplan', '/agenda'])
 
-  // Resolve the event this command runs against + a banner. matchEvent only
+  // Resolve the event this command runs against + a banner. matchEventLoose only
   // fires when there IS an arg, so plain "/stats" stays on the active event.
   let target = ev
   let scoped: Awaited<ReturnType<typeof loadAll>> = d
   if (DATA_SCOPED.has(base) && arg && base !== '/affiliate' && base !== '/find') {
-    const matched = matchEvent(arg, allEvents as Event[])
-    if (!matched) return `🤔 I couldn't match "${esc(arg)}" to an event. Try the date (e.g. "7 june") or the event name.`
+    const matched = matchEventLoose(arg, allEvents as Event[])
+    if (!matched) return `🤔 I couldn't match "${esc(arg)}" to an event. Try the date (e.g. "7 june"), "today", or part of the event name (e.g. "ops webinar").`
     if ((matched.id as string) !== (ev.id as string)) {
       target = matched as unknown as Row
       scoped = await loadAll(matched.id as string) // load THAT event's data
@@ -1236,8 +1248,10 @@ export async function POST(req: NextRequest) {
       await sendTyping(chatId)
       // Resolve which event the question is about and focus it — otherwise focus
       // is ALWAYS the active event and a question naming a past event answers
-      // from the wrong one's per-person/survey data.
-      const focus = matchEvent(text, allEvents as unknown as Event[])
+      // from the wrong one's per-person/survey data. Loose matching handles
+      // partial names ("claude for ops webinar" vs "Claude for Ops — Webinar")
+      // and temporal phrasing ("today's webinar", "tonight's event").
+      const focus = matchEventLoose(text, allEvents as unknown as Event[])
       reply = await askClaude(text, ev, data, chatId, focus ? (focus as unknown as Row) : undefined)
     }
 

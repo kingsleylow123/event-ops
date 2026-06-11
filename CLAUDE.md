@@ -46,7 +46,7 @@ npm run dev      # localhost:3000
 npm run build    # production build (run before deploy)
 npm run lint
 ```
-Deploy: push to `master` → Vercel auto-deploys. Supabase migrations in `supabase/migrations/`.
+Deploy: **`git push` does NOT deploy** — this project has no Vercel Git integration. After pushing, run `vercel --prod --yes` (CLI is authed) and verify the production alias updated with `vercel inspect event-ops-six.vercel.app`. Supabase migrations in `supabase/migrations/`.
 
 ## Supabase
 

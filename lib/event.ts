@@ -60,6 +60,107 @@ export function matchEvent(text: string, events: Event[]): Event | null {
 }
 
 // ---------------------------------------------------------------------------
+// matchEventLoose — natural-language → Event resolver for Jarvis questions
+// ---------------------------------------------------------------------------
+// matchEvent (above) is deliberately strict: full-name substring or explicit
+// date. That's right for "/survey 7jun" but fails plain questions like
+// "survey insights for claude for ops webinar" (the real name is "Claude for
+// Ops — Webinar" — the em-dash breaks the substring) or "today's webinar".
+// This looser resolver layers on top:
+//   1) strict matchEvent
+//   2) temporal words ("today's/tonight's/tomorrow's <webinar|workshop|...>")
+//      resolved against the MYT civil date — the noun adjacency requirement
+//      stops bare "today" in ordinary questions ("any buyers today?") from
+//      hijacking the focus event
+//   3) fuzzy name-token overlap, weighted by rarity across the event list so
+//      distinctive words ("ops", "webinar", "glcc", "batch") match but words
+//      shared by many events ("claude", "workshop", "june") can never win
+//      alone. Pure numbers/ordinals are excluded (dates belong to layer 2/strict).
+// Returns null when nothing confidently matches — callers fall back to the
+// active event, same as before.
+
+// Domain words that appear constantly in ops questions ("affiliate buyers",
+// "survey results") — never let them alone select an event, even if an event
+// name contains them.
+const LOOSE_STOPWORDS = new Set([
+  'the', 'a', 'an', 'for', 'of', 'and', 'or', 'on', 'at', 'in', 'to', 'with', 'by',
+  'event', 'events', 'affiliate', 'affiliates', 'survey', 'surveys',
+  // "go live" reads as ordinary English ("when do we go live?") far more often
+  // than as the GLCC name — GLCC stays matchable via "glcc" / "challenge".
+  'go', 'live',
+])
+
+const LOOSE_THRESHOLD = 0.9 // ≈ requires at least one near-unique name token
+
+function _looseTokens(name: string): string[] {
+  // Month names and bare numbers/ordinals are excluded from fuzzy tokens: dates
+  // belong to the strict date layer. Otherwise "May" in "…workshop 16th May" is
+  // unique (df=1) and the English modal verb in "who may not have paid" would
+  // silently switch focus to the May event.
+  return [...new Set(
+    name.toLowerCase().replace(/[^a-z0-9]+/g, ' ').split(' ').filter(w =>
+      w && !LOOSE_STOPWORDS.has(w) && !/^\d+(?:st|nd|rd|th)?$/.test(w) && !(w in MONTH_NAMES)
+    )
+  )]
+}
+
+export function matchEventLoose(text: string, events: Event[]): Event | null {
+  if (!text || !events || events.length === 0) return null
+
+  const strict = matchEvent(text, events)
+  if (strict) return strict
+
+  const lower = text.toLowerCase()
+
+  // 2) Temporal resolution on the MYT civil calendar --------------------------
+  const TEMPORAL = "(today|tonight|tonite|tomorrow|tmr|yesterday)(?:'?s)?"
+  const NOUN = '(?:webinar|workshop|event|session|challenge|class|meetup|training)'
+  const m =
+    lower.match(new RegExp(`\\b${TEMPORAL}\\s+${NOUN}\\b`)) ||
+    lower.match(new RegExp(`\\b${NOUN}\\s+${TEMPORAL}\\b`)) ||
+    // The entire text being just the temporal word ("/survey today") is an
+    // explicit event slot, so no noun needed there.
+    lower.trim().match(new RegExp(`^${TEMPORAL}$`))
+  if (m) {
+    const word = m[1]
+    const offsetDays = /^(tomorrow|tmr)/.test(word) ? 1 : word === 'yesterday' ? -1 : 0
+    const target = new Date(Date.now() + 8 * 3600000 + offsetDays * 86400000)
+    const sameDay = events.filter(e => {
+      if (!e.date) return false
+      const d = new Date(e.date)
+      if (isNaN(d.getTime())) return false
+      const myt = new Date(d.getTime() + 8 * 3600000)
+      return myt.getUTCFullYear() === target.getUTCFullYear()
+        && myt.getUTCMonth() === target.getUTCMonth()
+        && myt.getUTCDate() === target.getUTCDate()
+    })
+    if (sameDay.length === 1) return sameDay[0]
+    if (sameDay.length > 1) return _preferActive(sameDay)
+    // No event on that date — fall through to fuzzy
+  }
+
+  // 3) Fuzzy token overlap, rarity-weighted ------------------------------------
+  const qTokens = new Set(lower.replace(/[^a-z0-9]+/g, ' ').split(' ').filter(Boolean))
+  const perEvent = events.map(e => _looseTokens(e.name || ''))
+  const df = new Map<string, number>()
+  for (const tokens of perEvent) for (const t of tokens) df.set(t, (df.get(t) || 0) + 1)
+
+  let bestScore = 0
+  const scores = perEvent.map(tokens => {
+    let s = 0
+    for (const t of tokens) if (qTokens.has(t)) s += 1 / (df.get(t) || 1)
+    if (s > bestScore) bestScore = s
+    return s
+  })
+  if (bestScore >= LOOSE_THRESHOLD) {
+    const top = events.filter((_, i) => scores[i] >= bestScore - 1e-9)
+    return top.length === 1 ? top[0] : _preferActive(top)
+  }
+
+  return null
+}
+
+// ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
 
