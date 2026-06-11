@@ -384,6 +384,12 @@ export default function AttendeesPage() {
                           className="text-zinc-400 hover:text-amber-400 text-sm" title="Copy survey link">
                           📋
                         </button>
+                        <button
+                          onClick={() => a.notes ? alert(a.notes) : undefined}
+                          title={a.notes || 'No notes'}
+                          className={`text-sm ${a.notes ? 'text-amber-400 hover:text-amber-300' : 'text-zinc-700 cursor-default'}`}>
+                          📝
+                        </button>
                         <button onClick={() => deleteAttendee(a.id)}
                           className="text-zinc-600 hover:text-red-400 text-xs">✕</button>
                       </div>
