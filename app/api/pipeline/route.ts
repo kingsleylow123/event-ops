@@ -18,7 +18,7 @@ type Status = (typeof STATUSES)[number]
 export async function POST(req: NextRequest) {
   // Burst protection — each POST pings the founder's Telegram, so floods are
   // doubly costly. 20/min covers several closers sharing the venue IP.
-  if (!rateLimit(`pipeline:${clientIp(req)}`, 20)) return tooManyResponse()
+  if (!(await rateLimit(`pipeline:${clientIp(req)}`, 20))) return tooManyResponse()
 
   const body = await req.json().catch(() => ({}))
   const { event_id, rep_name, rep_phone, client_name, client_phone, needs } = body as {

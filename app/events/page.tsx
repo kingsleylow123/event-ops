@@ -9,7 +9,21 @@ const EMPTY_FORM = {
   venue: '',
   capacity: '',
   format: 'workshop',
+  config: {} as Record<string, string>,
 }
+
+// Per-event content config fields (lib/event-config.ts holds the defaults —
+// leave a field blank to inherit the Claude Malaysia default).
+const CONFIG_FIELDS: { key: string; label: string; placeholder: string }[] = [
+  { key: 'venue_label', label: 'Venue short name', placeholder: 'CO3 Puchong' },
+  { key: 'whatsapp_group_url', label: 'WhatsApp group invite link', placeholder: 'https://chat.whatsapp.com/…' },
+  { key: 'instagram_handle', label: 'Instagram handle', placeholder: '@claudemalaysiaofficial' },
+  { key: 'instagram_url', label: 'Instagram URL', placeholder: 'https://instagram.com/…' },
+  { key: 'mac_video_id', label: 'Mac setup video (YouTube ID)', placeholder: 'X57PTQR45Ps' },
+  { key: 'windows_video_id', label: 'Windows setup video (YouTube ID)', placeholder: 'XvBxfupKpgg' },
+  { key: 'docs_url', label: 'Installation guide doc URL', placeholder: 'https://docs.google.com/…' },
+  { key: 'venue_video_id', label: 'Venue tour video (YouTube ID)', placeholder: 'NeTd4AAxTrY' },
+]
 
 function toDatetimeLocalValue(iso: string | null): string {
   if (!iso) return ''
@@ -50,6 +64,7 @@ export default function EventsPage() {
       venue: ev.venue ?? '',
       capacity: ev.capacity != null ? String(ev.capacity) : '',
       format: ev.format ?? 'workshop',
+      config: ev.config ?? {},
     })
     setShowForm(true)
   }
@@ -68,6 +83,8 @@ export default function EventsPage() {
       venue: form.venue || null,
       capacity: form.capacity ? Number(form.capacity) : null,
       format: form.format || 'workshop',
+      // Drop blank values so they inherit defaults instead of overriding with ''.
+      config: Object.fromEntries(Object.entries(form.config).filter(([, v]) => v.trim() !== '')),
     }
 
     if (editingId) {
@@ -139,6 +156,26 @@ export default function EventsPage() {
               </select>
             </div>
             <p className="text-xs text-zinc-500">Format sets which pre-event survey questions show. Manage Host / Facilitator / Content Creator from the <span className="text-amber-400">Team</span> tab.</p>
+
+            {/* Per-event links & content (blank = inherit Claude Malaysia defaults) */}
+            <details className="rounded-lg border border-zinc-800 bg-zinc-900/40">
+              <summary className="cursor-pointer select-none px-3 py-2 text-sm text-zinc-300">
+                🔗 Links &amp; content <span className="text-zinc-500 text-xs">(survey + /start page — blank inherits defaults)</span>
+              </summary>
+              <div className="grid sm:grid-cols-2 gap-3 p-3 pt-1">
+                {CONFIG_FIELDS.map(f => (
+                  <label key={f.key} className="block">
+                    <span className="block text-[11px] text-zinc-500 mb-1">{f.label}</span>
+                    <input
+                      value={form.config[f.key] ?? ''}
+                      onChange={e => setForm(prev => ({ ...prev, config: { ...prev.config, [f.key]: e.target.value } }))}
+                      placeholder={f.placeholder}
+                      className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-xs"
+                    />
+                  </label>
+                ))}
+              </div>
+            </details>
             <div className="flex gap-2">
               <button type="submit" className="bg-amber-500 hover:bg-amber-400 text-black font-semibold px-4 py-2 rounded-lg text-sm">
                 {editingId ? 'Save Changes' : 'Create Event'}

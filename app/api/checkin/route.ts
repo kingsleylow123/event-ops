@@ -18,7 +18,7 @@ function isDouble(ticketType: TicketType, paymentAmount: number): boolean {
 export async function POST(req: NextRequest) {
   // Burst protection. 60/min is far above any real arrival burst (40 pax over
   // ~15 min on the venue's SHARED wifi IP) but stops bot floods cold.
-  if (!rateLimit(`checkin:${clientIp(req)}`, 60)) return tooManyResponse()
+  if (!(await rateLimit(`checkin:${clientIp(req)}`, 60))) return tooManyResponse()
 
   const body = await req.json()
   const { eventId, name, phone } = body as { eventId?: string; name?: string; phone?: string }

@@ -4,6 +4,7 @@ import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
 import { requireUser } from '@/lib/auth/guard'
 import { normPhone } from '@/lib/format'
 import { rateLimit, clientIp, tooManyResponse, tooLong } from '@/lib/rate-limit'
+import { resolveEventConfig } from '@/lib/event-config'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -44,7 +45,7 @@ async function generateRecommendation(a: {
 export async function POST(req: NextRequest) {
   // Burst protection: generous (a venue's shared wifi IP can carry a room of
   // people), but enough to stop bot floods minting member IDs.
-  if (!rateLimit(`survey:${clientIp(req)}`, 15)) return tooManyResponse()
+  if (!(await rateLimit(`survey:${clientIp(req)}`, 15))) return tooManyResponse()
 
   const { searchParams } = new URL(req.url)
 
@@ -144,18 +145,22 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'event_id required' }, { status: 400 })
   }
 
-  // Public mode (?name=1): return the event name + format for the survey form
-  // header and variant selection. No PII — safe for the public survey page.
+  // Public mode (?name=1): return the event name + format + content config for
+  // the survey form header, variant selection, and thank-you links. No PII.
   if (searchParams.get('name') === '1') {
-    const { data } = await supabase.from('events').select('name, format').eq('id', event_id).single()
-    return NextResponse.json({ name: data?.name ?? null, format: data?.format ?? 'workshop' })
+    const { data } = await supabase.from('events').select('name, format, config').eq('id', event_id).single()
+    return NextResponse.json({
+      name: data?.name ?? null,
+      format: data?.format ?? 'workshop',
+      config: resolveEventConfig(data?.config),
+    })
   }
 
   // Public facts (?facts=1): event name/date/venue/capacity + live fill counts.
   // No PII — for the pre-event landing page hero. Safe for unauthenticated use.
   if (searchParams.get('facts') === '1') {
     const { data: ev } = await supabase
-      .from('events').select('name, date, venue, capacity').eq('id', event_id).single()
+      .from('events').select('name, date, venue, capacity, config').eq('id', event_id).single()
     const { count: registered } = await supabase
       .from('attendees').select('id', { count: 'exact', head: true }).eq('event_id', event_id)
     const { count: paid } = await supabase
@@ -168,6 +173,7 @@ export async function GET(req: NextRequest) {
       capacity: ev?.capacity ?? null,
       registered: registered ?? 0,
       paid: paid ?? 0,
+      config: resolveEventConfig(ev?.config),
     })
   }
 

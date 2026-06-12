@@ -13,7 +13,7 @@ const NO_STORE = { 'Cache-Control': 'no-store, no-cache, must-revalidate' } as c
 export async function POST(req: NextRequest) {
   // Burst protection. Generous: each checkbox toggle saves, and a venue's
   // shared wifi IP can carry many attendees at once.
-  if (!rateLimit(`prep:${clientIp(req)}`, 30)) return tooManyResponse()
+  if (!(await rateLimit(`prep:${clientIp(req)}`, 30))) return tooManyResponse()
 
   const body = await req.json().catch(() => ({}))
   const { event_id, phone, steps } = body as {

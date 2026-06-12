@@ -23,6 +23,10 @@ function eventLabel(ev: Event): string {
   return ev.name
 }
 
+// Captured at module load (not during render — keeps render pure). Used only
+// to decide whether an event is in the past; minutes of staleness is fine.
+const PAGE_OPENED_TS = Date.now()
+
 export default function AttendeesPage() {
   const { data: eventsData } = useCachedFetch<Event[]>('events', '/api/events')
   const { data: meData } = useCachedFetch<{ is_admin: boolean }>('me', '/api/me')
@@ -299,6 +303,24 @@ export default function AttendeesPage() {
           <option value="yes">Attended</option>
           <option value="no">Not Attended</option>
         </select>
+        {(() => {
+          // No-shows: paid but never checked in, once the event is in the past.
+          const ev = events.find(e => e.id === selectedEventId)
+          const eventPast = ev?.date ? new Date(ev.date).getTime() < PAGE_OPENED_TS : false
+          const noShows = attendees.filter(a => a.payment_status === 'paid' && !a.attendance_confirmed).length
+          const active = filterStatus === 'paid' && filterAttendance === 'no'
+          if (!eventPast || noShows === 0) return null
+          return (
+            <button
+              onClick={() => {
+                if (active) { setFilterStatus('all'); setFilterAttendance('all') }
+                else { setFilterStatus('paid'); setFilterAttendance('no'); setFilterTicket('all') }
+              }}
+              className={`px-3 py-1.5 rounded-lg border text-sm ${active ? 'bg-amber-500 text-black border-amber-500 font-semibold' : 'bg-zinc-900 text-zinc-300 border-zinc-700 hover:border-amber-500/50'}`}>
+              👻 No-shows ({noShows})
+            </button>
+          )
+        })()}
         <span className="self-center text-zinc-500 text-xs">{filtered.length} of {attendees.length} shown</span>
       </div>
 

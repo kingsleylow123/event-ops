@@ -146,6 +146,37 @@ export default function FloorPlanPage() {
     return { byType: result, grand }
   }, [editing, draft, currentPlan])
 
+  // ── Live arrivals (auto-refresh every 5s) — so the floor team sees
+  // "VIP 8/10 arrived" at a glance during check-in without asking anyone. ──
+  const [arrivals, setArrivals] = useState<{
+    total: number; expected: number
+    vip: { in: number; of: number }; gen: { in: number; of: number }
+  } | null>(null)
+  useEffect(() => {
+    if (!selectedEventId) return
+    let stop = false
+    async function tick() {
+      try {
+        const res = await fetch(`/api/attendees?event_id=${selectedEventId}`, { cache: 'no-store' })
+        if (!res.ok) return
+        const rows: { ticket_type?: string; payment_status?: string; attendance_confirmed?: boolean }[] = await res.json()
+        const eligible = rows.filter(a => a.payment_status === 'paid' || a.payment_status === 'free')
+        const isVip = (t?: string) => (t ?? '').includes('vip')
+        const vipAll = eligible.filter(a => isVip(a.ticket_type))
+        const genAll = eligible.filter(a => !isVip(a.ticket_type))
+        if (!stop) setArrivals({
+          total: eligible.filter(a => a.attendance_confirmed).length,
+          expected: eligible.length,
+          vip: { in: vipAll.filter(a => a.attendance_confirmed).length, of: vipAll.length },
+          gen: { in: genAll.filter(a => a.attendance_confirmed).length, of: genAll.length },
+        })
+      } catch { /* keep last good values */ }
+    }
+    tick()
+    const t = setInterval(tick, 5000)
+    return () => { stop = true; clearInterval(t) }
+  }, [selectedEventId])
+
   const display = editing ? draft : currentPlan
 
   if (loading) return <div className="text-zinc-500 mt-20 text-center">Loading…</div>
@@ -191,6 +222,34 @@ export default function FloorPlanPage() {
           )}
         </div>
       </div>
+
+      {/* Live arrivals — refreshes every 5s during check-in */}
+      {selectedEvent && arrivals && arrivals.expected > 0 && (
+        <div className="flex items-center gap-4 flex-wrap bg-[#111] border border-zinc-800 rounded-xl px-4 py-3">
+          <span className="flex items-center gap-2 text-sm">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+            </span>
+            <span className="text-zinc-400">Live arrivals</span>
+          </span>
+          <span className="text-sm font-bold text-white">{arrivals.total}<span className="text-zinc-500 font-normal"> / {arrivals.expected} in</span></span>
+          {arrivals.vip.of > 0 && (
+            <span className="text-xs px-2 py-1 rounded-full bg-amber-500/15 text-amber-300">
+              👑 VIP {arrivals.vip.in}/{arrivals.vip.of}
+            </span>
+          )}
+          {arrivals.gen.of > 0 && (
+            <span className="text-xs px-2 py-1 rounded-full bg-blue-500/15 text-blue-300">
+              🎟 General {arrivals.gen.in}/{arrivals.gen.of}
+            </span>
+          )}
+          <div className="flex-1 min-w-[120px] h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+            <div className="h-full bg-emerald-500 rounded-full transition-all duration-700"
+              style={{ width: `${Math.round((arrivals.total / Math.max(1, arrivals.expected)) * 100)}%` }} />
+          </div>
+        </div>
+      )}
 
       {!selectedEvent ? (
         <div className="text-center text-zinc-500 py-20">No event selected.</div>
