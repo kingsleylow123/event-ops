@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
 import { requireUser } from '@/lib/auth/guard'
 import { normPhone } from '@/lib/format'
+import { rateLimit, clientIp, tooManyResponse, tooLong } from '@/lib/rate-limit'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -41,6 +42,10 @@ async function generateRecommendation(a: {
 }
 
 export async function POST(req: NextRequest) {
+  // Burst protection: generous (a venue's shared wifi IP can carry a room of
+  // people), but enough to stop bot floods minting member IDs.
+  if (!rateLimit(`survey:${clientIp(req)}`, 15)) return tooManyResponse()
+
   const { searchParams } = new URL(req.url)
 
   // ?action=recommend — generate the personalised tip only (no DB write). Fired
@@ -56,24 +61,60 @@ export async function POST(req: NextRequest) {
   if (!event_id || !name) {
     return NextResponse.json({ error: 'event_id and name required' }, { status: 400 })
   }
+  const oversized = tooLong({
+    name: [name, 120], phone: [phone, 40], industry: [industry, 200],
+    company_size: [company_size, 60], biggest_challenge: [biggest_challenge, 3000],
+    workshop_goal: [workshop_goal, 3000],
+  })
+  if (oversized) {
+    return NextResponse.json({ error: `${oversized} too long` }, { status: 400 })
+  }
 
-  const { data, error } = await supabase
-    .from('pre_event_survey_responses')
-    .insert([{
-      event_id,
-      attendee_id: attendee_id || null,
-      name,
-      phone: phone || null,
-      industry: industry || null,
-      company_size: company_size || null,
-      biggest_challenge: biggest_challenge || null,
-      workshop_goal: workshop_goal || null,
-    }])
-    .select('id')
-    .single()
+  const row = {
+    event_id,
+    attendee_id: attendee_id || null,
+    name,
+    phone: phone || null,
+    industry: industry || null,
+    company_size: company_size || null,
+    biggest_challenge: biggest_challenge || null,
+    workshop_goal: workshop_goal || null,
+  }
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  // Dedup by (event, phone): a re-submission from the same person UPDATES
+  // their existing response instead of inserting a duplicate that pollutes
+  // Insights counts. Phone is stored raw, so match by normalized phone in JS
+  // (per-event responses are small). No phone → fall through to insert.
+  const submitNorm = normPhone(phone)
+  let savedId: string | null = null
+  if (submitNorm) {
+    const { data: existing } = await supabase
+      .from('pre_event_survey_responses')
+      .select('id, phone')
+      .eq('event_id', event_id)
+    const dup = existing?.find(r => normPhone(r.phone as string) === submitNorm)
+    if (dup) {
+      const { data: upd, error: updErr } = await supabase
+        .from('pre_event_survey_responses')
+        .update(row)
+        .eq('id', dup.id)
+        .select('id')
+        .single()
+      if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 })
+      savedId = upd.id
+    }
+  }
+
+  if (!savedId) {
+    const { data, error } = await supabase
+      .from('pre_event_survey_responses')
+      .insert([row])
+      .select('id')
+      .single()
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+    savedId = data.id
   }
 
   // Assign (or fetch) a Claude Malaysia member number, keyed by phone. Upsert on
@@ -92,7 +133,7 @@ export async function POST(req: NextRequest) {
     } catch { /* registry hiccup — survey still succeeds */ }
   }
 
-  return NextResponse.json({ success: true, id: data.id, member_no })
+  return NextResponse.json({ success: true, id: savedId, member_no })
 }
 
 export async function GET(req: NextRequest) {

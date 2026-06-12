@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { isValidPhone } from '@/lib/validate'
 
 const INDUSTRIES = [
   'Sales & Business Development',
@@ -42,13 +43,6 @@ const WEBINAR_TEAM_SIZES = [
   '30–50',
   '50+',
 ]
-
-// Phone: strip +, spaces, dashes, parens → require 8–15 digits.
-// Accepts MY (0123456789), SG (+6591162866), UK (+44 7868872241); rejects '123', 'abc'.
-function isValidPhone(s: string): boolean {
-  const digits = s.replace(/[\s+()-]/g, '')
-  return /^\d{8,15}$/.test(digits)
-}
 
 // URL/domain only (not bare @handle). Accepts instagram.com/you, https://yourco.com.
 function isValidUrl(s: string): boolean {

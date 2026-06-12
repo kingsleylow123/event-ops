@@ -7,8 +7,10 @@ import { renderInvoicePDF, type InvoiceData, type InvoiceLineItem, type InvoiceP
 import { findAttendeesByName, type AttendeeMatch } from '@/lib/invoice-lookup'
 import { pickActiveEvent, matchEvent, matchEventLoose } from '@/lib/event'
 import { normPhone, normEmail } from '@/lib/format'
+import { PREP_STEP_SHORT, zeroStepCounts } from '@/lib/prep-steps'
 import { loadMemory, appendTurn, setPending, clearPending, recentTurnsForPrompt } from '@/lib/jarvis-memory'
 import { matchTransactions, type ReconcileMatch, type PendingAttendee, type StatementTxn } from '@/lib/reconcile'
+import { sendEmail, emailEnabled, invoiceEmailHtml, receiptEmailHtml } from '@/lib/email'
 import type { Event } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -566,14 +568,14 @@ function fmtAgenda(ev: Row) {
 }
 
 async function fmtPrep(eventId: string) {
-  const STEP = { '1': 'Install', '2': 'Pro', '3': 'Dev tools', '4': 'Survey', '5': 'Data', '6': '9:30am' } as const
+  const STEP = PREP_STEP_SHORT
   const { data } = await supabase
     .from('prep_progress').select('name, phone, steps, completed').eq('event_id', eventId)
   const rows = data ?? []
   if (!rows.length) return `🎓 ${b('Pre-Workshop Prep')}\nNo one has started yet. Share the /start link.`
   const started = rows.length
   const completed = rows.filter(r => r.completed).length
-  const per: Record<string, number> = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0 }
+  const per: Record<string, number> = zeroStepCounts()
   for (const r of rows) {
     const s = (r.steps ?? {}) as Record<string, boolean>
     for (const k of Object.keys(per)) if (s[k]) per[k]++
@@ -660,7 +662,8 @@ const HELP = `🤖 ${b('Jarvis')} — your EventOps assistant\n\n` +
   `<i>e.g. "who hasn't paid?", "how full are we vs capacity?", "which paid attendees skipped the survey?"</i>\n\n` +
   `${b('🧾 Invoices')}\n` +
   `<i>"send Daphne an invoice"</i> · <i>"invoice Ken Ang RM 497"</i> · <i>"make an invoice for Jeremy with 2000 deposit"</i>\n` +
-  `→ Jarvis generates a branded PDF and sends it back as a file.\n\n` +
+  `→ Jarvis generates a branded PDF and sends it back as a file.\n` +
+  `Add <i>"and email it"</i> (or an address) → the client gets the PDF by email too, BCC finance.\n\n` +
   `${b('📋 Order → Invoice')}\n` +
   `Paste a customer's WhatsApp order/payment message (any format) with "invoice this:" —\n` +
   `→ Jarvis extracts name/phone/amount, adds them as an attendee if new, and sends the PDF.\n\n` +
@@ -681,7 +684,9 @@ const GENERATE_INVOICE_TOOL: Anthropic.Tool = {
     'is added as an attendee automatically. Never invent an amount — if the pasted message has no ' +
     'amount, ask for it instead of calling this tool. ' +
     'Look up the attendee by their name (partial match supported). The PDF is sent ' +
-    'to the chat as a file — do NOT also reply with a text summary; the tool result handles it.',
+    'to the chat as a file — do NOT also reply with a text summary; the tool result handles it. ' +
+    'If the admin asks to EMAIL the invoice to the client, set email_to_client=true ' +
+    '(and client_email when they specify an address — otherwise the attendee\'s recorded email is used).',
   input_schema: {
     type: 'object',
     properties: {
@@ -719,6 +724,14 @@ const GENERATE_INVOICE_TOOL: Anthropic.Tool = {
         enum: ['quick', 'balance'],
         description: 'quick = single line + TOTAL box. balance = multi-line with Subtotal/Payments/BALANCE DUE. Default: quick.',
       },
+      email_to_client: {
+        type: 'boolean',
+        description: 'Set true when the admin asks to EMAIL the invoice to the client (e.g. "invoice Ken RM497 and email it to him"). The email goes to client_email if given, else the attendee\'s recorded email, and always BCCs the finance mailbox.',
+      },
+      client_email: {
+        type: 'string',
+        description: 'Email address to send the invoice to. Only set when the admin specifies one; leave empty to use the attendee\'s recorded email.',
+      },
       payments_received: {
         type: 'array',
         description: 'Only used when mode=balance. Each payment received so far.',
@@ -746,6 +759,8 @@ type InvoiceToolInput = {
   customer_phone?: string
   customer_email?: string
   ticket_hint?: 'general' | 'vip'
+  email_to_client?: boolean
+  client_email?: string
 }
 
 // Execute the invoice tool: look up attendee → build InvoiceData → render PDF →
@@ -792,6 +807,7 @@ async function executeInvoiceTool(
     a = {
       id: ins.id as string,
       name: input.attendee_name,
+      email: input.customer_email?.trim() || null,
       ticket_type: ticketType as AttendeeMatch['ticket_type'],
       payment_amount: newAmount as number,
       payment_status: 'pending',
@@ -853,6 +869,27 @@ async function executeInvoiceTool(
     `🧾 <b>Invoice</b> for ${esc(a.name)} — RM ${amount.toLocaleString('en-MY')}${warn}`)
   if (!sent) {
     return `⚠️ Built the invoice for ${a.name} (RM ${amount}) but the upload to Telegram failed — nothing was delivered. Try again, or grab it from the /invoice page.`
+  }
+
+  // Email the same PDF when the admin asked for it. BCC finance@ (inside
+  // sendEmail) keeps the accountant's archive complete automatically.
+  if (input.email_to_client) {
+    const toEmail = (input.client_email || a.email || '').trim()
+    if (!toEmail) {
+      return `⚠️ Invoice PDF is in the chat, but ${a.name} has no email on file — NOT emailed. Tell me their address, e.g. "email it to ken@gmail.com".`
+    }
+    if (!emailEnabled()) {
+      return `⚠️ Invoice PDF is in the chat, but email isn't configured yet (RESEND_API_KEY missing) — NOT emailed to ${toEmail}.`
+    }
+    const res = await sendEmail({
+      to: toEmail,
+      subject: `Invoice — ${a.name} (RM ${amount.toLocaleString('en-MY')})`,
+      html: invoiceEmailHtml({ clientName: a.name, amount: amount as number, description: desc }),
+      attachments: [{ filename: `Invoice-${safeName}.pdf`, content: pdfBuffer }],
+    })
+    return res.ok
+      ? `📧 Invoice emailed to ${toEmail} (BCC finance) and the PDF is in the chat.`
+      : `⚠️ Invoice PDF is in the chat, but the email to ${toEmail} FAILED (${res.error ?? 'unknown error'}). Try again or send it manually.`
   }
 
   return `Invoice PDF sent to the chat for ${a.name} (RM ${amount}).`
@@ -1017,7 +1054,7 @@ async function executeReconcile(matches: ReconcileMatch[], chatId: number): Prom
     .update({ payment_status: 'paid', paid_at: new Date().toISOString() })
     .in('id', ids)
     .eq('payment_status', 'pending')
-    .select('id, name, payment_amount')
+    .select('id, name, payment_amount, email, event_id, receipt_sent_at')
   if (error) {
     console.error('[telegram] reconcile update failed', error)
     return `⚠️ Reconciliation failed — nothing was updated. (${error.message})`
@@ -1028,6 +1065,38 @@ async function executeReconcile(matches: ReconcileMatch[], chatId: number): Prom
   for (const r of updated.slice(0, 12)) msg += `• ${esc((r.name as string) || '')} — RM ${Number(r.payment_amount ?? 0).toLocaleString('en-MY')}\n`
   if (updated.length > 12) msg += `…and ${updated.length - 12} more\n`
   if (updated.length < matches.length) msg += `\n(${matches.length - updated.length} were already paid — skipped.)`
+
+  // Email a payment receipt to each newly-paid attendee with an address on
+  // file. receipt_sent_at keeps re-runs from double-sending; BCC finance@
+  // (inside sendEmail) fills the accountant's archive automatically.
+  if (emailEnabled()) {
+    const toReceipt = updated.filter(r => (r.email as string | null)?.trim() && !r.receipt_sent_at)
+    if (toReceipt.length) {
+      const evIds = [...new Set(toReceipt.map(r => r.event_id as string).filter(Boolean))]
+      const { data: evs } = await supabase.from('events').select('id, name').in('id', evIds)
+      const evName = new Map((evs ?? []).map(e => [e.id as string, (e.name as string) || '']))
+      let receipted = 0
+      for (const r of toReceipt) {
+        const eventName = evName.get(r.event_id as string) || 'Claude Malaysia Workshop'
+        const res = await sendEmail({
+          to: (r.email as string).trim(),
+          subject: `Payment received — ${eventName}`,
+          html: receiptEmailHtml({
+            name: (r.name as string) || 'there',
+            amount: Number(r.payment_amount ?? 0),
+            eventName,
+            paidAt: new Date(),
+          }),
+        })
+        if (res.ok) {
+          receipted++
+          await supabase.from('attendees').update({ receipt_sent_at: new Date().toISOString() }).eq('id', r.id)
+        }
+      }
+      if (receipted) msg += `\n📧 Receipt emailed to ${receipted} attendee(s) (BCC finance).`
+      if (receipted < toReceipt.length) msg += `\n⚠️ ${toReceipt.length - receipted} receipt email(s) failed — check logs.`
+    }
+  }
   return msg
 }
 
@@ -1304,6 +1373,14 @@ DATA>>>`
       const recv = inv.payments_received.reduce((s, p) => s + (Number(p.amount) || 0), 0)
       for (const p of inv.payments_received) preview += `\n  − ${esc(p.label)}: ${showRM(Number(p.amount) || 0)}`
       preview += `\n${b('Balance due')}: ${showRM((amount as number) - recv)}`
+    }
+    // Email delivery is part of what the admin is confirming — show the exact
+    // recipient (or the missing-address warning) BEFORE the YES.
+    if (inv.email_to_client) {
+      const toEmail = (inv.client_email || (a ? a.email : inv.customer_email) || '').trim()
+      preview += toEmail
+        ? `\n✉️ Will also email to ${b(toEmail)} (BCC finance)`
+        : `\n⚠️ No email on file for ${esc(stageName)} — PDF will go to this chat only. Include an address if you want it emailed.`
     }
     preview += `\n\nReply <b>YES</b> to send, or "cancel". Expires in 10 min.`
     return preview

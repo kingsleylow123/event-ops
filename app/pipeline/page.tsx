@@ -83,6 +83,17 @@ export default function PipelinePage() {
 
   const shown = statusFilter ? leads.filter(l => l.status === statusFilter) : leads
 
+  const [patchFailed, setPatchFailed] = useState(false)
+  function reloadFromServer() {
+    fetch(`/api/pipeline?event_id=${selectedEventId}`)
+      .then(r => r.json())
+      .then((d: PipelineData) => {
+        setLeads(d.leads || []); setSummary(d.summary || null)
+        mutateCache<PipelineData>(`pipeline:${selectedEventId}`, () => d)
+      })
+      .catch(() => {})
+  }
+
   function patchLead(id: string, patch: { status?: string; founder_notes?: string }) {
     // Optimistic update + cache sync (compute next outside setState — no nesting).
     const next = leads.map(l => (l.id === id ? { ...l, ...patch } : l))
@@ -95,7 +106,13 @@ export default function PipelinePage() {
     fetch('/api/pipeline', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, ...patch }),
-    }).catch(() => {})
+    })
+      .then(r => { if (!r.ok) throw new Error() })
+      .catch(() => {
+        // Surface the failure and restore server truth (undo the optimism).
+        setPatchFailed(true)
+        reloadFromServer()
+      })
   }
 
   function copyCaptureLink() {
@@ -125,6 +142,13 @@ export default function PipelinePage() {
           </button>
         </div>
       </div>
+
+      {patchFailed && (
+        <div className="flex items-center justify-between gap-3 text-sm text-red-300 bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2.5">
+          <span>⚠️ That change didn&apos;t save — the list has been restored from the server. Try again.</span>
+          <button onClick={() => setPatchFailed(false)} className="text-red-200/70 hover:text-white">✕</button>
+        </div>
+      )}
 
       {/* Summary cards (status filters) */}
       {summary && (

@@ -3,11 +3,10 @@ import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
 import { requireUser } from '@/lib/auth/guard'
 import { normPhone } from '@/lib/format'
 import { rateLimit, clientIp, tooManyResponse } from '@/lib/rate-limit'
+import { PREP_STEP_KEYS as STEP_KEYS, zeroStepCounts } from '@/lib/prep-steps'
 
 export const dynamic = 'force-dynamic'
 const NO_STORE = { 'Cache-Control': 'no-store, no-cache, must-revalidate' } as const
-
-const STEP_KEYS = ['1', '2', '3', '4', '5', '6'] as const
 
 // POST (public): save a participant's prep progress, keyed by normalized phone.
 // Matches to an attendee of the event (by phone) to fill the name for the dashboard.
@@ -70,7 +69,7 @@ export async function GET(req: NextRequest) {
   const rows = data ?? []
   const started = rows.length
   const completed = rows.filter(r => r.completed).length
-  const perStep: Record<string, number> = { '1': 0, '2': 0, '3': 0, '4': 0, '5': 0, '6': 0 }
+  const perStep: Record<string, number> = zeroStepCounts()
   for (const r of rows) {
     const s = (r.steps ?? {}) as Record<string, boolean>
     for (const k of STEP_KEYS) if (s[k]) perStep[k]++

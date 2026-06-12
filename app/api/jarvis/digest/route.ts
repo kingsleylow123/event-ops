@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
 import { notifyAdmins, esc, b } from '@/lib/telegram'
 import { pickActiveEvent } from '@/lib/event'
-import { rm, fmtDate } from '@/lib/format'
+import { rm, fmtDate, normPhone } from '@/lib/format'
 import type { Event } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -44,10 +44,14 @@ export async function GET(req: NextRequest) {
   // daysUntil: positive = future, 0 = today, negative = past
   const daysUntil = Math.round((eventTs - todayTs) / msPerDay)
 
-  const [attRes, checkRes, surveyRes] = await Promise.all([
-    supabase.from('attendees').select('payment_status, payment_amount, attendance_confirmed').eq('event_id', eventId),
+  const agedCutoff = new Date(Date.now() - 48 * 3600_000).toISOString()
+  const [attRes, checkRes, surveyRes, prepRes, agedLeadsRes] = await Promise.all([
+    supabase.from('attendees').select('name, phone, payment_status, payment_amount, attendance_confirmed').eq('event_id', eventId),
     supabase.from('checklist_items').select('item, category, due_date, status').eq('event_id', eventId),
-    supabase.from('pre_event_survey_responses').select('id').eq('event_id', eventId),
+    supabase.from('pre_event_survey_responses').select('id, phone').eq('event_id', eventId),
+    supabase.from('prep_progress').select('phone_norm, name, completed').eq('event_id', eventId),
+    // Deal leads stuck in 'new' for >48h — across ALL events (deals outlive events).
+    supabase.from('deal_leads').select('client_name, client_phone, needs, rep_name, created_at').eq('status', 'new').lt('created_at', agedCutoff),
   ])
 
   if (attRes.error) return NextResponse.json({ ok: false, error: attRes.error.message }, { status: 500 })
@@ -55,6 +59,8 @@ export async function GET(req: NextRequest) {
   const attendees = attRes.data ?? []
   const checklist = checkRes.data ?? []
   const surveyCount = (surveyRes.data ?? []).length
+  const prepRows = prepRes.data ?? []
+  const agedLeads = agedLeadsRes.data ?? []
 
   // ── Attendance breakdown ───────────────────────────────────────────────────
   const paid = attendees.filter(a => a.payment_status === 'paid')
@@ -104,6 +110,62 @@ export async function GET(req: NextRequest) {
     msg += `\n⏳ ${b(pending.length + ' pending payment' + (pending.length !== 1 ? 's' : ''))} — follow up needed`
   }
 
+  // ── Ops leak-killers (audit sprint): who needs chasing, by name ────────────
+  const eligible = attendees.filter(a => a.payment_status === 'paid' || a.payment_status === 'free')
+
+  // Prep laggards — from T-3 onward, paid/free attendees who haven't finished
+  // (or even started) the 6-step prep. Matched to prep_progress by phone.
+  if (daysUntil >= 0 && daysUntil <= 3 && eligible.length) {
+    const prepByPhone = new Map(prepRows.map(p => [p.phone_norm as string, p]))
+    const laggards = eligible
+      .map(a => {
+        const p = prepByPhone.get(normPhone(a.phone as string))
+        if (p?.completed) return null
+        return { name: (a.name as string) || (a.phone as string) || '?', started: !!p }
+      })
+      .filter((x): x is { name: string; started: boolean } => x !== null)
+    if (laggards.length) {
+      msg += `\n\n🎓 ${b(`Prep laggards (${laggards.length})`)} — nudge them:\n`
+      msg += laggards.slice(0, 12).map(l => `  • ${esc(l.name)}${l.started ? ' <i>(started)</i>' : ' <i>(not started)</i>'}`).join('\n')
+      if (laggards.length > 12) msg += `\n  <i>… and ${laggards.length - 12} more</i>`
+    } else {
+      msg += `\n\n🎓 Everyone is workshop-ready ✅`
+    }
+
+    // Survey non-responders — paid/free attendees with no survey response (by phone).
+    const surveyNorms = new Set((surveyRes.data ?? []).map(s => normPhone(s.phone as string)).filter(Boolean))
+    const noSurvey = eligible.filter(a => {
+      const n = normPhone(a.phone as string)
+      return n && !surveyNorms.has(n)
+    })
+    if (noSurvey.length) {
+      msg += `\n\n📋 ${b(`No survey yet (${noSurvey.length})`)}:\n`
+      msg += noSurvey.slice(0, 10).map(a => `  • ${esc((a.name as string) || (a.phone as string))}`).join('\n')
+      if (noSurvey.length > 10) msg += `\n  <i>… and ${noSurvey.length - 10} more</i>`
+    }
+  }
+
+  // No-shows — for 3 days after the event: paid people who never checked in.
+  if (daysUntil < 0 && daysUntil >= -3) {
+    const noShows = attendees.filter(a => a.payment_status === 'paid' && !a.attendance_confirmed)
+    if (noShows.length) {
+      msg += `\n\n👻 ${b(`No-shows (${noShows.length})`)} — re-engage or offer next date:\n`
+      msg += noShows.slice(0, 10).map(a => `  • ${esc((a.name as string) || '?')}${a.phone ? ` · ${esc(a.phone as string)}` : ''}`).join('\n')
+      if (noShows.length > 10) msg += `\n  <i>… and ${noShows.length - 10} more</i>`
+    }
+  }
+
+  // Aged deal leads — stuck in 'new' >48h (all events). Money going cold.
+  if (agedLeads.length) {
+    msg += `\n\n🔥 ${b(`Deal leads going cold (${agedLeads.length})`)} — still 'new' after 48h:\n`
+    msg += agedLeads.slice(0, 8).map(l => {
+      const days = Math.floor((Date.now() - new Date(l.created_at as string).getTime()) / 86400000)
+      return `  • ${esc(l.client_name as string)} · ${esc((l.client_phone as string) || '')} <i>(${days}d, by ${esc(l.rep_name as string)})</i>`
+    }).join('\n')
+    if (agedLeads.length > 8) msg += `\n  <i>… and ${agedLeads.length - 8} more</i>`
+    msg += `\n  → /pipeline to work them`
+  }
+
   // T-1 special reminder
   if (daysUntil === 1) {
     msg += `\n\n🔔 ${b("Tomorrow's the day!")} Last chance to confirm payments + checklist.`
@@ -127,5 +189,6 @@ export async function GET(req: NextRequest) {
     pending: pending.length,
     surveyCount,
     overdueChecklist: overdueItems.length,
+    agedDealLeads: agedLeads.length,
   })
 }

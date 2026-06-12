@@ -1,12 +1,8 @@
 'use client'
 import { useEffect, useState, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-
-// Phone validation (mirrors survey page)
-function isValidPhone(s: string): boolean {
-  const digits = s.replace(/[\s+()-]/g, '')
-  return /^\d{8,15}$/.test(digits)
-}
+import { isValidPhone } from '@/lib/validate'
+import { PREP_STEP_KEYS, emptySteps } from '@/lib/prep-steps'
 
 // Countdown deadline = midnight (00:00) at the START of the event's calendar
 // day, in Malaysia time (UTC+8). Take the event's date as seen in Asia/
@@ -24,7 +20,6 @@ interface Facts {
   name?: string | null; date?: string | null; venue?: string | null
 }
 
-const STEP_IDS = ['1', '2', '3', '4', '5', '6'] as const
 type Steps = Record<string, boolean>
 type OS = 'mac' | 'windows' | null
 
@@ -33,7 +28,7 @@ function StartContent() {
   const eventId = params.get('event') || ''
 
   const [facts, setFacts] = useState<Facts | null>(null)
-  const [steps, setSteps] = useState<Steps>({ '1': false, '2': false, '3': false, '4': false, '5': false, '6': false })
+  const [steps, setSteps] = useState<Steps>(emptySteps())
   const [ipadAck, setIpadAck] = useState(false)
   const [os, setOs] = useState<OS>(null)
   const [phone, setPhone] = useState('')
@@ -59,18 +54,26 @@ function StartContent() {
   }, [eventId]) // eslint-disable-line react-hooks/exhaustive-deps
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  const doneCount = STEP_IDS.filter(k => steps[k]).length
-  const pct = Math.round((doneCount / STEP_IDS.length) * 100)
-  const allDone = doneCount === STEP_IDS.length
+  const doneCount = PREP_STEP_KEYS.filter(k => steps[k]).length
+  const pct = Math.round((doneCount / PREP_STEP_KEYS.length) * 100)
+  const allDone = doneCount === PREP_STEP_KEYS.length
+
+  // Cloud sync with visible failure: progress always lands in localStorage,
+  // but if the POST fails (flaky wifi) the attendee sees a retry toast instead
+  // of silently losing their cloud copy.
+  const [cloudFailed, setCloudFailed] = useState<{ steps: Steps; ack: boolean; phone: string } | null>(null)
+  function syncToCloud(next: Steps, ack: boolean, ph: string) {
+    fetch('/api/prep', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event_id: eventId, phone: ph, steps: { ...next, ipad_ack: ack } }),
+    })
+      .then(r => { if (!r.ok) throw new Error(); setCloudFailed(null) })
+      .catch(() => setCloudFailed({ steps: next, ack, phone: ph }))
+  }
 
   function persistSteps(next: Steps, ph: string) {
     try { localStorage.setItem(STEPS_KEY, JSON.stringify(next)); if (ph) localStorage.setItem(PHONE_KEY, ph) } catch { /* ignore */ }
-    if (ph) {
-      fetch('/api/prep', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event_id: eventId, phone: ph, steps: { ...next, ipad_ack: ipadAck } }),
-      }).catch(() => {})
-    }
+    if (ph) syncToCloud(next, ipadAck, ph)
   }
   function persistMisc(next: { ipadAck: boolean; os: OS }) {
     try { localStorage.setItem(MISC_KEY, JSON.stringify(next)) } catch { /* ignore */ }
@@ -83,12 +86,7 @@ function StartContent() {
   }
   function setAck(v: boolean) {
     setIpadAck(v); persistMisc({ ipadAck: v, os })
-    if (phone) {
-      fetch('/api/prep', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event_id: eventId, phone, steps: { ...steps, ipad_ack: v } }),
-      }).catch(() => {})
-    }
+    if (phone) syncToCloud(steps, v, phone)
   }
   function chooseOs(v: OS) { setOs(v); persistMisc({ ipadAck, os: v }) }
 
@@ -314,6 +312,19 @@ function StartContent() {
           </Glass>
         )}
       </div>
+
+      {/* ── Cloud-save failure toast (progress is still on this device) ── */}
+      {cloudFailed && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl text-[13px] text-white"
+          style={{ background: 'rgba(40,16,12,0.92)', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)', border: '1px solid rgba(239,68,68,0.35)' }}>
+          <span>⚠️ Saved on this phone, but not to the cloud</span>
+          <button onClick={() => syncToCloud(cloudFailed.steps, cloudFailed.ack, cloudFailed.phone)}
+            className="shrink-0 font-bold text-black text-[12px] px-3 py-1.5 rounded-xl"
+            style={{ background: 'linear-gradient(135deg, #f59e0b, #D4684A)' }}>
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* ── Phone prompt sheet ── */}
       {phoneAsked && (

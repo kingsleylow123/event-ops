@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import type { Event } from '@/lib/supabase'
 import { resolveInitialEvent, storeEventId } from '@/lib/event'
 import { useCachedFetch, mutateCache, peekCache } from '@/lib/useCachedFetch'
+import { PREP_STEP_LABELS } from '@/lib/prep-steps'
 
 interface SurveyResponse {
   id: string
@@ -21,11 +22,6 @@ interface PrepSummary {
   completed: number
   perStep: Record<string, number>
   people: { name: string; completed: boolean; done: number }[]
-}
-
-const PREP_STEP_LABELS: Record<string, string> = {
-  '1': 'Install Claude Code', '2': 'Get Claude Pro', '3': 'Install dev tools',
-  '4': 'Fill survey', '5': 'Prepare data', '6': 'Show up 9:30am',
 }
 
 function count<T>(arr: T[], key: (item: T) => string | null): Record<string, number> {
