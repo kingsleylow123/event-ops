@@ -5,6 +5,7 @@
 // written to the event's `venue` field via PATCH /api/events.
 
 export type VenueStatus = 'available' | 'tbc'
+export type VenueLayout = 'classroom' | 'theater'
 
 export interface Venue {
   id: string
@@ -12,6 +13,7 @@ export interface Venue {
   area?: string
   room?: string
   capacity?: number
+  layout?: VenueLayout    // seating setting — matters for workshops
   priceRM?: number
   priceNote?: string      // e.g. "+ RM100 for 75\" TV transport", "Free / TBD"
   picName?: string
@@ -33,11 +35,12 @@ export const VENUES: Venue[] = [
     area: 'Puchong',
     room: 'Red Dot Room',
     capacity: 40,
+    layout: 'classroom',
     priceRM: 500,
     picName: 'David Lai',
     picPhone: '+60 12-311 2639',
+    photo: '/venues/co3.jpg',
     status: 'available',
-    // photo: '/venues/co3.jpg', // ← drop the CO3 photo here to enable
   },
   {
     id: 'hspace',
@@ -45,9 +48,10 @@ export const VENUES: Venue[] = [
     area: 'Bandar Utama',
     room: 'Event Room',
     capacity: 50,
-    priceRM: 500,
+    layout: 'classroom',
+    priceRM: 1120,
+    photo: '/venues/hspace.jpg',
     status: 'available',
-    // photo: '/venues/hspace.jpg', // ← drop the Hspace photo here to enable
   },
   {
     id: 'pavillion-synergy',
@@ -55,12 +59,13 @@ export const VENUES: Venue[] = [
     area: 'Damansara',
     room: 'Synergy Room (big)',
     capacity: 40,
+    layout: 'classroom',
     priceRM: 1900,
     picName: 'Duncan Tsen',
     picPhone: '+60 14-910 5314',
     notes: 'Hybrid: Physical + Zoom + Recording',
-    photo: '/venues/pavillion-synergy.jpg',
     status: 'available',
+    // photo reassigned to Wisma Cosway — add a Pavillion photo at /venues/pavillion-synergy.jpg to restore
   },
   {
     id: 'pavillion-nexus',
@@ -68,6 +73,7 @@ export const VENUES: Venue[] = [
     area: 'Damansara',
     room: 'Nexus Boardroom (small)',
     capacity: 18,
+    layout: 'classroom',
     priceRM: 1800,
     picName: 'Duncan Tsen',
     picPhone: '+60 14-910 5314',
@@ -80,6 +86,7 @@ export const VENUES: Venue[] = [
     area: 'Kuala Lumpur',
     room: 'Event Room',
     capacity: 40,
+    layout: 'classroom',
     priceRM: 700,
     priceNote: '+ RM100 for 75" TV transport',
     picName: 'CP',
@@ -91,11 +98,13 @@ export const VENUES: Venue[] = [
     id: 'mhaus-d2',
     name: 'Mhaus D2',
     room: 'Event Space',
+    capacity: 50,
+    layout: 'theater',
     priceNote: 'Free / TBD',
     picName: 'Deric',
     picPhone: '+60 16-478 1282',
-    photo: '/venues/mhaus-d2.jpg',
     status: 'available',
+    // photo reassigned to Hspace — add a Mhaus photo at /venues/mhaus-d2.jpg to restore
   },
   {
     id: 'kamin-suma',

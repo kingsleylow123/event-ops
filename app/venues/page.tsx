@@ -204,7 +204,7 @@ function VenueCard({
         <div className="absolute inset-x-0 top-0 flex items-start justify-between p-3">
           {v.capacity ? (
             <span className="rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-medium text-white backdrop-blur-sm">
-              👥 {v.capacity} pax
+              👥 {v.capacity} pax{v.layout ? ` ${v.layout}` : ''}
             </span>
           ) : <span />}
           {selected ? (
@@ -233,6 +233,12 @@ function VenueCard({
           {v.area && <span className="shrink-0 text-xs text-zinc-500">📍 {v.area}</span>}
         </div>
         {v.room && <p className="mt-0.5 text-sm text-zinc-400">{v.room}</p>}
+
+        {v.capacity && (
+          <p className="mt-1.5 inline-flex w-fit items-center gap-1.5 rounded-md bg-white/5 px-2 py-0.5 text-xs text-zinc-300">
+            🪑 {v.capacity} pax · <span className="capitalize text-white">{v.layout ?? 'classroom'}</span>
+          </p>
+        )}
 
         {v.priceRM != null && v.priceNote && (
           <p className="mt-1 text-xs text-amber-400/90">{v.priceNote}</p>
