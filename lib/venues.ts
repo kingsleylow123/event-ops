@@ -113,4 +113,22 @@ export const VENUES: Venue[] = [
     area: 'Petaling Jaya',
     status: 'tbc',
   },
+  {
+    id: 'apu',
+    name: 'APU University',
+    area: 'Bukit Jalil',
+    status: 'tbc',
+  },
+  {
+    id: 'sunway-uni',
+    name: 'Sunway University',
+    area: 'Bandar Sunway',
+    status: 'tbc',
+  },
+  {
+    id: 'michael-tp',
+    name: 'Michael — TP contacts',
+    notes: 'Lead — venue contacts via Michael',
+    status: 'tbc',
+  },
 ]
