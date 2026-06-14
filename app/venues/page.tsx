@@ -178,6 +178,7 @@ function VenueCard({
 }) {
   const tbc = v.status === 'tbc'
   const d = digits(v.picPhone)
+  const contactName = v.picName ?? 'venue contact'
 
   return (
     <article
@@ -250,17 +251,17 @@ function VenueCard({
         )}
 
         {/* PIC + contact */}
-        {v.picName ? (
+        {(v.picName || v.picPhone) ? (
           <div className="mt-3 flex items-center justify-between gap-2 border-t border-zinc-800/80 pt-3">
             <div className="min-w-0">
-              <p className="truncate text-sm text-zinc-300">{v.picName}</p>
+              <p className="truncate text-sm text-zinc-300">{v.picName ?? 'Venue contact'}</p>
               {v.picPhone && <p className="truncate text-xs text-zinc-500">{v.picPhone}</p>}
             </div>
             {d && (
               <div className="flex shrink-0 gap-1.5">
-                <a href={`tel:+${d}`} aria-label={`Call ${v.picName}`} title={`Call ${v.picName}`}
+                <a href={`tel:+${d}`} aria-label={`Call ${contactName}`} title={`Call ${contactName}`}
                   className="grid h-10 w-10 place-items-center rounded-lg border border-zinc-700 text-zinc-300 transition-colors hover:border-amber-500/50 hover:text-amber-400">📞</a>
-                <a href={`https://wa.me/${d}`} target="_blank" rel="noopener noreferrer" aria-label={`WhatsApp ${v.picName}`} title={`WhatsApp ${v.picName}`}
+                <a href={`https://wa.me/${d}`} target="_blank" rel="noopener noreferrer" aria-label={`WhatsApp ${contactName}`} title={`WhatsApp ${contactName}`}
                   className="grid h-10 w-10 place-items-center rounded-lg border border-zinc-700 text-zinc-300 transition-colors hover:border-emerald-500/50 hover:text-emerald-400">💬</a>
               </div>
             )}
