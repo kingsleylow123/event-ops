@@ -45,21 +45,24 @@ export async function GET(req: Request) {
   const event_id = new URL(req.url).searchParams.get('event_id') || 'all'
   const isAll = event_id === 'all'
 
-  let attQ = supabaseAdmin.from('attendees').select('name, payment_amount, payment_status, paid_at, created_at, notes')
+  let attQ = supabaseAdmin.from('attendees').select('event_id, name, payment_amount, payment_status, paid_at, created_at, notes')
   let expQ = supabaseAdmin.from('expenses').select('amount, category, created_at')
   let payQ = supabaseAdmin.from('affiliate_payouts').select('amount, paid_at')
   let finQ = supabaseAdmin.from('finance_entries').select('type, category, amount, entry_date')
   let claimQ = supabaseAdmin.from('claims').select('amount, status, submitted_at')
+  // Refunded deposit-holders are no longer receivables — drop them from invoices.
+  let refundQ = supabaseAdmin.from('deposits').select('event_id, name').eq('status', 'refunded')
   if (!isAll) {
     attQ = attQ.eq('event_id', event_id)
     expQ = expQ.eq('event_id', event_id)
     payQ = payQ.eq('event_id', event_id)
     finQ = finQ.eq('event_id', event_id)
     claimQ = claimQ.eq('event_id', event_id)
+    refundQ = refundQ.eq('event_id', event_id)
   }
 
-  const [{ data: att }, { data: exp }, { data: pay }, { data: fin }, { data: claimsData }, { data: events }] = await Promise.all([
-    attQ, expQ, payQ, finQ, claimQ,
+  const [{ data: att }, { data: exp }, { data: pay }, { data: fin }, { data: claimsData }, { data: refundedDeps }, { data: events }] = await Promise.all([
+    attQ, expQ, payQ, finQ, claimQ, refundQ,
     supabaseAdmin.from('events').select('id, name'),
   ])
 
@@ -71,8 +74,12 @@ export async function GET(req: Request) {
   const scope_label = isAll ? 'All events' : (events ?? []).find(e => e.id === event_id)?.name ?? '—'
 
   // ── Totals & cash on hand ──────────────────────────────────────────────────
+  const refundedKeys = new Set((refundedDeps ?? []).map(d => `${d.event_id}|${String(d.name ?? '').trim().toLowerCase()}`))
   const paid = attendees.filter(a => a.payment_status === 'paid')
-  const pending = attendees.filter(a => a.payment_status === 'pending')
+  const pending = attendees.filter(a =>
+    a.payment_status === 'pending'
+    && !refundedKeys.has(`${a.event_id}|${String(a.name ?? '').trim().toLowerCase()}`)
+  )
   const paidRevenue = paid.reduce((s, a) => s + Number(a.payment_amount ?? 0), 0)
   const manualIncome = finEntries.filter(f => f.type === 'income').reduce((s, f) => s + Number(f.amount ?? 0), 0)
   const expensesTotal = expenses.reduce((s, e) => s + Number(e.amount ?? 0), 0)

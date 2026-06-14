@@ -72,6 +72,7 @@ export async function POST(req: Request) {
     existingKeys.add(k)
     const a = attByKey.get(k)
     if (!a) continue // manual deposit — leave it alone
+    if (d.status === 'refunded') continue // keep refunded deposits as-is
     const want = desired(a)
     const sameTotal = r2(Number(d.total_amount ?? 0)) === want.total
     const samePaid = r2(Number(d.deposit_paid ?? 0)) === want.deposit

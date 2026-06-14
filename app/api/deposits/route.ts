@@ -14,7 +14,7 @@ import { requireAdmin } from '@/lib/auth/guard'
 export const dynamic = 'force-dynamic'
 const NO_STORE = { 'Cache-Control': 'no-store' } as const
 
-const STATUSES = ['partial', 'paid', 'cancelled'] as const
+const STATUSES = ['partial', 'paid', 'refunded'] as const
 type Status = (typeof STATUSES)[number]
 const r2 = (n: number) => Math.round(n * 100) / 100
 const todayKey = () => new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10) // MYT
@@ -99,7 +99,7 @@ export async function PATCH(req: Request) {
   }
 
   const { data: current, error: loadErr } = await supabaseAdmin
-    .from('deposits').select('total_amount, deposit_paid, status, paid_at').eq('id', id).single()
+    .from('deposits').select('event_id, name, total_amount, deposit_paid, status, paid_at, refund_entry_id').eq('id', id).single()
   if (loadErr || !current) {
     return NextResponse.json({ error: loadErr?.message ?? 'Deposit not found.' }, { status: 404, headers: NO_STORE })
   }
@@ -119,14 +119,19 @@ export async function PATCH(req: Request) {
     }
   }
 
-  // Resolve status: explicit wins (e.g. 'cancelled'); otherwise derive from the
-  // effective paid-vs-total so it flips to 'paid' the moment the balance clears.
+  // Resolve status: explicit wins; otherwise derive from paid-vs-total so it
+  // flips to 'paid' the moment the balance clears. A refund is a returned
+  // customer deposit (a liability), not a P&L expense — it just drops the person
+  // from receivables (handled by the Finance dashboard). So no expense is logged.
+  // A 'refunded' deposit is never auto-changed by an amount edit.
   const total = (updates.total_amount as number) ?? Number(current.total_amount ?? 0)
   const paid = (updates.deposit_paid as number) ?? Number(current.deposit_paid ?? 0)
+  const wasRefunded = current.status === 'refunded'
+
   if (status !== undefined) {
     updates.status = status
     updates.paid_at = status === 'paid' ? (current.paid_at ?? new Date().toISOString()) : null
-  } else if (rest.total_amount !== undefined || rest.deposit_paid !== undefined) {
+  } else if ((rest.total_amount !== undefined || rest.deposit_paid !== undefined) && !wasRefunded) {
     const fullyPaid = total > 0 && paid >= total
     updates.status = fullyPaid ? 'paid' : 'partial'
     updates.paid_at = fullyPaid ? (current.paid_at ?? new Date().toISOString()) : null
