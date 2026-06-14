@@ -16,7 +16,7 @@ export type TicketType =
   | 'standard_general'
   | 'standard_vip'
 export type PaymentMethod = 'stripe' | 'bank_transfer' | 'free'
-export type PaymentStatus = 'paid' | 'pending' | 'free'
+export type PaymentStatus = 'paid' | 'pending' | 'free' | 'refunded'
 export type ChecklistStatus = 'pending' | 'in_progress' | 'done'
 
 export const TICKET_LABELS: Record<TicketType, string> = {
