@@ -99,7 +99,7 @@ export async function PATCH(req: Request) {
   }
 
   const { data: current, error: loadErr } = await supabaseAdmin
-    .from('deposits').select('event_id, name, total_amount, deposit_paid, status, paid_at, refund_entry_id').eq('id', id).single()
+    .from('deposits').select('event_id, name, phone, total_amount, deposit_paid, status, paid_at, refund_entry_id').eq('id', id).single()
   if (loadErr || !current) {
     return NextResponse.json({ error: loadErr?.message ?? 'Deposit not found.' }, { status: 404, headers: NO_STORE })
   }
@@ -139,6 +139,24 @@ export async function PATCH(req: Request) {
 
   const { data, error } = await supabaseAdmin.from('deposits').update(updates).eq('id', id).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE })
+
+  // Keep the underlying attendee in sync so a refund drops the person from
+  // pending/revenue everywhere (Revenue page, dashboard, Month-End, Jarvis).
+  if (status !== undefined && (status === 'refunded' || wasRefunded)) {
+    const norm = (s: unknown) => String(s ?? '').trim().toLowerCase()
+    const { data: atts } = await supabaseAdmin
+      .from('attendees').select('id, name, phone, payment_status').eq('event_id', current.event_id as string)
+    const matched = (atts ?? []).find(a =>
+      (current.phone && a.phone === current.phone) || norm(a.name) === norm(current.name))
+    if (matched) {
+      if (status === 'refunded' && matched.payment_status === 'pending') {
+        await supabaseAdmin.from('attendees').update({ payment_status: 'refunded' }).eq('id', matched.id)
+      } else if (status !== 'refunded' && matched.payment_status === 'refunded') {
+        await supabaseAdmin.from('attendees').update({ payment_status: 'pending' }).eq('id', matched.id)
+      }
+    }
+  }
+
   return NextResponse.json({ ok: true, deposit: data }, { headers: NO_STORE })
 }
 
