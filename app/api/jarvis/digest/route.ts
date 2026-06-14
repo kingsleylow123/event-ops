@@ -45,13 +45,14 @@ export async function GET(req: NextRequest) {
   const daysUntil = Math.round((eventTs - todayTs) / msPerDay)
 
   const agedCutoff = new Date(Date.now() - 48 * 3600_000).toISOString()
-  const [attRes, checkRes, surveyRes, prepRes, agedLeadsRes] = await Promise.all([
+  const [attRes, checkRes, surveyRes, prepRes, agedLeadsRes, claimsRes] = await Promise.all([
     supabase.from('attendees').select('name, phone, payment_status, payment_amount, attendance_confirmed').eq('event_id', eventId),
     supabase.from('checklist_items').select('item, category, due_date, status').eq('event_id', eventId),
     supabase.from('pre_event_survey_responses').select('id, phone').eq('event_id', eventId),
     supabase.from('prep_progress').select('phone_norm, name, completed').eq('event_id', eventId),
     // Deal leads stuck in 'new' for >48h — across ALL events (deals outlive events).
     supabase.from('deal_leads').select('client_name, client_phone, needs, rep_name, created_at').eq('status', 'new').lt('created_at', agedCutoff),
+    supabase.from('claims').select('amount, status, submitted_at').eq('event_id', eventId),
   ])
 
   if (attRes.error) return NextResponse.json({ ok: false, error: attRes.error.message }, { status: 500 })
@@ -61,6 +62,8 @@ export async function GET(req: NextRequest) {
   const surveyCount = (surveyRes.data ?? []).length
   const prepRows = prepRes.data ?? []
   const agedLeads = agedLeadsRes.data ?? []
+  // Open claims = submitted but not yet paid/rejected.
+  const openClaims = (claimsRes.data ?? []).filter(c => c.status === 'pending' || c.status === 'approved')
 
   // ── Attendance breakdown ───────────────────────────────────────────────────
   const paid = attendees.filter(a => a.payment_status === 'paid')
@@ -108,6 +111,16 @@ export async function GET(req: NextRequest) {
   // Payment-pending count (already in breakdown above — add a call-to-action if any)
   if (pending.length) {
     msg += `\n⏳ ${b(pending.length + ' pending payment' + (pending.length !== 1 ? 's' : ''))} — follow up needed`
+  }
+
+  // Open expense claims awaiting reimbursement
+  if (openClaims.length) {
+    const claimTotal = openClaims.reduce((s, c) => s + Number(c.amount ?? 0), 0)
+    const oldest = Math.max(
+      ...openClaims.map(c => Math.round((todayTs - new Date(c.submitted_at).setHours(0, 0, 0, 0)) / msPerDay))
+    )
+    msg += `\n💸 ${b(openClaims.length + ' claim' + (openClaims.length !== 1 ? 's' : '') + ' to reimburse')} — ${esc(rm(claimTotal))}`
+    if (oldest >= 3) msg += ` <i>(oldest ${oldest}d)</i>`
   }
 
   // ── Ops leak-killers (audit sprint): who needs chasing, by name ────────────
@@ -189,6 +202,7 @@ export async function GET(req: NextRequest) {
     pending: pending.length,
     surveyCount,
     overdueChecklist: overdueItems.length,
+    openClaims: openClaims.length,
     agedDealLeads: agedLeads.length,
   })
 }

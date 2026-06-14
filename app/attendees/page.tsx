@@ -131,6 +131,19 @@ export default function AttendeesPage() {
     setAttendees(prev => prev.map(x => x.id === a.id ? { ...x, payment_status: newStatus } : x))
   }
 
+  // View / edit / add an attendee note inline.
+  async function editNote(a: Attendee) {
+    const next = window.prompt(`Note for ${a.name}:`, a.notes ?? '')
+    if (next === null) return // cancelled
+    const notes = next.trim() || null
+    await fetch('/api/attendees', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: a.id, notes }),
+    })
+    setAttendees(prev => prev.map(x => x.id === a.id ? { ...x, notes } : x))
+  }
+
   async function toggleAttendance(a: Attendee) {
     const confirmed = !a.attendance_confirmed
     await fetch('/api/attendees', {
@@ -407,9 +420,9 @@ export default function AttendeesPage() {
                           📋
                         </button>
                         <button
-                          onClick={() => a.notes ? alert(a.notes) : undefined}
-                          title={a.notes || 'No notes'}
-                          className={`text-sm ${a.notes ? 'text-amber-400 hover:text-amber-300' : 'text-zinc-700 cursor-default'}`}>
+                          onClick={() => editNote(a)}
+                          title={a.notes ? `${a.notes} — click to edit` : 'Add note'}
+                          className={`text-sm ${a.notes ? 'text-amber-400 hover:text-amber-300' : 'text-zinc-600 hover:text-amber-400'}`}>
                           📝
                         </button>
                         <button onClick={() => deleteAttendee(a.id)}

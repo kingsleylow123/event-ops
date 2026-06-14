@@ -44,6 +44,9 @@ const icons = {
   bukku: I(<><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /><path d="M9 7h7M9 11h5" /></>),
   admin: I(<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />),
   pipeline: I(<path d="M3 4h18l-7 8v6l-4 2v-8z" />),
+  finance: I(<><path d="M21.21 15.89A10 10 0 1 1 8 2.83" /><path d="M22 12A10 10 0 0 0 12 2v10z" /></>),
+  claims: I(<><path d="M5 3v18l2-1 2 1 2-1 2 1 2-1 2 1V3l-2 1-2-1-2 1-2-1-2 1z" /><path d="M9 8h6M9 12h5" /></>),
+  deposits: I(<><rect x="2" y="6" width="20" height="13" rx="2" /><circle cx="12" cy="12.5" r="3" /><path d="M6 6V4h14a2 2 0 0 1 2 2v9" /></>),
 }
 
 export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarProps) {
@@ -88,9 +91,16 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
         { href: '/pipeline', label: 'Pipeline', icon: icons.pipeline },
         { href: '/revenue', label: 'Revenue', icon: icons.revenue },
         { href: '/affiliates', label: 'Affiliates', icon: icons.affiliates },
-        { href: '/payout', label: 'Payout', icon: icons.payout },
         { href: '/payment-template', label: 'Payment', icon: icons.payment },
+      ],
+    }] : []),
+    ...(isAdmin ? [{
+      id: 'finance', title: 'Finance', items: [
+        { href: '/finance', label: 'Finance', icon: icons.finance },
         { href: '/invoice', label: 'Invoice', icon: icons.invoice },
+        { href: '/payout', label: 'Payout', icon: icons.payout },
+        { href: '/claims', label: 'Claims', icon: icons.claims },
+        { href: '/deposits', label: 'Deposits', icon: icons.deposits },
         { href: '/bukku', label: 'Bukku', icon: icons.bukku },
         { href: '/month-end', label: 'Month-End', icon: icons.monthend },
       ],
