@@ -1,12 +1,7 @@
 'use client'
 import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-
-// Phone validation (mirrors survey / start pages).
-function isValidPhone(s: string): boolean {
-  const digits = s.replace(/[\s+()-]/g, '')
-  return /^\d{8,15}$/.test(digits)
-}
+import { isValidPhone } from '@/lib/validate'
 
 interface SessionLead { client_name: string; client_phone: string; needs: string; at: number }
 

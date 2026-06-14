@@ -1,12 +1,9 @@
 'use client'
 import { useEffect, useState, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-
-// Phone validation (mirrors survey page)
-function isValidPhone(s: string): boolean {
-  const digits = s.replace(/[\s+()-]/g, '')
-  return /^\d{8,15}$/.test(digits)
-}
+import { isValidPhone } from '@/lib/validate'
+import { PREP_STEP_KEYS, emptySteps } from '@/lib/prep-steps'
+import { resolveEventConfig, type EventConfig } from '@/lib/event-config'
 
 // Countdown deadline = midnight (00:00) at the START of the event's calendar
 // day, in Malaysia time (UTC+8). Take the event's date as seen in Asia/
@@ -22,9 +19,9 @@ function startOfEventDayMYT(d: Date): Date {
 
 interface Facts {
   name?: string | null; date?: string | null; venue?: string | null
+  config?: Partial<EventConfig>
 }
 
-const STEP_IDS = ['1', '2', '3', '4', '5', '6'] as const
 type Steps = Record<string, boolean>
 type OS = 'mac' | 'windows' | null
 
@@ -33,7 +30,7 @@ function StartContent() {
   const eventId = params.get('event') || ''
 
   const [facts, setFacts] = useState<Facts | null>(null)
-  const [steps, setSteps] = useState<Steps>({ '1': false, '2': false, '3': false, '4': false, '5': false, '6': false })
+  const [steps, setSteps] = useState<Steps>(emptySteps())
   const [ipadAck, setIpadAck] = useState(false)
   const [os, setOs] = useState<OS>(null)
   const [phone, setPhone] = useState('')
@@ -59,18 +56,26 @@ function StartContent() {
   }, [eventId]) // eslint-disable-line react-hooks/exhaustive-deps
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  const doneCount = STEP_IDS.filter(k => steps[k]).length
-  const pct = Math.round((doneCount / STEP_IDS.length) * 100)
-  const allDone = doneCount === STEP_IDS.length
+  const doneCount = PREP_STEP_KEYS.filter(k => steps[k]).length
+  const pct = Math.round((doneCount / PREP_STEP_KEYS.length) * 100)
+  const allDone = doneCount === PREP_STEP_KEYS.length
+
+  // Cloud sync with visible failure: progress always lands in localStorage,
+  // but if the POST fails (flaky wifi) the attendee sees a retry toast instead
+  // of silently losing their cloud copy.
+  const [cloudFailed, setCloudFailed] = useState<{ steps: Steps; ack: boolean; phone: string } | null>(null)
+  function syncToCloud(next: Steps, ack: boolean, ph: string) {
+    fetch('/api/prep', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event_id: eventId, phone: ph, steps: { ...next, ipad_ack: ack } }),
+    })
+      .then(r => { if (!r.ok) throw new Error(); setCloudFailed(null) })
+      .catch(() => setCloudFailed({ steps: next, ack, phone: ph }))
+  }
 
   function persistSteps(next: Steps, ph: string) {
     try { localStorage.setItem(STEPS_KEY, JSON.stringify(next)); if (ph) localStorage.setItem(PHONE_KEY, ph) } catch { /* ignore */ }
-    if (ph) {
-      fetch('/api/prep', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event_id: eventId, phone: ph, steps: { ...next, ipad_ack: ipadAck } }),
-      }).catch(() => {})
-    }
+    if (ph) syncToCloud(next, ipadAck, ph)
   }
   function persistMisc(next: { ipadAck: boolean; os: OS }) {
     try { localStorage.setItem(MISC_KEY, JSON.stringify(next)) } catch { /* ignore */ }
@@ -83,12 +88,7 @@ function StartContent() {
   }
   function setAck(v: boolean) {
     setIpadAck(v); persistMisc({ ipadAck: v, os })
-    if (phone) {
-      fetch('/api/prep', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event_id: eventId, phone, steps: { ...steps, ipad_ack: v } }),
-      }).catch(() => {})
-    }
+    if (phone) syncToCloud(steps, v, phone)
   }
   function chooseOs(v: OS) { setOs(v); persistMisc({ ipadAck, os: v }) }
 
@@ -101,6 +101,7 @@ function StartContent() {
     setPendingStep(null); setPhoneInput('')
   }
 
+  const cfg = resolveEventConfig(facts?.config)
   const eventDate = facts?.date ? new Date(facts.date) : null
   // Countdown ends at 12am on the day of the event (Malaysia time), not the
   // event's start time — so prep is "due" by midnight the day-of.
@@ -115,7 +116,7 @@ function StartContent() {
   return (
     <div className="relative min-h-screen text-white" style={{ background: '#060606' }}>
       {/* ── Sticky countdown ── */}
-      <CountdownBar target={countdownTarget} done={allDone} doneCount={doneCount} />
+      <CountdownBar target={countdownTarget} done={allDone} doneCount={doneCount} venue={cfg.venue_label} />
 
       {/* Ambient liquid background — clipped here (not on the root) so it can't
           force horizontal scroll while leaving the root free for sticky. */}
@@ -214,12 +215,12 @@ function StartContent() {
               <OsBtn label="🍎 Mac" active={os === 'mac'} onClick={() => chooseOs('mac')} />
               <OsBtn label="🪟 Windows" active={os === 'windows'} onClick={() => chooseOs('windows')} />
             </div>
-            {os === 'mac' && <Video id="X57PTQR45Ps" label="🍎 Install Homebrew on Mac" full />}
-            {os === 'windows' && <Video id="XvBxfupKpgg" label="🪟 Install Git (& Claude) on Windows" full />}
+            {os === 'mac' && <Video id={cfg.mac_video_id} label="🍎 Install Homebrew on Mac" full />}
+            {os === 'windows' && <Video id={cfg.windows_video_id} label="🪟 Install Git (& Claude) on Windows" full />}
             {!os && <div className="text-[12px] text-zinc-600 text-center py-3">👆 Pick your OS to see the right guide</div>}
 
             {/* Prominent docs CTA */}
-            <a href="https://docs.google.com/document/d/1-cKqYXB2loZFGbhEFpUDKdrMwTVt5VATFXFbFiSTqeU/edit" target="_blank" rel="noopener noreferrer"
+            <a href={cfg.docs_url} target="_blank" rel="noopener noreferrer"
               className="mt-3 flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all active:scale-[0.98]"
               style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.18), rgba(99,102,241,0.12))', border: '1px solid rgba(99,102,241,0.35)' }}>
               <span className="w-10 h-10 shrink-0 rounded-xl flex items-center justify-center text-lg" style={{ background: 'rgba(99,102,241,0.25)' }}>📄</span>
@@ -253,7 +254,7 @@ function StartContent() {
           <StepCard n="6" done={steps['6']} onToggle={() => toggleStep('6')}
             title="Show up EARLY — 9:30am" subtitle="Watch this so you know how to find us">
             <p className="text-[13px] text-zinc-400 mb-3 leading-relaxed">Here&apos;s exactly how to get up to the venue 👇 (and a peek inside!)</p>
-            <Video id="NeTd4AAxTrY" label="🎬 How to get to CO3 Puchong — Venue Guide" full />
+            <Video id={cfg.venue_video_id} label={`🎬 How to get to ${cfg.venue_label} — Venue Guide`} full />
           </StepCard>
         </div>
 
@@ -315,6 +316,19 @@ function StartContent() {
         )}
       </div>
 
+      {/* ── Cloud-save failure toast (progress is still on this device) ── */}
+      {cloudFailed && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl text-[13px] text-white"
+          style={{ background: 'rgba(40,16,12,0.92)', backdropFilter: 'blur(18px)', WebkitBackdropFilter: 'blur(18px)', border: '1px solid rgba(239,68,68,0.35)' }}>
+          <span>⚠️ Saved on this phone, but not to the cloud</span>
+          <button onClick={() => syncToCloud(cloudFailed.steps, cloudFailed.ack, cloudFailed.phone)}
+            className="shrink-0 font-bold text-black text-[12px] px-3 py-1.5 rounded-xl"
+            style={{ background: 'linear-gradient(135deg, #f59e0b, #D4684A)' }}>
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* ── Phone prompt sheet ── */}
       {phoneAsked && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
@@ -364,7 +378,7 @@ function CdUnit({ v, l }: { v: number; l: string }) {
   )
 }
 
-function CountdownBar({ target, done, doneCount }: { target: Date | null; done: boolean; doneCount: number }) {
+function CountdownBar({ target, done, doneCount, venue }: { target: Date | null; done: boolean; doneCount: number; venue: string }) {
   // Start ticking after mount (avoids SSR hydration mismatch + sync setState).
   const [now, setNow] = useState(0)
   useEffect(() => {
@@ -380,7 +394,7 @@ function CountdownBar({ target, done, doneCount }: { target: Date | null; done: 
   } else if (target && now > 0) {
     const ms = target.getTime() - now
     if (ms <= 0) {
-      body = <span className="text-sm font-semibold text-amber-300">🔴 It&apos;s workshop day — head to CO3 Puchong!</span>
+      body = <span className="text-sm font-semibold text-amber-300">🔴 It&apos;s workshop day — head to {venue}!</span>
     } else {
       const d = Math.floor(ms / 86400000)
       const h = Math.floor((ms % 86400000) / 3600000)

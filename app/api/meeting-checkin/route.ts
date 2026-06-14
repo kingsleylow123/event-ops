@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   // Burst protection — this endpoint AUTO-CREATES attendance entries on
   // unknown names, so unthrottled bots could flood the roster.
-  if (!rateLimit(`mcheckin:${clientIp(req)}`, 30)) return tooManyResponse()
+  if (!(await rateLimit(`mcheckin:${clientIp(req)}`, 30))) return tooManyResponse()
 
   const body = await req.json()
   const { meetingId, name } = body as { meetingId?: string; name?: string }

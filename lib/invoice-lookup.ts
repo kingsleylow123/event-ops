@@ -10,6 +10,7 @@ import { TICKET_LABELS, type TicketType } from '@/lib/supabase'
 export type AttendeeMatch = {
   id: string
   name: string
+  email: string | null
   ticket_type: TicketType
   payment_amount: number
   payment_status: string
@@ -23,7 +24,7 @@ export async function findAttendeesByName(query: string, eventId?: string): Prom
 
   let sb = supabase
     .from('attendees')
-    .select('id, name, ticket_type, payment_amount, payment_status, notes, event_id')
+    .select('id, name, email, ticket_type, payment_amount, payment_status, notes, event_id')
     .ilike('name', `%${q}%`)
     .order('created_at', { ascending: false })
 
@@ -36,6 +37,7 @@ export async function findAttendeesByName(query: string, eventId?: string): Prom
   return data.map(a => ({
     id: a.id as string,
     name: a.name as string,
+    email: (a.email as string | null) ?? null,
     ticket_type: a.ticket_type as TicketType,
     payment_amount: Number(a.payment_amount ?? 0),
     payment_status: a.payment_status as string,

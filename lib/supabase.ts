@@ -144,6 +144,7 @@ export interface Event {
   capacity: number | null
   is_active: boolean
   format?: string // 'workshop' (default) | 'webinar' — drives the survey variant
+  config?: Record<string, string> // per-event links/videos/venue copy (see lib/event-config.ts)
   team: TeamMember[]
   floor_plan?: FloorPlan
   // Legacy single-member columns — kept for back-compat, no longer used by UI
