@@ -107,9 +107,24 @@ export const VENUES: Venue[] = [
     // photo reassigned to Hspace — add a Mhaus photo at /venues/mhaus-d2.jpg to restore
   },
   {
-    id: 'kamin-suma',
-    name: 'Kamin — Suma College',
-    status: 'tbc',
+    id: 'fifth-academy',
+    name: 'The Fifth Academy',
+    room: 'Seminar Room',
+    priceRM: 850,
+    priceNote: 'Weekend / public holiday · full day 9am–5pm',
+    picPhone: '+60 11-6979 0976',
+    photo: '/venues/fifth-academy.jpg',
+    status: 'available',
+  },
+  {
+    id: 'suma-college',
+    name: 'Suma College',
+    capacity: 30,
+    layout: 'classroom',
+    picName: 'Shun',
+    picPhone: '+60 17-268 1388',
+    photo: '/venues/suma-college.jpg',
+    status: 'available',
   },
   {
     id: 'leo-ultimate',
