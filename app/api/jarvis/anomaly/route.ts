@@ -45,10 +45,11 @@ export async function GET(req: NextRequest) {
   const today = new Date().toISOString().slice(0, 10)
 
   // ── Load attendees, checklist, survey in parallel ─────────────────────────
-  const [attRes, checkRes, surveyRes] = await Promise.all([
+  const [attRes, checkRes, surveyRes, claimsRes] = await Promise.all([
     supabase.from('attendees').select('id, name, phone, email, payment_status').eq('event_id', eventId),
     supabase.from('checklist_items').select('id, item, category, due_date, status').eq('event_id', eventId),
     supabase.from('pre_event_survey_responses').select('id').eq('event_id', eventId),
+    supabase.from('claims').select('id, claimant_name, amount, status, submitted_at').eq('event_id', eventId),
   ])
 
   if (attRes.error) return NextResponse.json({ ok: false, error: attRes.error.message }, { status: 500 })
@@ -56,6 +57,7 @@ export async function GET(req: NextRequest) {
   const attendees = attRes.data ?? []
   const checklist = checkRes.data ?? []
   const surveyCount = (surveyRes.data ?? []).length
+  const claims = claimsRes.data ?? []
   const registered = attendees.length
 
   // ── Detect anomalies ───────────────────────────────────────────────────────
@@ -139,6 +141,19 @@ export async function GET(req: NextRequest) {
     })
   }
 
+  // 5) Expense claims pending reimbursement ≥ 7 days
+  for (const c of claims) {
+    if (c.status !== 'pending' && c.status !== 'approved') continue
+    const ageDays = Math.round((todayTs - new Date(c.submitted_at as string).setHours(0, 0, 0, 0)) / msPerDay)
+    if (ageDays >= 7) {
+      detected.push({
+        kind: 'unpaid_claim',
+        ref: `claim:${c.id as string}`,
+        label: `Unpaid claim (${ageDays}d): ${esc(c.claimant_name as string)} — RM ${Number(c.amount ?? 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+      })
+    }
+  }
+
   if (!detected.length) {
     return NextResponse.json({ ok: true, new: 0 })
   }
@@ -171,7 +186,8 @@ export async function GET(req: NextRequest) {
       a.kind === 'duplicate' ? '👥' :
       a.kind === 'overdue' ? '⚠️' :
       a.kind === 'capacity' ? '🔴' :
-      a.kind === 'stalled_survey' ? '📋' : '❗'
+      a.kind === 'stalled_survey' ? '📋' :
+      a.kind === 'unpaid_claim' ? '💸' : '❗'
     msg += `\n${icon} ${a.label}`
   }
 

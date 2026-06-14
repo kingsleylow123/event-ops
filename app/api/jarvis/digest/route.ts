@@ -44,10 +44,11 @@ export async function GET(req: NextRequest) {
   // daysUntil: positive = future, 0 = today, negative = past
   const daysUntil = Math.round((eventTs - todayTs) / msPerDay)
 
-  const [attRes, checkRes, surveyRes] = await Promise.all([
+  const [attRes, checkRes, surveyRes, claimsRes] = await Promise.all([
     supabase.from('attendees').select('payment_status, payment_amount, attendance_confirmed').eq('event_id', eventId),
     supabase.from('checklist_items').select('item, category, due_date, status').eq('event_id', eventId),
     supabase.from('pre_event_survey_responses').select('id').eq('event_id', eventId),
+    supabase.from('claims').select('amount, status, submitted_at').eq('event_id', eventId),
   ])
 
   if (attRes.error) return NextResponse.json({ ok: false, error: attRes.error.message }, { status: 500 })
@@ -55,6 +56,8 @@ export async function GET(req: NextRequest) {
   const attendees = attRes.data ?? []
   const checklist = checkRes.data ?? []
   const surveyCount = (surveyRes.data ?? []).length
+  // Open claims = submitted but not yet paid/rejected.
+  const openClaims = (claimsRes.data ?? []).filter(c => c.status === 'pending' || c.status === 'approved')
 
   // ── Attendance breakdown ───────────────────────────────────────────────────
   const paid = attendees.filter(a => a.payment_status === 'paid')
@@ -104,6 +107,16 @@ export async function GET(req: NextRequest) {
     msg += `\n⏳ ${b(pending.length + ' pending payment' + (pending.length !== 1 ? 's' : ''))} — follow up needed`
   }
 
+  // Open expense claims awaiting reimbursement
+  if (openClaims.length) {
+    const claimTotal = openClaims.reduce((s, c) => s + Number(c.amount ?? 0), 0)
+    const oldest = Math.max(
+      ...openClaims.map(c => Math.round((todayTs - new Date(c.submitted_at).setHours(0, 0, 0, 0)) / msPerDay))
+    )
+    msg += `\n💸 ${b(openClaims.length + ' claim' + (openClaims.length !== 1 ? 's' : '') + ' to reimburse')} — ${esc(rm(claimTotal))}`
+    if (oldest >= 3) msg += ` <i>(oldest ${oldest}d)</i>`
+  }
+
   // T-1 special reminder
   if (daysUntil === 1) {
     msg += `\n\n🔔 ${b("Tomorrow's the day!")} Last chance to confirm payments + checklist.`
@@ -127,5 +140,6 @@ export async function GET(req: NextRequest) {
     pending: pending.length,
     surveyCount,
     overdueChecklist: overdueItems.length,
+    openClaims: openClaims.length,
   })
 }
