@@ -6,7 +6,7 @@ import { rm } from '@/lib/finance'
 import { resolveInitialEvent } from '@/lib/event'
 import { useCachedFetch } from '@/lib/useCachedFetch'
 
-type Status = 'partial' | 'paid' | 'cancelled'
+type Status = 'partial' | 'paid' | 'refunded'
 type Deposit = {
   id: string
   event_id: string
@@ -27,9 +27,9 @@ type Deposit = {
 const STATUS_COLORS: Record<Status, string> = {
   partial: 'bg-yellow-900/40 text-yellow-400 border border-yellow-800',
   paid: 'bg-green-900/40 text-green-400 border border-green-800',
-  cancelled: 'bg-zinc-800 text-zinc-400 border border-zinc-700',
+  refunded: 'bg-red-900/40 text-red-400 border border-red-800',
 }
-const STATUS_ORDER: Status[] = ['partial', 'paid', 'cancelled']
+const STATUS_ORDER: Status[] = ['partial', 'paid', 'refunded']
 const fmtDate = (ts: string | null) =>
   ts ? new Date(ts).toLocaleDateString('en-MY', { dateStyle: 'medium' }) : '—'
 
@@ -54,6 +54,7 @@ export default function DepositsPage() {
   const [err, setErr] = useState('')
 
   const [form, setForm] = useState({ event_id: '', name: '', total_amount: '', deposit_paid: '', due_date: '' })
+  const [tab, setTab] = useState<'partial' | 'paid' | 'refunded'>('partial')
 
   // Always all events — no scope filter.
   const load = useCallback(async (): Promise<Deposit[]> => {
@@ -169,8 +170,11 @@ export default function DepositsPage() {
   }
 
   const open = deposits.filter(d => d.status === 'partial')
+  const paidList = deposits.filter(d => d.status === 'paid')
+  const refundedList = deposits.filter(d => d.status === 'refunded')
   const outstanding = open.reduce((s, d) => s + d.balance, 0)
   const overdueCount = open.filter(d => d.overdue).length
+  const shown = tab === 'partial' ? open : tab === 'paid' ? paidList : refundedList
 
   if (loading && !deposits.length) {
     return <div className="text-zinc-500 mt-20 text-center">Loading…</div>
@@ -224,10 +228,20 @@ export default function DepositsPage() {
           : <p className="w-full text-xs text-zinc-600">Attaches to <span className="text-zinc-400">{events.find(e => e.id === form.event_id)?.name ?? '—'}</span></p>}
       </form>
 
+      {/* Tabs — refunded deposits move into Refunded */}
+      <div className="flex gap-1">
+        {([['partial', 'Open', open.length], ['paid', 'Paid', paidList.length], ['refunded', 'Refunded', refundedList.length]] as const).map(([key, label, count]) => (
+          <button key={key} onClick={() => setTab(key)}
+            className={`text-sm px-3 py-1.5 rounded-lg transition-colors ${tab === key ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}>
+            {label}<span className="ml-1.5 text-xs text-zinc-500">{count}</span>
+          </button>
+        ))}
+      </div>
+
       {/* List */}
       <div className="bg-[#111] border border-zinc-800 rounded-xl overflow-x-auto">
-        {deposits.length === 0 ? (
-          <p className="text-zinc-600 text-sm p-6 text-center">No deposits yet.</p>
+        {shown.length === 0 ? (
+          <p className="text-zinc-600 text-sm p-6 text-center">No deposits here.</p>
         ) : (
           <table className="w-full text-sm">
             <thead>
@@ -244,7 +258,7 @@ export default function DepositsPage() {
               </tr>
             </thead>
             <tbody>
-              {deposits.map(d => {
+              {shown.map(d => {
                 const due = dueInfo(d)
                 const wa = toWhatsApp(d.phone)
                 return (
