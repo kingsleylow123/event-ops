@@ -154,6 +154,13 @@ export default function DepositsPage() {
   }
 
   async function setStatus(d: Deposit, status: Status) {
+    if (status === d.status) return
+    // Refund / un-refund are big money moves — confirm before changing either way
+    // so a stray tap on the status dropdown can't silently flip someone's deposit.
+    if (status === 'refunded' || d.status === 'refunded') {
+      const verb = status === 'refunded' ? 'mark as refunded' : `change from refunded to "${status}"`
+      if (!window.confirm(`${verb} for ${d.name} (RM ${d.deposit_paid})?`)) return
+    }
     setDeposits(prev => prev.map(x => (x.id === d.id ? { ...x, status } : x)))
     await fetch('/api/deposits', {
       method: 'PATCH',
