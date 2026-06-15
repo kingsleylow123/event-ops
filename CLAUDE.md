@@ -46,7 +46,7 @@ npm run dev      # localhost:3000
 npm run build    # production build (run before deploy)
 npm run lint
 ```
-Deploy: **`git push` does NOT deploy** — this project has no Vercel Git integration. After pushing, run `vercel --prod --yes` (CLI is authed) and verify the production alias updated with `vercel inspect event-ops-six.vercel.app`. Supabase migrations in `supabase/migrations/`.
+Deploy: **`git push origin master` DOES auto-deploy** — this project HAS a Vercel Git integration that builds & deploys every push to `master` (work lands via PRs that merge to master). So **the source of truth for what's live is committed `master`, NOT your local working tree.** A `vercel --prod` CLI deploy from an uncommitted working tree only goes live until the next master push reverts it. **Always commit + push your changes** rather than relying on `vercel --prod`. After a push, verify the served output (`curl` the route + grep a string unique to your change) — the build takes ~1 min. Supabase migrations in `supabase/migrations/`.
 
 ## Supabase
 
