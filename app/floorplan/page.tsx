@@ -401,6 +401,7 @@ export default function FloorPlanPage() {
                   <input value={draft.stage_speaker ?? ''}
                     onChange={e => setDraft(d => ({ ...d, stage_speaker: e.target.value }))}
                     placeholder="Speaker name"
+                    autoComplete="off" spellCheck={false} name="floorplan-stage-speaker"
                     className="bg-transparent border-b border-blue-700 mt-2 text-white text-center text-lg font-bold uppercase w-full focus:outline-none focus:border-blue-400" />
                 ) : (
                   <p className="text-white text-lg font-bold uppercase mt-2">{display.stage_speaker || '—'}</p>
@@ -417,6 +418,7 @@ export default function FloorPlanPage() {
                       <div key={idx} className="flex gap-1 items-center">
                         <input value={need} onChange={e => updateSpeakerNeed(idx, e.target.value)}
                           placeholder="e.g. Lapel mic"
+                          autoComplete="off" spellCheck={false} name={`floorplan-need-${idx}`}
                           className="flex-1 bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-white text-xs" />
                         <button type="button" onClick={() => removeSpeakerNeed(idx)}
                           className="text-zinc-500 hover:text-red-400 text-[10px] px-1.5 py-0.5 border border-zinc-700 hover:border-red-500/50 rounded">✕</button>
@@ -495,6 +497,7 @@ export default function FloorPlanPage() {
                 {editing ? (
                   <input value={section.label} onChange={e => updateSection(idx, { label: e.target.value })}
                     placeholder="Section name (e.g. Zac)"
+                    autoComplete="off" spellCheck={false} name={`floorplan-section-label-${section.id}`}
                     className="bg-zinc-900 border border-zinc-700 hover:border-orange-500/50 focus:border-orange-400 rounded px-2 py-1.5 text-orange-400 text-xs uppercase tracking-widest font-bold text-center w-full focus:outline-none" />
                 ) : (
                   <h3 className="text-orange-400 text-xs uppercase tracking-widest font-bold">{section.label}</h3>
@@ -533,6 +536,7 @@ export default function FloorPlanPage() {
                     <input value={section.note ?? ''}
                       onChange={e => updateSection(idx, { note: e.target.value || null })}
                       placeholder="Note (e.g. '4 VIPs + 1 overflow')"
+                      autoComplete="off" spellCheck={false} name={`floorplan-section-note-${section.id}`}
                       className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-white text-xs" />
                     <div className="flex items-center justify-between gap-1">
                       <div className="flex gap-1">
@@ -587,6 +591,7 @@ export default function FloorPlanPage() {
                 {editing ? (
                   <input value={draft.videographer ?? ''} onChange={e => setDraft(d => ({ ...d, videographer: e.target.value }))}
                     placeholder="Name (e.g. Jimmy)"
+                    autoComplete="off" spellCheck={false} name="floorplan-videographer"
                     className="mt-1 w-full bg-zinc-900 border border-purple-700/50 rounded px-2 py-1 text-white text-sm text-center focus:outline-none focus:border-purple-400" />
                 ) : (
                   <p className="text-white text-sm mt-0.5 font-semibold">{display.videographer || '—'}</p>
@@ -602,6 +607,7 @@ export default function FloorPlanPage() {
               {editing ? (
                 <input value={draft.registration ?? ''} onChange={e => setDraft(d => ({ ...d, registration: e.target.value }))}
                   placeholder="Who's at registration?"
+                  autoComplete="off" spellCheck={false} name="floorplan-registration"
                   className="mt-1 w-full bg-transparent border-b border-amber-700/50 text-white text-center text-sm focus:outline-none focus:border-amber-400" />
               ) : (
                 <p className="text-white text-sm mt-1">{display.registration || '—'}</p>
@@ -612,6 +618,7 @@ export default function FloorPlanPage() {
               {editing ? (
                 <input value={draft.main_door ?? ''} onChange={e => setDraft(d => ({ ...d, main_door: e.target.value }))}
                   placeholder="(optional notes)"
+                  autoComplete="off" spellCheck={false} name="floorplan-main-door"
                   className="mt-1 w-full bg-transparent border-b border-zinc-700 text-white text-center text-sm focus:outline-none focus:border-zinc-400" />
               ) : (
                 display.main_door ? <p className="text-white text-sm mt-1">{display.main_door}</p> : <p className="text-zinc-600 text-xs mt-1 italic">— entrance —</p>
@@ -622,6 +629,7 @@ export default function FloorPlanPage() {
               {editing ? (
                 <input value={draft.fnb ?? ''} onChange={e => setDraft(d => ({ ...d, fnb: e.target.value }))}
                   placeholder="Who's at F&B?"
+                  autoComplete="off" spellCheck={false} name="floorplan-fnb"
                   className="mt-1 w-full bg-transparent border-b border-amber-700/50 text-white text-center text-sm focus:outline-none focus:border-amber-400" />
               ) : (
                 <p className="text-white text-sm mt-1">{display.fnb || '—'}</p>
