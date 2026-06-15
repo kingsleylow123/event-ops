@@ -2,7 +2,8 @@
 import { useEffect, useState, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { isValidPhone } from '@/lib/validate'
-import { PREP_STEP_KEYS, emptySteps } from '@/lib/prep-steps'
+import { PREP_STEP_KEYS, GLCC_PREP_STEP_KEYS, PREP_TRACKS, PREP_TRACK_TOOLS, emptySteps, type PrepTrackKey } from '@/lib/prep-steps'
+import { GLCC_SETUP_SKILL } from '@/lib/glcc-skill'
 import { resolveEventConfig, type EventConfig } from '@/lib/event-config'
 
 // Countdown deadline = midnight (00:00) at the START of the event's calendar
@@ -28,6 +29,8 @@ type OS = 'mac' | 'windows' | null
 function StartContent() {
   const params = useSearchParams()
   const eventId = params.get('event') || ''
+  // Tester mode: ?preview=1 unlocks every step and never writes to the live dashboard.
+  const previewUnlock = params.get('preview') === '1' || params.get('unlock') === '1'
 
   const [facts, setFacts] = useState<Facts | null>(null)
   const [steps, setSteps] = useState<Steps>(emptySteps())
@@ -37,10 +40,19 @@ function StartContent() {
   const [phoneAsked, setPhoneAsked] = useState(false)
   const [phoneInput, setPhoneInput] = useState('')
   const [pendingStep, setPendingStep] = useState<string | null>(null)
+  const [track, setTrack] = useState<PrepTrackKey | null>(null)
+  const [consentAck, setConsentAck] = useState(false)
+  const [tool, setTool] = useState<string | null>(null)
+  const [toolHasApi, setToolHasApi] = useState(false)
+  const [otherActive, setOtherActive] = useState(false)
+  const [verified, setVerified] = useState(false)
+  const [copiedSkill, setCopiedSkill] = useState(false)
+  const [factsError, setFactsError] = useState(false)
 
   const PHONE_KEY = `prep_phone_${eventId}`
   const STEPS_KEY = `prep_steps_${eventId}`
   const MISC_KEY = `prep_misc_${eventId}`
+  const VERIFIED_KEY = `prep_verified_${eventId}`
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
@@ -49,25 +61,50 @@ function StartContent() {
       const p = localStorage.getItem(PHONE_KEY); if (p) setPhone(p)
       const s = localStorage.getItem(STEPS_KEY); if (s) setSteps(JSON.parse(s))
       const m = localStorage.getItem(MISC_KEY)
-      if (m) { const mm = JSON.parse(m); setIpadAck(!!mm.ipadAck); if (mm.os) setOs(mm.os) }
+      if (m) { const mm = JSON.parse(m); setIpadAck(!!mm.ipadAck); setConsentAck(!!mm.consentAck); if (mm.os) setOs(mm.os); if (mm.track) setTrack(mm.track); if (mm.tool) setTool(mm.tool); setToolHasApi(!!mm.toolHasApi); setOtherActive(!!mm.otherActive) }
+      const v = localStorage.getItem(VERIFIED_KEY); if (v === '1') setVerified(true)
     } catch { /* ignore */ }
-    fetch(`/api/survey?event_id=${eventId}&facts=1`)
-      .then(r => r.json()).then((d: Facts) => setFacts(d)).catch(() => {})
+    // Load the event facts (incl. config.prep_variant that decides GLCC vs half-day).
+    // A transient failure on first mount (cold function / request burst) used to hit
+    // the catch and leave facts = {}, which silently rendered the WRONG (half-day)
+    // workshop for a GLCC attendee. So retry a few times, and on hard failure show an
+    // error rather than the wrong page.
+    let cancelled = false
+    const loadFacts = (attempt: number) => {
+      fetch(`/api/survey?event_id=${eventId}&facts=1`, { cache: 'no-store' })
+        .then(r => { if (!r.ok) throw new Error(String(r.status)); return r.json() })
+        .then((d: Facts) => { if (!cancelled) { setFacts(d); setFactsError(false) } })
+        .catch(() => {
+          if (cancelled) return
+          if (attempt < 3) setTimeout(() => loadFacts(attempt + 1), 600 * (attempt + 1))
+          else setFactsError(true)
+        })
+    }
+    loadFacts(0)
+    return () => { cancelled = true }
   }, [eventId]) // eslint-disable-line react-hooks/exhaustive-deps
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  const doneCount = PREP_STEP_KEYS.filter(k => steps[k]).length
-  const pct = Math.round((doneCount / PREP_STEP_KEYS.length) * 100)
-  const allDone = doneCount === PREP_STEP_KEYS.length
+  const isGlcc = resolveEventConfig(facts?.config).prep_variant === 'glcc'
+  const stepKeys: readonly string[] = isGlcc ? GLCC_PREP_STEP_KEYS : PREP_STEP_KEYS
+  const stepCount = stepKeys.length
+  const doneCount = stepKeys.filter(k => steps[k]).length
+  const pct = Math.round((doneCount / stepCount) * 100)
+  const allDone = doneCount === stepCount
+  // Hard-lock gating (GLCC only): only the first unfinished step is open; every
+  // step after it stays locked until the step above is ticked.
+  const firstOpenIdx = (() => { const i = stepKeys.findIndex(k => !steps[k]); return i === -1 ? stepKeys.length : i })()
+  const isLocked = (n: string) => isGlcc && !previewUnlock && stepKeys.indexOf(n) > firstOpenIdx
 
   // Cloud sync with visible failure: progress always lands in localStorage,
   // but if the POST fails (flaky wifi) the attendee sees a retry toast instead
   // of silently losing their cloud copy.
   const [cloudFailed, setCloudFailed] = useState<{ steps: Steps; ack: boolean; phone: string } | null>(null)
-  function syncToCloud(next: Steps, ack: boolean, ph: string) {
+  function syncToCloud(next: Steps, ack: boolean, ph: string, trk: PrepTrackKey | null = track, consent: boolean = consentAck, tl: string | null = tool, tlApi: boolean = toolHasApi) {
+    if (previewUnlock) return // tester mode: never write to the live dashboard
     fetch('/api/prep', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ event_id: eventId, phone: ph, steps: { ...next, ipad_ack: ack } }),
+      body: JSON.stringify({ event_id: eventId, phone: ph, track: trk, tool: tl, tool_has_api: tlApi, steps: { ...next, ipad_ack: ack, consent_ack: consent } }),
     })
       .then(r => { if (!r.ok) throw new Error(); setCloudFailed(null) })
       .catch(() => setCloudFailed({ steps: next, ack, phone: ph }))
@@ -77,27 +114,60 @@ function StartContent() {
     try { localStorage.setItem(STEPS_KEY, JSON.stringify(next)); if (ph) localStorage.setItem(PHONE_KEY, ph) } catch { /* ignore */ }
     if (ph) syncToCloud(next, ipadAck, ph)
   }
-  function persistMisc(next: { ipadAck: boolean; os: OS }) {
-    try { localStorage.setItem(MISC_KEY, JSON.stringify(next)) } catch { /* ignore */ }
+  function persistMisc(patch: Partial<{ ipadAck: boolean; os: OS; consentAck: boolean; track: PrepTrackKey | null; tool: string | null; toolHasApi: boolean; otherActive: boolean }>) {
+    const merged = { ipadAck, os, consentAck, track, tool, toolHasApi, otherActive, ...patch }
+    try { localStorage.setItem(MISC_KEY, JSON.stringify(merged)) } catch { /* ignore */ }
   }
 
   function toggleStep(id: string) {
-    if (!phone) { setPendingStep(id); setPhoneAsked(true); return }
+    if (!phone && !previewUnlock) { setPendingStep(id); setPhoneAsked(true); return }
     const next = { ...steps, [id]: !steps[id] }
     setSteps(next); persistSteps(next, phone)
   }
   function setAck(v: boolean) {
-    setIpadAck(v); persistMisc({ ipadAck: v, os })
+    setIpadAck(v); persistMisc({ ipadAck: v })
     if (phone) syncToCloud(steps, v, phone)
   }
-  function chooseOs(v: OS) { setOs(v); persistMisc({ ipadAck, os: v }) }
+  function chooseOs(v: OS) { setOs(v); persistMisc({ os: v }) }
+
+  // Step 7 (GLCC) = pick a track → pick a tool → confirm it has an API.
+  // The step only counts as done when all three are set.
+  function commitStep7(nextTrack: PrepTrackKey | null, nextTool: string | null, nextApi: boolean) {
+    const done7 = !!(nextTrack && nextTool && nextTool.trim() && nextApi)
+    const next = { ...steps, '8': done7 }
+    setSteps(next)
+    try { localStorage.setItem(STEPS_KEY, JSON.stringify(next)) } catch { /* ignore */ }
+    if (phone) syncToCloud(next, ipadAck, phone, nextTrack, consentAck, nextTool, nextApi)
+  }
+  function chooseTrack(t: PrepTrackKey) {
+    setTrack(t); setTool(null); setToolHasApi(false); setOtherActive(false)
+    persistMisc({ track: t, tool: null, toolHasApi: false, otherActive: false })
+    if (!phone && !previewUnlock) { setPhoneAsked(true); return }
+    commitStep7(t, null, false)
+  }
+  function chooseTool(name: string, other = false) {
+    setTool(name); setOtherActive(other)
+    persistMisc({ tool: name, otherActive: other })
+    if (!phone && !previewUnlock) { setPhoneAsked(true); return }
+    commitStep7(track, name, toolHasApi)
+  }
+  function setToolApi(v: boolean) {
+    setToolHasApi(v); persistMisc({ toolHasApi: v })
+    if (!phone && !previewUnlock) { setPhoneAsked(true); return }
+    commitStep7(track, tool, v)
+  }
+  function copySkill() {
+    try { navigator.clipboard.writeText(GLCC_SETUP_SKILL); setCopiedSkill(true); setTimeout(() => setCopiedSkill(false), 2000) } catch { /* ignore */ }
+  }
 
   function submitPhone() {
     if (!isValidPhone(phoneInput)) return
     const ph = phoneInput.trim()
     setPhone(ph); setPhoneAsked(false)
     const next = pendingStep ? { ...steps, [pendingStep]: true } : steps
-    setSteps(next); persistSteps(next, ph)
+    setSteps(next)
+    try { localStorage.setItem(STEPS_KEY, JSON.stringify(next)); localStorage.setItem(PHONE_KEY, ph) } catch { /* ignore */ }
+    syncToCloud(next, ipadAck, ph)
     setPendingStep(null); setPhoneInput('')
   }
 
@@ -109,14 +179,53 @@ function StartContent() {
   const dateStr = eventDate ? eventDate.toLocaleDateString('en-MY', { weekday: 'long', day: 'numeric', month: 'long' }) : null
   const surveyUrl = eventId ? `/survey?event=${eventId}` : '#'
 
+  // GLCC: one master video at top; each step links to its timestamp in it.
+  const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+  function jumpLink(tsStr: string | undefined, label: string) {
+    if (!cfg.glcc_video_master) return null
+    const sec = parseInt(tsStr || '0', 10) || 0
+    const href = `https://youtu.be/${cfg.glcc_video_master}${sec ? `?t=${sec}` : ''}`
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" className="cta-ghost">
+        ▶️ {label}{sec ? ` · ${mmss(sec)}` : ''}
+      </a>
+    )
+  }
+  // Prefer a per-step Loom walkthrough if one is set; otherwise fall back to the
+  // master-video timestamp link.
+  function stepVideo(loomId: string | undefined, ts: string | undefined, label: string) {
+    if (loomId) return <Loom id={loomId} label={label} />
+    return jumpLink(ts, label)
+  }
+  function typeOther(value: string) {
+    setTool(value); setOtherActive(true); persistMisc({ tool: value, otherActive: true })
+  }
+
   if (!eventId) {
     return <div className="min-h-screen flex items-center justify-center bg-black"><p className="text-zinc-500">Invalid link.</p></div>
+  }
+
+  // GLCC setup page is gated to paid attendees (preview=1 bypasses for testing).
+  if (factsError) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-6 text-center" style={{ background: '#060606' }}>
+        <p className="text-zinc-400 text-sm max-w-xs">Couldn&apos;t load your workshop details — check your connection and try again.</p>
+        <button onClick={() => location.reload()} className="text-black font-semibold rounded-2xl px-6 py-3 text-sm"
+          style={{ background: 'linear-gradient(135deg, #f59e0b, #D4684A)' }}>↻ Reload</button>
+      </div>
+    )
+  }
+  if (facts === null) {
+    return <div className="min-h-screen flex items-center justify-center" style={{ background: '#060606' }}><p className="text-zinc-500">Loading…</p></div>
+  }
+  if (isGlcc && !verified && !previewUnlock) {
+    return <GlccGate onVerified={() => { setVerified(true); try { localStorage.setItem(VERIFIED_KEY, '1') } catch { /* ignore */ } }} />
   }
 
   return (
     <div className="relative min-h-screen text-white" style={{ background: '#060606' }}>
       {/* ── Sticky countdown ── */}
-      <CountdownBar target={countdownTarget} done={allDone} doneCount={doneCount} venue={cfg.venue_label} />
+      <CountdownBar target={countdownTarget} done={allDone} doneCount={doneCount} total={stepCount} venue={cfg.venue_label} />
 
       {/* Ambient liquid background — clipped here (not on the root) so it can't
           force horizontal scroll while leaving the root free for sticky. */}
@@ -144,18 +253,18 @@ function StartContent() {
           {/* Workshop topic */}
           <h1 className="text-[28px] sm:text-4xl font-extrabold leading-[1.1] tracking-tight mb-3">
             <span className="bg-clip-text text-transparent" style={{ backgroundImage: 'linear-gradient(180deg, #fff 30%, #d4a574)' }}>
-              Claude Dashboard for CEOs &amp; Heads of Department
+              {isGlcc ? 'Go Live Claude Challenge — Get Set Up' : 'Claude Dashboard for CEOs & Heads of Department'}
             </span>
           </h1>
           <p className="text-zinc-400 text-[15px] leading-relaxed mb-6 max-w-sm mx-auto">
-            You&apos;re in 🎉 Six quick steps to be <span className="text-white font-medium">workshop-ready</span>. Your progress saves automatically.
+            You&apos;re in 🎉 {stepCount} quick steps to be <span className="text-white font-medium">{isGlcc ? 'build-ready for Day 1' : 'workshop-ready'}</span>. Your progress saves automatically.
           </p>
 
           {/* Date + venue pills (no seat count) */}
           <div className="flex flex-wrap items-center justify-center gap-2">
-            {dateStr && <Pill icon="📅" text={dateStr} />}
+            {(cfg.date_label || dateStr) && <Pill icon="📅" text={cfg.date_label || dateStr || ''} />}
             {facts?.venue && <Pill icon="📍" text={facts.venue} />}
-            <Pill icon="⏰" text="9:30am start" highlight />
+            <Pill icon="⏰" text={cfg.time_label || '9:30am start'} highlight />
           </div>
         </div>
 
@@ -164,7 +273,7 @@ function StartContent() {
           <div className="flex gap-3">
             <span className="text-xl">⚡</span>
             <div>
-              <div className="text-sm font-semibold text-amber-200 mb-0.5">Please finish all 6 steps before the day</div>
+              <div className="text-sm font-semibold text-amber-200 mb-0.5">Please finish all {stepCount} steps before the day</div>
               <p className="text-[13px] text-zinc-400 leading-relaxed">If you show up un-installed, you&apos;ll <b className="text-zinc-200">delay the whole class</b> waiting on downloads — which means less hands-on building and sharing time for everyone.</p>
             </div>
           </div>
@@ -174,12 +283,13 @@ function StartContent() {
         <Glass className="mt-4 p-4 flex items-center gap-4">
           <Ring pct={pct} />
           <div className="flex-1">
-            <div className="text-sm font-semibold">{allDone ? "You're all set! 🚀" : `${doneCount} of 6 complete`}</div>
+            <div className="text-sm font-semibold">{allDone ? "You're all set! 🚀" : `${doneCount} of ${stepCount} complete`}</div>
             <div className="text-xs text-zinc-500">{allDone ? 'See you at 9:30am sharp' : 'Tap each step as you go'}</div>
           </div>
         </Glass>
 
-        {/* ── Steps ── */}
+        {/* ── Steps (half-day) ── */}
+        {!isGlcc && (
         <div className="mt-4 space-y-3">
           {/* Step 1 */}
           <StepCard n="1" done={steps['1']} onToggle={() => toggleStep('1')}
@@ -257,6 +367,180 @@ function StartContent() {
             <Video id={cfg.venue_video_id} label={`🎬 How to get to ${cfg.venue_label} — Venue Guide`} full />
           </StepCard>
         </div>
+        )}
+
+        {/* ── Steps (GLCC 2-day) ── */}
+        {isGlcc && (<>
+        {/* One A-Z master video, pinned at the top */}
+        {cfg.glcc_video_master && (
+          <div className="mt-5">
+            <SectionLabel>Watch this first — your whole setup, start to finish</SectionLabel>
+            <div className="mt-3"><Video id={cfg.glcc_video_master} label="🎬 GLCC setup — everything in one video" full /></div>
+            <p className="text-[12px] text-zinc-500 text-center mt-2">Follow along, then tick each step below. Each step jumps you to its part of the video.</p>
+          </div>
+        )}
+
+        <div className="mt-4 space-y-3">
+          {/* GLCC 1 — Install Claude Code + setup co-pilot */}
+          <StepCard n="1" done={steps['1']} onToggle={() => toggleStep('1')} critical
+            title="Install Claude Code (the CLI)" subtitle="Mac or Windows laptop — with a terminal">
+            {stepVideo(cfg.glcc_loom_install, cfg.glcc_ts_install, '🎬 Watch: install Claude Code')}
+            <p className="text-[13px] text-zinc-400 my-3 leading-relaxed">Two quick installs — <b className="text-zinc-200">no Homebrew needed</b>. First, install <b className="text-zinc-200">Node.js (LTS)</b> from nodejs.org (just click through the installer). Then open your terminal and paste the line for <b className="text-zinc-200">your</b> computer 👇</p>
+            <div className="mt-3">
+              <div className="text-[12px] font-semibold text-zinc-300 mb-1">🍎 On Mac — open <b className="text-white">Terminal</b> (Cmd+Space, type Terminal):</div>
+              <div className="rounded-xl px-3 py-2.5 text-[12px] font-mono text-amber-200 bg-black/40 border border-white/10 overflow-x-auto">curl -fsSL https://claude.ai/install.sh | bash</div>
+            </div>
+            <div className="mt-3">
+              <div className="text-[12px] font-semibold text-zinc-300 mb-1">🪟 On Windows — open <b className="text-white">PowerShell</b> (Start, type PowerShell — not Command Prompt):</div>
+              <div className="rounded-xl px-3 py-2.5 text-[12px] font-mono text-amber-200 bg-black/40 border border-white/10 overflow-x-auto">irm https://claude.ai/install.ps1 | iex</div>
+            </div>
+            <p className="text-[12px] text-zinc-500 mt-2">Then type <code className="px-1 rounded bg-white/10 text-amber-200 text-[11px]">claude</code> and log in.</p>
+            <div className="rounded-xl px-3.5 py-3 mt-3 text-[12px] text-zinc-300 leading-relaxed"
+              style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.22)' }}>
+              ✅ You&apos;ll know it worked when <code className="px-1 rounded bg-white/10 text-amber-200 text-[11px]">claude --version</code> and <code className="px-1 rounded bg-white/10 text-amber-200 text-[11px]">node -v</code> both show a version — I show you exactly how in the video.
+            </div>
+            {/* Setup co-pilot — gated skill (paid attendees) */}
+            <div className="rounded-2xl px-4 py-3.5 mt-3"
+              style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.16), rgba(99,102,241,0.10))', border: '1px solid rgba(99,102,241,0.30)' }}>
+              <div className="text-sm font-bold flex items-center gap-2">🤖 Meet Kingsley AI — your setup narrator</div>
+              <p className="text-[12px] text-indigo-100/80 mt-1 leading-relaxed">Don&apos;t want to do all this yourself? Copy this and paste it into <b>Claude Code</b> — <b>Kingsley AI</b> sets up every account <i>for</i> you, click-by-click in your browser. 👇</p>
+              <button onClick={copySkill} className="cta mt-2.5">{copiedSkill ? '✅ Copied — paste into Claude Code' : '📋 Copy Kingsley AI'}</button>
+            </div>
+            <button onClick={() => setAck(!ipadAck)}
+              className={`mt-3 w-full flex items-center gap-3 text-left rounded-xl px-3.5 py-3 transition-all border
+                ${ipadAck ? 'border-amber-500/40 bg-amber-500/[0.06]' : 'border-white/10 bg-white/[0.02]'}`}>
+              <span className={`w-5 h-5 shrink-0 rounded-md border-2 flex items-center justify-center transition-all
+                ${ipadAck ? 'bg-amber-500 border-amber-500 text-black' : 'border-zinc-600 text-transparent'}`}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+              </span>
+              <span className="text-[13px] text-zinc-300 leading-snug">I understand I&apos;ll bring a <b className="text-white">real laptop, not an iPad</b> — Claude Code needs a terminal.</span>
+            </button>
+          </StepCard>
+
+          {/* GLCC 2 — Download Claude for Chrome */}
+          <StepCard n="2" done={steps['2']} onToggle={() => toggleStep('2')} locked={isLocked('2')}
+            title="Download Claude for Chrome" subtitle="So the AI can set things up in your browser">
+            {stepVideo(cfg.glcc_loom_chrome, cfg.glcc_ts_chrome, '🎬 Watch: Claude for Chrome')}
+            <p className="text-[13px] text-zinc-400 my-3 leading-relaxed">Install the <b className="text-zinc-200">Claude for Chrome</b> extension and sign in. It lets your setup co-pilot (and Claude in class) <b className="text-amber-300">click through your browser for you</b>.</p>
+            <a href="https://claude.ai/chrome" target="_blank" rel="noopener noreferrer" className="cta">🧩 Get Claude for Chrome</a>
+            <p className="text-[12px] text-zinc-500 mt-2">After adding it, pin it and grant it permission to control the browser when asked.</p>
+          </StepCard>
+
+          {/* GLCC 3 — Claude Pro + API key */}
+          <StepCard n="3" done={steps['3']} onToggle={() => toggleStep('3')} locked={isLocked('3')}
+            title="Claude Pro + an API key" subtitle="Load USD $5 (about RM23) of credit">
+            {stepVideo(cfg.glcc_loom_keys, cfg.glcc_ts_keys, '🎬 Watch: Claude Pro + API key')}
+            <p className="text-[13px] text-zinc-400 my-3 leading-relaxed">Get <b className="text-zinc-200">Claude Pro</b> (Free can&apos;t run Claude Code), then create an <b className="text-zinc-200">Anthropic API key</b> and load <b className="text-amber-300">USD $5 (about RM23)</b> — your Telegram bot uses it. Keep the cap low; the key is billable.</p>
+            <a href="https://claude.com/pricing" target="_blank" rel="noopener noreferrer" className="cta">⭐ Get Claude Pro</a>
+            <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer" className="cta-ghost mt-2">🔑 Create API key + add credit</a>
+          </StepCard>
+
+          {/* GLCC 4 — GitHub account + copy the starter template into their own repo */}
+          <StepCard n="4" done={steps['4']} onToggle={() => toggleStep('4')} locked={isLocked('4')}
+            title="GitHub + your project repo" subtitle="Your project's home for the workshop">
+            {stepVideo(cfg.glcc_loom_github, cfg.glcc_ts_github, '🎬 Watch: GitHub + your repo')}
+            <p className="text-[13px] text-zinc-400 my-3 leading-relaxed">Create a free <b className="text-zinc-200">GitHub</b> account, then make your own copy of our starter — one click gives you your <b className="text-amber-300">glcc-ops</b> repo, the home for everything you build.</p>
+            <a href="https://github.com/signup" target="_blank" rel="noopener noreferrer" className="cta-ghost">🐙 Create GitHub account</a>
+            <a href={cfg.template_repo_url || 'https://github.com/claude-malaysia-glcc/glcc-ops-starter/generate'} target="_blank" rel="noopener noreferrer" className="cta mt-2">📦 Use this template → make my repo</a>
+            <p className="text-[12px] text-zinc-500 mt-2">Name it <b className="text-zinc-300">glcc-ops</b>, keep it <b className="text-zinc-300">Public</b>, and you&apos;re done. (Coaching access is optional and set up later, on Day 2.)</p>
+          </StepCard>
+
+          {/* GLCC 5 — Supabase */}
+          <StepCard n="5" done={steps['5']} onToggle={() => toggleStep('5')} locked={isLocked('5')}
+            title="Create a Supabase project" subtitle="Your free cloud database — the 'second brain'">
+            {stepVideo(cfg.glcc_loom_supabase, cfg.glcc_ts_supabase, '🎬 Watch: create Supabase')}
+            <a href="https://supabase.com/dashboard" target="_blank" rel="noopener noreferrer" className="cta mt-3">🗄️ Create Supabase project</a>
+            <p className="text-[12px] text-zinc-500 mt-2">Free tier is plenty. Make ONE empty project, <b className="text-zinc-300">save the database password</b>, pick Singapore — we run the rest in class.</p>
+          </StepCard>
+
+          {/* GLCC 6 — Vercel */}
+          <StepCard n="6" done={steps['6']} onToggle={() => toggleStep('6')} locked={isLocked('6')}
+            title="Create a Vercel account" subtitle="Where your app goes live — sign in with GitHub">
+            {stepVideo(cfg.glcc_loom_vercel, cfg.glcc_ts_vercel, '🎬 Watch: create Vercel')}
+            <a href="https://vercel.com/signup" target="_blank" rel="noopener noreferrer" className="cta mt-3">▲ Create Vercel account</a>
+            <p className="text-[12px] text-zinc-500 mt-2">Choose <b className="text-zinc-300">Continue with GitHub</b> so it links to your repo automatically. No project needed — we deploy in class.</p>
+          </StepCard>
+
+          {/* GLCC 7 — Telegram bot + user ID */}
+          <StepCard n="7" done={steps['7']} onToggle={() => toggleStep('7')} critical locked={isLocked('7')}
+            title="Telegram bot + your user ID" subtitle="So your Jarvis can text you">
+            {stepVideo(cfg.glcc_loom_telegram, cfg.glcc_ts_telegram, '🎬 Watch: Telegram bot + user ID')}
+            <p className="text-[13px] text-zinc-400 my-3 leading-relaxed">In Telegram: message <b className="text-zinc-200">@BotFather</b> → <code className="px-1 rounded bg-white/10 text-amber-200 text-[11px]">/newbot</code> → save the <b className="text-zinc-200">token</b>. Then message <b className="text-zinc-200">@userinfobot</b> → tap Start → save the <b className="text-zinc-200">number</b> (your user ID).</p>
+            <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" className="cta-ghost">🤖 Open @BotFather</a>
+            <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer" className="cta-ghost mt-2">🆔 Open @userinfobot</a>
+            <div className="rounded-xl px-3.5 py-3 mt-3 text-[12px] text-zinc-300 leading-relaxed"
+              style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.22)' }}>
+              📝 Save BOTH: your <b className="text-amber-200">bot token</b> AND your <b className="text-amber-200">user ID</b> (e.g. 812345678) — you need both on Day 1.
+            </div>
+          </StepCard>
+
+          {/* GLCC 8 — Pick your track + tool */}
+          <StepCard n="8" done={steps['8']} onToggle={() => { /* completed by choosing track + tool + API below */ }} locked={isLocked('8')}
+            title="Pick your track & tool" subtitle="What will YOUR system run?">
+            {stepVideo(cfg.glcc_loom_track, undefined, '🎬 Watch: pick your track & tool')}
+            <p className="text-[12px] text-zinc-500 mb-2">1. Choose your track:</p>
+            <div className="grid grid-cols-1 gap-2">
+              {PREP_TRACKS.map(t => (
+                <button key={t.key} onClick={() => chooseTrack(t.key)}
+                  className={`flex items-center gap-3 text-left rounded-xl px-3.5 py-3 transition-all border
+                    ${track === t.key ? 'border-amber-500/50 bg-amber-500/[0.08]' : 'border-white/10 bg-white/[0.02] hover:bg-white/[0.05]'}`}>
+                  <span className="text-xl">{t.emoji}</span>
+                  <span className="text-[14px] font-medium text-zinc-100 flex-1">{t.label}</span>
+                  {track === t.key && <span className="text-amber-400 text-sm font-bold">✓</span>}
+                </button>
+              ))}
+            </div>
+            {track && (
+              <div className="mt-4">
+                <p className="text-[12px] text-zinc-500 mb-2">2. Which ONE tool will you connect? <span className="text-zinc-600">(it must have an API)</span></p>
+                <div className="flex flex-wrap gap-2">
+                  {PREP_TRACK_TOOLS[track].map(name => (
+                    <button key={name} onClick={() => chooseTool(name, false)}
+                      className={`text-[13px] px-3 py-2 rounded-xl border transition-all
+                        ${tool === name && !otherActive ? 'border-amber-500/50 bg-amber-500/[0.08] text-white' : 'border-white/10 bg-white/[0.02] text-zinc-300 hover:bg-white/[0.05]'}`}>
+                      {name}
+                    </button>
+                  ))}
+                  <button onClick={() => chooseTool('', true)}
+                    className={`text-[13px] px-3 py-2 rounded-xl border transition-all
+                      ${otherActive ? 'border-amber-500/50 bg-amber-500/[0.08] text-white' : 'border-white/10 bg-white/[0.02] text-zinc-300 hover:bg-white/[0.05]'}`}>
+                    ✏️ Other
+                  </button>
+                </div>
+                {otherActive && (
+                  <input value={tool ?? ''} onChange={e => typeOther(e.target.value)}
+                    onBlur={e => { if (phone) commitStep7(track, e.target.value, toolHasApi) }}
+                    placeholder="Type your tool's name…"
+                    className="w-full mt-2 bg-black/40 border border-white/15 rounded-xl px-3.5 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500/60" />
+                )}
+                {tool && tool.trim() && (
+                  <button onClick={() => setToolApi(!toolHasApi)}
+                    className={`mt-3 w-full flex items-center gap-3 text-left rounded-xl px-3.5 py-3 transition-all border
+                      ${toolHasApi ? 'border-emerald-500/40 bg-emerald-500/[0.06]' : 'border-white/10 bg-white/[0.02]'}`}>
+                    <span className={`w-5 h-5 shrink-0 rounded-md border-2 flex items-center justify-center transition-all
+                      ${toolHasApi ? 'bg-emerald-500 border-emerald-500 text-black' : 'border-zinc-600 text-transparent'}`}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+                    </span>
+                    <span className="text-[13px] text-zinc-300 leading-snug">I can access <b className="text-white">{tool}</b>&apos;s API key.</span>
+                  </button>
+                )}
+                <p className="text-[11px] text-zinc-600 mt-2">Not sure it has an API? Google &ldquo;{tool || 'your tool'} API&rdquo;, or ask Claude &ldquo;does it have an API and how do I get a key?&rdquo;</p>
+              </div>
+            )}
+          </StepCard>
+
+          {/* GLCC 9 — Bring your data */}
+          <StepCard n="9" done={steps['9']} onToggle={() => toggleStep('9')} locked={isLocked('9')}
+            title="Bring your data" subtitle="Excel or Google Sheets — we'll plug it in">
+            {stepVideo(cfg.glcc_loom_data, cfg.glcc_ts_data, '🎬 Watch: bring your data')}
+            <p className="text-[13px] text-zinc-400 my-3 leading-relaxed">Bring <b className="text-zinc-200">real numbers from your own business</b> (sales, leads, expenses — whatever your track needs) in an <b className="text-zinc-200">Excel or Google Sheets</b> file. We plug it straight into <b className="text-amber-300">your live system</b> on Day 2.</p>
+            <div className="rounded-xl px-3.5 py-3 text-[12px] text-zinc-300 leading-relaxed"
+              style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.22)' }}>
+              💡 Messy real data beats perfect fake data — a simple month-by-month sheet is enough.
+            </div>
+          </StepCard>
+        </div>
+        </>)}
 
         {/* ── What you'll leave with ── */}
         <div className="mt-9">
@@ -266,24 +550,63 @@ function StartContent() {
           <div className="mt-3"><DashboardShowcase /></div>
 
           <div className="space-y-3 mt-3">
-            <Glass className="p-4 flex items-start gap-3.5">
-              <div className="w-11 h-11 shrink-0 rounded-2xl flex items-center justify-center text-xl"
-                style={{ background: 'linear-gradient(135deg, rgba(212,104,74,0.25), rgba(245,158,11,0.15))', border: '1px solid rgba(245,158,11,0.2)' }}>📊</div>
-              <div>
-                <div className="font-bold text-[15px]">Your own personalised dashboard</div>
-                <div className="text-[13px] text-zinc-400 leading-relaxed">Built live, running on your real business data — yours to keep. Marketing, Sales, Finance, HR, Inventory — whatever you run.</div>
-              </div>
-            </Glass>
-            <Glass className="p-4 flex items-start gap-3.5 relative overflow-hidden">
-              <div className="absolute top-3 right-3 text-[10px] font-bold tracking-wide px-2 py-0.5 rounded-full"
-                style={{ background: 'linear-gradient(135deg, #D4684A, #f59e0b)', color: '#1a1000' }}>VIP ONLY</div>
-              <div className="w-11 h-11 shrink-0 rounded-2xl flex items-center justify-center text-xl"
-                style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.25), rgba(236,72,153,0.15))', border: '1px solid rgba(236,72,153,0.2)' }}>🎨</div>
-              <div className="pr-12">
-                <div className="font-bold text-[15px]">Viral IG Carousel skill</div>
-                <div className="text-[13px] text-zinc-400 leading-relaxed">Turn any idea into scroll-stopping branded carousels. Exclusive to VIP guests.</div>
-              </div>
-            </Glass>
+            {isGlcc ? (
+              <>
+                <Glass className="p-4 flex items-start gap-3.5">
+                  <div className="w-11 h-11 shrink-0 rounded-2xl flex items-center justify-center text-xl"
+                    style={{ background: 'linear-gradient(135deg, rgba(212,104,74,0.25), rgba(245,158,11,0.15))', border: '1px solid rgba(245,158,11,0.2)' }}>📊</div>
+                  <div>
+                    <div className="font-bold text-[15px]">Your AI dashboard</div>
+                    <div className="text-[13px] text-zinc-400 leading-relaxed">Live, on your real business data, built for your track — yours to keep.</div>
+                  </div>
+                </Glass>
+                <Glass className="p-4 flex items-start gap-3.5">
+                  <div className="w-11 h-11 shrink-0 rounded-2xl flex items-center justify-center text-xl"
+                    style={{ background: 'linear-gradient(135deg, rgba(16,185,129,0.25), rgba(5,150,105,0.15))', border: '1px solid rgba(16,185,129,0.2)' }}>⚙️</div>
+                  <div>
+                    <div className="font-bold text-[15px]">An AI employee</div>
+                    <div className="text-[13px] text-zinc-400 leading-relaxed">An automation that does your repetitive admin for you — 24/7, no salary.</div>
+                  </div>
+                </Glass>
+                <Glass className="p-4 flex items-start gap-3.5">
+                  <div className="w-11 h-11 shrink-0 rounded-2xl flex items-center justify-center text-xl"
+                    style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.25), rgba(99,102,241,0.15))', border: '1px solid rgba(99,102,241,0.2)' }}>🌐</div>
+                  <div>
+                    <div className="font-bold text-[15px]">Your live AI HQ</div>
+                    <div className="text-[13px] text-zinc-400 leading-relaxed">A real web app on the internet — open it on your laptop or your phone.</div>
+                  </div>
+                </Glass>
+                <Glass className="p-4 flex items-start gap-3.5">
+                  <div className="w-11 h-11 shrink-0 rounded-2xl flex items-center justify-center text-xl"
+                    style={{ background: 'linear-gradient(135deg, rgba(245,158,11,0.25), rgba(212,104,74,0.15))', border: '1px solid rgba(245,158,11,0.2)' }}>🤖</div>
+                  <div>
+                    <div className="font-bold text-[15px]">Your own Jarvis</div>
+                    <div className="text-[13px] text-zinc-400 leading-relaxed">Text your business on Telegram — &ldquo;how many leads today?&rdquo; — get an instant answer.</div>
+                  </div>
+                </Glass>
+              </>
+            ) : (
+              <>
+                <Glass className="p-4 flex items-start gap-3.5">
+                  <div className="w-11 h-11 shrink-0 rounded-2xl flex items-center justify-center text-xl"
+                    style={{ background: 'linear-gradient(135deg, rgba(212,104,74,0.25), rgba(245,158,11,0.15))', border: '1px solid rgba(245,158,11,0.2)' }}>📊</div>
+                  <div>
+                    <div className="font-bold text-[15px]">Your own personalised dashboard</div>
+                    <div className="text-[13px] text-zinc-400 leading-relaxed">Built live, running on your real business data — yours to keep. Marketing, Sales, Finance, HR, Inventory — whatever you run.</div>
+                  </div>
+                </Glass>
+                <Glass className="p-4 flex items-start gap-3.5 relative overflow-hidden">
+                  <div className="absolute top-3 right-3 text-[10px] font-bold tracking-wide px-2 py-0.5 rounded-full"
+                    style={{ background: 'linear-gradient(135deg, #D4684A, #f59e0b)', color: '#1a1000' }}>VIP ONLY</div>
+                  <div className="w-11 h-11 shrink-0 rounded-2xl flex items-center justify-center text-xl"
+                    style={{ background: 'linear-gradient(135deg, rgba(124,58,237,0.25), rgba(236,72,153,0.15))', border: '1px solid rgba(236,72,153,0.2)' }}>🎨</div>
+                  <div className="pr-12">
+                    <div className="font-bold text-[15px]">Viral IG Carousel skill</div>
+                    <div className="text-[13px] text-zinc-400 leading-relaxed">Turn any idea into scroll-stopping branded carousels. Exclusive to VIP guests.</div>
+                  </div>
+                </Glass>
+              </>
+            )}
           </div>
         </div>
 
@@ -296,12 +619,25 @@ function StartContent() {
             <p className="text-[13px] text-zinc-400 leading-relaxed mb-1">
               Your registration, seating, check-in, surveys, even invoices — all managed by <b className="text-amber-300">Jarvis Oyen</b>, our AI events manager. Text the cat, it answers. 🐾
             </p>
-            <p className="text-[12px] text-zinc-600 leading-relaxed">
-              We&apos;re <i>not</i> building Jarvis Oyen in this half-day class — that&apos;s the next level.
-            </p>
-            <p className="text-[12px] text-zinc-600 leading-relaxed mt-1.5">
-              Today&apos;s workshop marks the start: your first dashboard. 🌱 This is what it could look like once you go live with all your data!
-            </p>
+            {isGlcc ? (
+              <>
+                <p className="text-[12px] text-zinc-600 leading-relaxed">
+                  In these 2 days, you build <i>your own</i> Jarvis Oyen — on your Telegram, running on your real data. 🌱
+                </p>
+                <p className="text-[12px] text-zinc-600 leading-relaxed mt-1.5">
+                  By the end of Day 2, your whole business is one text away.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-[12px] text-zinc-600 leading-relaxed">
+                  We&apos;re <i>not</i> building Jarvis Oyen in this half-day class — that&apos;s the next level.
+                </p>
+                <p className="text-[12px] text-zinc-600 leading-relaxed mt-1.5">
+                  Today&apos;s workshop marks the start: your first dashboard. 🌱 This is what it could look like once you go live with all your data!
+                </p>
+              </>
+            )}
           </Glass>
           <div className="mt-3"><JarvisDemo /></div>
         </div>
@@ -369,6 +705,64 @@ function StartContent() {
 
 // ── Reusable liquid-glass shell ────────────────────────────────────────────────
 // ── Sticky countdown to event ──────────────────────────────────────────────────
+// Gate the GLCC setup page — paid attendees only.
+function GlccGate({ onVerified }: { onVerified: () => void }) {
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [phone, setPhone] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const canSubmit = name.trim().length > 1 && email.includes('@') && isValidPhone(phone)
+
+  async function verify() {
+    if (!canSubmit || loading) return
+    setLoading(true); setFailed(false)
+    try {
+      const r = await fetch('/api/glcc-verify', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), email: email.trim(), phone: phone.trim() }),
+      })
+      const d = await r.json()
+      if (d.ok) onVerified()
+      else setFailed(true)
+    } catch { setFailed(true) }
+    setLoading(false)
+  }
+
+  const input = 'w-full mt-1 bg-black/40 border border-white/15 rounded-xl px-3.5 py-3 text-white text-sm focus:outline-none focus:border-indigo-500/60'
+  return (
+    <div className="relative min-h-screen text-white flex items-center" style={{ background: '#060606' }}>
+      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+        <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[680px] h-[680px] rounded-full blur-[120px] opacity-[0.20]"
+          style={{ background: 'radial-gradient(circle, #6366f1 0%, transparent 65%)' }} />
+      </div>
+      <div className="max-w-md mx-auto px-5 py-10 w-full">
+        <div className="text-center mb-7">
+          <div className="text-4xl mb-3">🔒</div>
+          <p className="text-[11px] font-semibold tracking-[0.15em] text-indigo-300/90 uppercase mb-2">Go Live Claude Challenge</p>
+          <h1 className="text-2xl font-extrabold leading-tight">Confirm your seat</h1>
+          <p className="text-zinc-400 text-[14px] mt-3 leading-relaxed">This setup page is for <span className="text-amber-300 font-medium">paid attendees</span>. Pop in your details to unlock it.</p>
+        </div>
+        <div className="rounded-[22px] border border-white/[0.08] p-5 space-y-3" style={{ background: 'rgba(255,255,255,0.035)' }}>
+          <label className="block"><span className="text-[12px] text-zinc-500">Full name</span>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name" className={input} /></label>
+          <label className="block"><span className="text-[12px] text-zinc-500">Email</span>
+            <input value={email} onChange={e => setEmail(e.target.value)} placeholder="you@email.com" type="email" className={input} /></label>
+          <label className="block"><span className="text-[12px] text-zinc-500">Phone (WhatsApp)</span>
+            <input value={phone} onChange={e => setPhone(e.target.value)} onKeyDown={e => e.key === 'Enter' && verify()} placeholder="e.g. 0123456789" type="tel" className={input} /></label>
+          {failed && <p className="text-[13px] text-red-300 leading-relaxed">We couldn&apos;t find a <b>paid</b> Go Live Claude Challenge seat for those details. Just paid? Give it a few minutes, or double-check the email/phone you registered with.</p>}
+          <button onClick={verify} disabled={!canSubmit || loading}
+            className="w-full mt-1 disabled:opacity-40 text-black font-semibold rounded-2xl py-3.5 text-sm transition-all"
+            style={{ background: 'linear-gradient(135deg, #6366f1, #818cf8)' }}>
+            {loading ? 'Checking…' : '🔓 Unlock my setup page'}
+          </button>
+          <p className="text-[11px] text-zinc-600 text-center leading-relaxed">Only used to confirm your seat. You&apos;ll never be asked for a password or API key here.</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function CdUnit({ v, l }: { v: number; l: string }) {
   return (
     <span className="flex flex-col items-center">
@@ -378,7 +772,7 @@ function CdUnit({ v, l }: { v: number; l: string }) {
   )
 }
 
-function CountdownBar({ target, done, doneCount, venue }: { target: Date | null; done: boolean; doneCount: number; venue: string }) {
+function CountdownBar({ target, done, doneCount, total, venue }: { target: Date | null; done: boolean; doneCount: number; total: number; venue: string }) {
   // Start ticking after mount (avoids SSR hydration mismatch + sync setState).
   const [now, setNow] = useState(0)
   useEffect(() => {
@@ -411,7 +805,7 @@ function CountdownBar({ target, done, doneCount, venue }: { target: Date | null;
       )
     }
   } else {
-    body = <span className="text-sm font-semibold text-amber-200/90">⏳ Finish all 6 steps before the workshop</span>
+    body = <span className="text-sm font-semibold text-amber-200/90">⏳ Finish all {total} steps before the workshop</span>
   }
 
   return (
@@ -421,7 +815,7 @@ function CountdownBar({ target, done, doneCount, venue }: { target: Date | null;
         {body}
         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0"
           style={{ background: done ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)', color: done ? '#6ee7b7' : '#fcd34d' }}>
-          {doneCount}/6
+          {doneCount}/{total}
         </span>
       </div>
     </div>
@@ -476,30 +870,49 @@ function Ring({ pct }: { pct: number }) {
   )
 }
 
-function StepCard({ n, title, subtitle, done, onToggle, critical, children }: {
-  n: string; title: string; subtitle: string; done: boolean; onToggle: () => void; critical?: boolean; children: React.ReactNode
+function StepCard({ n, title, subtitle, done, onToggle, critical, locked, children }: {
+  n: string; title: string; subtitle: string; done: boolean; onToggle: () => void; critical?: boolean; locked?: boolean; children: React.ReactNode
 }) {
   return (
-    <Glass className={`p-4 transition-all ${done ? 'border-amber-500/30' : critical ? 'border-red-500/25' : ''}`}
-      style={done ? { background: 'rgba(245,158,11,0.05)' } : undefined}>
+    <Glass className={`p-4 transition-all ${locked ? 'opacity-50' : ''} ${done && !locked ? 'border-amber-500/30' : critical && !locked ? 'border-red-500/25' : ''}`}
+      style={done && !locked ? { background: 'rgba(245,158,11,0.05)' } : undefined}>
       <div className="flex items-start gap-3.5">
-        <button onClick={onToggle} aria-label={done ? 'Mark incomplete' : 'Mark complete'}
-          className={`mt-0.5 w-8 h-8 shrink-0 rounded-xl border-2 flex items-center justify-center transition-all active:scale-90
-            ${done ? 'border-transparent text-black' : 'border-zinc-600 text-transparent active:border-amber-500'}`}
-          style={done ? { background: 'linear-gradient(135deg, #f59e0b, #D4684A)' } : undefined}>
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+        <button onClick={locked ? undefined : onToggle} disabled={locked} aria-label={locked ? 'Locked' : done ? 'Mark incomplete' : 'Mark complete'}
+          className={`mt-0.5 w-8 h-8 shrink-0 rounded-xl border-2 flex items-center justify-center transition-all
+            ${locked ? 'border-zinc-700 text-zinc-600 cursor-not-allowed' : done ? 'border-transparent text-black active:scale-90' : 'border-zinc-600 text-transparent active:border-amber-500 active:scale-90'}`}
+          style={done && !locked ? { background: 'linear-gradient(135deg, #f59e0b, #D4684A)' } : undefined}>
+          {locked
+            ? <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></svg>
+            : <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>}
         </button>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
-            <span className={`text-[11px] font-bold ${critical ? 'text-red-400/90' : 'text-amber-400/80'}`}>STEP {n}</span>
-            {done && <span className="text-[10px] text-amber-400">✓ done</span>}
+            <span className={`text-[11px] font-bold ${locked ? 'text-zinc-500' : critical ? 'text-red-400/90' : 'text-amber-400/80'}`}>STEP {n}</span>
+            {done && !locked && <span className="text-[10px] text-amber-400">✓ done</span>}
+            {locked && <span className="text-[10px] text-zinc-500">🔒 locked</span>}
           </div>
-          <div className={`text-[17px] font-bold leading-tight ${done ? 'text-zinc-300' : 'text-white'}`}>{title}</div>
+          <div className={`text-[17px] font-bold leading-tight ${done && !locked ? 'text-zinc-300' : 'text-white'}`}>{title}</div>
           <div className="text-xs text-zinc-500 mb-3">{subtitle}</div>
-          {children}
+          {locked
+            ? <div className="text-[12px] text-zinc-600">Finish the step above to unlock this one.</div>
+            : children}
         </div>
       </div>
     </Glass>
+  )
+}
+
+function Loom({ id, label }: { id: string; label: string }) {
+  return (
+    <div className="w-full mb-3">
+      <div className="relative w-full rounded-2xl overflow-hidden border border-white/10" style={{ paddingBottom: '64.98%' }}>
+        <iframe
+          src={`https://www.loom.com/embed/${id}`}
+          title={label} loading="lazy" allowFullScreen
+          className="absolute inset-0 w-full h-full" />
+      </div>
+      <div className="text-xs text-zinc-400 mt-2 font-medium">{label}</div>
+    </div>
   )
 }
 

@@ -21,7 +21,12 @@ interface PrepSummary {
   started: number
   completed: number
   perStep: Record<string, number>
-  people: { name: string; completed: boolean; done: number }[]
+  perTrack?: Record<string, number>
+  perTool?: Record<string, number>
+  people: { name: string; completed: boolean; done: number; track?: string | null; tool?: string | null; tool_has_api?: boolean | null }[]
+  total?: number
+  variant?: string
+  labels?: Record<string, string>
 }
 
 function count<T>(arr: T[], key: (item: T) => string | null): Record<string, number> {
@@ -179,30 +184,58 @@ export default function InsightsPage() {
               )}
             </div>
           </div>
-          {/* per-step bars */}
-          <div className="space-y-2 mb-4">
-            {Object.keys(PREP_STEP_LABELS).map(k => {
-              const n = prep.perStep[k] ?? 0
-              const pctv = prep.started ? (n / prep.started) * 100 : 0
-              return (
-                <div key={k} className="flex items-center gap-3">
-                  <span className="text-xs text-zinc-400 w-36 shrink-0">{PREP_STEP_LABELS[k]}</span>
-                  <div className="flex-1 h-2 bg-zinc-800 rounded-full overflow-hidden">
-                    <div className="h-full bg-amber-500 rounded-full" style={{ width: `${pctv}%` }} />
-                  </div>
-                  <span className="text-xs text-zinc-400 w-8 text-right shrink-0">{n}</span>
+          {(() => {
+            const labels = prep.labels ?? PREP_STEP_LABELS
+            const total = prep.total ?? Object.keys(labels).length
+            return (
+              <>
+                {/* per-step bars */}
+                <div className="space-y-2 mb-4">
+                  {Object.keys(labels).map(k => {
+                    const n = prep.perStep[k] ?? 0
+                    const pctv = prep.started ? (n / prep.started) * 100 : 0
+                    return (
+                      <div key={k} className="flex items-center gap-3">
+                        <span className="text-xs text-zinc-400 w-36 shrink-0">{labels[k]}</span>
+                        <div className="flex-1 h-2 bg-zinc-800 rounded-full overflow-hidden">
+                          <div className="h-full bg-amber-500 rounded-full" style={{ width: `${pctv}%` }} />
+                        </div>
+                        <span className="text-xs text-zinc-400 w-8 text-right shrink-0">{n}</span>
+                      </div>
+                    )
+                  })}
                 </div>
-              )
-            })}
-          </div>
-          {/* who */}
-          <div className="flex flex-wrap gap-1.5">
-            {prep.people.map((p, i) => (
-              <span key={i} className={`text-[11px] px-2 py-0.5 rounded-full border ${p.completed ? 'bg-amber-500/15 border-amber-500/30 text-amber-300' : 'bg-white/[0.03] border-white/10 text-zinc-400'}`}>
-                {p.completed ? '✓ ' : `${p.done}/5 `}{p.name}
-              </span>
-            ))}
-          </div>
+                {/* track distribution (GLCC) */}
+                {prep.perTrack && Object.keys(prep.perTrack).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {Object.entries(prep.perTrack).sort((a, b) => b[1] - a[1]).map(([t, n]) => (
+                      <span key={t} className="text-[11px] px-2 py-0.5 rounded-full border bg-white/[0.03] border-white/10 text-zinc-300">
+                        {t}: <b className="text-amber-300">{n}</b>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {/* tool distribution (GLCC) */}
+                {prep.perTool && Object.keys(prep.perTool).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-4">
+                    {Object.entries(prep.perTool).sort((a, b) => b[1] - a[1]).map(([t, n]) => (
+                      <span key={t} className="text-[11px] px-2 py-0.5 rounded-full border bg-emerald-500/[0.06] border-emerald-500/20 text-emerald-200/90">
+                        🔌 {t}: <b className="text-emerald-300">{n}</b>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {/* who */}
+                <div className="flex flex-wrap gap-1.5">
+                  {prep.people.map((p, i) => (
+                    <span key={i} className={`text-[11px] px-2 py-0.5 rounded-full border ${p.completed ? 'bg-amber-500/15 border-amber-500/30 text-amber-300' : 'bg-white/[0.03] border-white/10 text-zinc-400'}`}>
+                      {p.completed ? '✓ ' : `${p.done}/${total} `}{p.name}{p.track ? ` · ${p.track}` : ''}{p.tool ? ` · 🔌${p.tool}${p.tool_has_api ? '✓' : '?'}` : ''}
+                    </span>
+                  ))}
+                </div>
+              </>
+            )
+          })()}
         </div>
       )}
 
