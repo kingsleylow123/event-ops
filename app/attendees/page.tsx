@@ -123,6 +123,9 @@ export default function AttendeesPage() {
   }
 
   async function togglePaid(a: Attendee) {
+    // Refunded attendees are managed via the Deposits page — clicking the badge
+    // here must not flip them back to paid/pending and silently inflate revenue.
+    if (a.payment_status === 'refunded') return
     const newStatus: PaymentStatus = a.payment_status === 'paid' ? 'pending' : 'paid'
     await fetch('/api/attendees', {
       method: 'PATCH',

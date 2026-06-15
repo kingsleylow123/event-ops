@@ -72,7 +72,17 @@ export async function POST(req: Request) {
     existingKeys.add(k)
     const a = attByKey.get(k)
     if (!a) continue // manual deposit — leave it alone
-    if (d.status === 'refunded') continue // keep refunded deposits as-is
+    if (d.status === 'refunded') {
+      // Keep refunded deposits as-is, but enforce attendee = 'refunded' too —
+      // so a stray click on the Attendees status pill can't re-inflate revenue.
+      if (a.payment_status !== 'refunded') {
+        updates.push(
+          supabaseAdmin.from('attendees').update({ payment_status: 'refunded' })
+            .eq('event_id', a.event_id as string).eq('name', a.name as string)
+        )
+      }
+      continue
+    }
     const want = desired(a)
     const sameTotal = r2(Number(d.total_amount ?? 0)) === want.total
     const samePaid = r2(Number(d.deposit_paid ?? 0)) === want.deposit
