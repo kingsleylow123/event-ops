@@ -452,7 +452,7 @@ export default function FloorPlanPage() {
           </div>
 
           {/* Sections grid — responsive: 2 col mobile, then user's pick (2 or 3) on desktop */}
-          <div className={`grid grid-cols-2 ${cols === 3 ? 'lg:grid-cols-3' : ''} gap-4`}>
+          <div className={`grid grid-cols-2 ${cols === 3 ? 'lg:grid-cols-[1fr_0.4fr_1fr]' : ''} gap-x-3 gap-y-4`}>
             {(display.sections ?? []).map((section, idx) => section.type === 'spacer' ? (
               // Gap — invisible cell in view mode; in edit mode, just controls so
               // the user can change type / move / remove without seating boxes.
@@ -682,7 +682,7 @@ export default function FloorPlanPage() {
             </div>
 
             {/* Sections — responsive grid (user-chosen 2 or 3 columns) */}
-            <div className={`grid grid-cols-2 ${cols === 3 ? 'lg:grid-cols-3' : ''} gap-4`}>
+            <div className={`grid grid-cols-2 ${cols === 3 ? 'lg:grid-cols-[1fr_0.4fr_1fr]' : ''} gap-x-3 gap-y-4`}>
               {(currentPlan.sections ?? []).map(section => section.type === 'spacer' ? (
                 <div key={section.id} aria-hidden="true" />
               ) : (
