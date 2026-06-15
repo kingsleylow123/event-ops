@@ -179,7 +179,11 @@ export interface Attendee {
   payment_amount: number
   payment_status: PaymentStatus
   stripe_session_id: string | null
+  // attendance_confirmed = (day1_attended OR day2_attended), kept in sync by a
+  // DB trigger. Single-day events still write to attendance_confirmed directly.
   attendance_confirmed: boolean
+  day1_attended: boolean
+  day2_attended: boolean
   notes: string | null
   paid_at: string | null
   created_at: string

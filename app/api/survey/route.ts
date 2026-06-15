@@ -160,12 +160,15 @@ export async function GET(req: NextRequest) {
   // No PII — for the pre-event landing page hero. Safe for unauthenticated use.
   if (searchParams.get('facts') === '1') {
     const { data: ev } = await supabase
-      .from('events').select('name, date, venue, capacity, config').eq('id', event_id).single()
+      .from('events').select('name, date, venue, capacity, config, floor_plan').eq('id', event_id).single()
     const { count: registered } = await supabase
       .from('attendees').select('id', { count: 'exact', head: true }).eq('event_id', event_id)
     const { count: paid } = await supabase
       .from('attendees').select('id', { count: 'exact', head: true })
       .eq('event_id', event_id).eq('payment_status', 'paid')
+    // Just the count, never the floor_plan contents — keeps speakers/notes private.
+    const fp = ev?.floor_plan as { days?: unknown[] } | null
+    const days_count = Array.isArray(fp?.days) && fp!.days!.length > 0 ? fp!.days!.length : 1
     return NextResponse.json({
       name: ev?.name ?? null,
       date: ev?.date ?? null,
@@ -174,6 +177,7 @@ export async function GET(req: NextRequest) {
       registered: registered ?? 0,
       paid: paid ?? 0,
       config: resolveEventConfig(ev?.config),
+      days_count,
     })
   }
 
