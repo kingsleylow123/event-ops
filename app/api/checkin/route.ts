@@ -21,7 +21,9 @@ export async function POST(req: NextRequest) {
   if (!(await rateLimit(`checkin:${clientIp(req)}`, 60))) return tooManyResponse()
 
   const body = await req.json()
-  const { eventId, name, phone } = body as { eventId?: string; name?: string; phone?: string }
+  // `day` (1|2) is for multi-day events. Missing/invalid → Day 1 (back-compat).
+  const { eventId, name, phone, day } = body as { eventId?: string; name?: string; phone?: string; day?: 1 | 2 }
+  const checkDay: 1 | 2 = day === 2 ? 2 : 1
 
   if (!eventId || (!name?.trim() && !phone?.trim())) {
     return NextResponse.json({ success: false, error: 'missing_params' }, { status: 400, headers: NO_STORE_HEADERS })
@@ -41,7 +43,7 @@ export async function POST(req: NextRequest) {
 
   const { data, error } = await supabase
     .from('attendees')
-    .select('id, name, phone, ticket_type, payment_amount, attendance_confirmed, notes')
+    .select('id, name, phone, ticket_type, payment_amount, attendance_confirmed, day1_attended, day2_attended, notes')
     .eq('event_id', eventId)
     .in('payment_status', ['paid', 'free'])
     .or('notes.is.null,notes.neq.upgrade_payment')
@@ -99,16 +101,20 @@ export async function POST(req: NextRequest) {
 
   const attendee = matches[0]
 
-  if (attendee.attendance_confirmed) {
+  // Per-day fields are kept consistent by a trigger (attendance_confirmed = day1 OR day2).
+  // Day 1 / Day 2 are tracked independently — checking in twice for the SAME day is
+  // a duplicate; checking in for the OTHER day is allowed.
+  const dayField = checkDay === 1 ? 'day1_attended' : 'day2_attended'
+  if (attendee[dayField]) {
     return NextResponse.json(
-      { success: false, error: 'already_checked_in', name: attendee.name },
+      { success: false, error: 'already_checked_in', name: attendee.name, day: checkDay },
       { headers: NO_STORE_HEADERS }
     )
   }
 
   const { error: updateError } = await supabase
     .from('attendees')
-    .update({ attendance_confirmed: true })
+    .update({ [dayField]: true })
     .eq('id', attendee.id)
 
   if (updateError) {
@@ -118,7 +124,7 @@ export async function POST(req: NextRequest) {
   const double = isDouble(attendee.ticket_type as TicketType, Number(attendee.payment_amount))
 
   return NextResponse.json(
-    { success: true, attendee: { name: attendee.name, ticket_type: attendee.ticket_type, is_double: double } },
+    { success: true, attendee: { name: attendee.name, ticket_type: attendee.ticket_type, is_double: double }, day: checkDay },
     { headers: NO_STORE_HEADERS }
   )
 }

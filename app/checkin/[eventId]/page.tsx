@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { TICKET_LABELS } from '@/lib/supabase'
 import type { TicketType } from '@/lib/supabase'
@@ -21,6 +21,21 @@ export default function CheckinPage() {
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [state, setState] = useState<CheckinState>({ status: 'idle' })
+  // Multi-day events show a Day 1 / Day 2 toggle above the form.
+  const [isMultiDay, setIsMultiDay] = useState(false)
+  const [day, setDay] = useState<1 | 2>(1)
+
+  // Detect multi-day via the public facts endpoint (no admin auth needed,
+  // same one /start uses). Returns days_count derived from floor_plan.days.
+  useEffect(() => {
+    if (!eventId) return
+    fetch(`/api/survey?event_id=${eventId}&facts=1`)
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { days_count?: number } | null) => {
+        if ((d?.days_count ?? 1) >= 2) setIsMultiDay(true)
+      })
+      .catch(() => { /* not critical — single-day flow still works */ })
+  }, [eventId])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -30,7 +45,7 @@ export default function CheckinPage() {
       const res = await fetch('/api/checkin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ eventId, name: name.trim(), phone: phone.trim() }),
+        body: JSON.stringify({ eventId, name: name.trim(), phone: phone.trim(), day }),
       })
       const data = await res.json()
       if (data.success) {
@@ -61,7 +76,7 @@ export default function CheckinPage() {
       const res = await fetch('/api/checkin/confirm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ attendeeId }),
+        body: JSON.stringify({ attendeeId, day }),
       })
       const data = await res.json()
       if (data.success) {
@@ -100,6 +115,28 @@ export default function CheckinPage() {
         <h1 className="text-3xl font-bold text-white leading-tight">Thanks for coming!</h1>
         <p className="text-zinc-500 text-sm mt-2">Enter your <span style={{color:'#e8563a'}}>phone number</span> or name to check in</p>
       </div>
+
+      {/* Day selector — only shown for multi-day events. Big tap targets for
+          tablet/phone check-in at the door. */}
+      {isMultiDay && (state.status === 'idle' || state.status === 'loading') && (
+        <div className="w-full max-w-sm mb-4">
+          <p className="text-xs text-zinc-500 mb-2 uppercase tracking-wider text-center">Checking in for</p>
+          <div className="grid grid-cols-2 gap-2">
+            {([1, 2] as const).map(n => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setDay(n)}
+                className={`py-3 rounded-xl text-base font-semibold transition-colors ${
+                  day === n ? 'bg-amber-500 text-black' : 'bg-zinc-900 text-zinc-400 border border-zinc-800'
+                }`}
+              >
+                Day {n}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Card */}
       <div className="w-full max-w-sm rounded-2xl p-6 border" style={{ background: '#111', borderColor: '#222' }}>

@@ -46,6 +46,8 @@ export default function AttendeesPage() {
   const [revenueHidden, toggleRevenue] = useRevenueHidden()
 
   const event = events.find(e => e.id === selectedEventId) ?? null
+  // Multi-day events show per-day attendance checkboxes instead of one "Attended" box.
+  const isMultiDay = (event?.floor_plan?.days?.length ?? 0) >= 2
 
   const [form, setForm] = useState({
     name: '', phone: '', email: '',
@@ -146,6 +148,24 @@ export default function AttendeesPage() {
       body: JSON.stringify({ id: a.id, notes }),
     })
     setAttendees(prev => prev.map(x => x.id === a.id ? { ...x, notes } : x))
+  }
+
+  // Per-day toggle for multi-day events. attendance_confirmed is auto-synced
+  // by the DB trigger to (day1 OR day2), so the UI just flips the relevant day.
+  async function toggleDay(a: Attendee, day: 1 | 2) {
+    const field = day === 1 ? 'day1_attended' : 'day2_attended'
+    const next = !(a as Attendee)[field]
+    await fetch('/api/attendees', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: a.id, [field]: next }),
+    })
+    setAttendees(prev => prev.map(x => {
+      if (x.id !== a.id) return x
+      const updated: Attendee = { ...x, [field]: next }
+      updated.attendance_confirmed = updated.day1_attended || updated.day2_attended
+      return updated
+    }))
   }
 
   async function toggleAttendance(a: Attendee) {
@@ -353,13 +373,20 @@ export default function AttendeesPage() {
               <th className="px-4 py-3">Payment Date</th>
               {isAdmin && <th className="px-4 py-3">Method</th>}
               {isAdmin && <th className="px-4 py-3">Status</th>}
-              <th className="px-4 py-3 text-center">Attended</th>
+              {isMultiDay ? (
+                <>
+                  <th className="px-4 py-3 text-center">Day 1</th>
+                  <th className="px-4 py-3 text-center">Day 2</th>
+                </>
+              ) : (
+                <th className="px-4 py-3 text-center">Attended</th>
+              )}
               {isAdmin && <th className="px-4 py-3"></th>}
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={isAdmin ? 9 : 4} className="text-center text-zinc-500 py-10">No attendees found</td></tr>
+              <tr><td colSpan={(isAdmin ? 9 : 4) + (isMultiDay ? 1 : 0)} className="text-center text-zinc-500 py-10">No attendees found</td></tr>
             )}
             {filtered.map(a => {
               const waUrl = toWhatsApp(a.phone)
@@ -404,12 +431,29 @@ export default function AttendeesPage() {
                       </button>
                     </td>
                   )}
-                  <td className="px-4 py-3 text-center">
-                    <input type="checkbox" checked={a.attendance_confirmed}
-                      onChange={isAdmin ? () => toggleAttendance(a) : undefined}
-                      readOnly={!isAdmin}
-                      className={`w-4 h-4 accent-amber-500 ${isAdmin ? 'cursor-pointer' : 'cursor-default opacity-70'}`} />
-                  </td>
+                  {isMultiDay ? (
+                    <>
+                      <td className="px-4 py-3 text-center">
+                        <input type="checkbox" checked={a.day1_attended}
+                          onChange={isAdmin ? () => toggleDay(a, 1) : undefined}
+                          readOnly={!isAdmin}
+                          className={`w-4 h-4 accent-amber-500 ${isAdmin ? 'cursor-pointer' : 'cursor-default opacity-70'}`} />
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <input type="checkbox" checked={a.day2_attended}
+                          onChange={isAdmin ? () => toggleDay(a, 2) : undefined}
+                          readOnly={!isAdmin}
+                          className={`w-4 h-4 accent-amber-500 ${isAdmin ? 'cursor-pointer' : 'cursor-default opacity-70'}`} />
+                      </td>
+                    </>
+                  ) : (
+                    <td className="px-4 py-3 text-center">
+                      <input type="checkbox" checked={a.attendance_confirmed}
+                        onChange={isAdmin ? () => toggleAttendance(a) : undefined}
+                        readOnly={!isAdmin}
+                        className={`w-4 h-4 accent-amber-500 ${isAdmin ? 'cursor-pointer' : 'cursor-default opacity-70'}`} />
+                    </td>
+                  )}
                   {isAdmin && (
                     <td className="px-4 py-3">
                       <div className="flex gap-2 items-center">
