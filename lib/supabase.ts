@@ -134,6 +134,7 @@ export interface FloorPlan {
   main_door?: string | null
   fnb?: string | null
   videographer?: string | null
+  columns?: 2 | 3 // sections per row in the floor-plan grid (defaults to 3)
 }
 
 export interface Event {

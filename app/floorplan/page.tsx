@@ -74,8 +74,31 @@ export default function FloorPlanPage() {
       main_door: currentPlan.main_door ?? '',
       fnb: currentPlan.fnb ?? '',
       videographer: currentPlan.videographer ?? '',
+      columns: currentPlan.columns ?? 3,
     })
     setEditing(true)
+  }
+
+  // Current column count (defaults to 3, persists in the saved floor plan).
+  const cols: 2 | 3 = (editing ? draft.columns : currentPlan.columns) ?? 3
+
+  // Toggle 2-col / 3-col layout. In edit mode → updates the draft (saved when
+  // you hit Save). In view mode → persists immediately so a quick layout swap
+  // doesn't require entering edit mode.
+  async function setColumns(next: 2 | 3) {
+    if (next === cols) return
+    if (editing) {
+      setDraft(d => ({ ...d, columns: next }))
+      return
+    }
+    if (!selectedEvent) return
+    const updated: FloorPlan = { ...currentPlan, columns: next }
+    setEvents(prev => prev.map(e => e.id === selectedEvent.id ? { ...e, floor_plan: updated } : e))
+    await fetch('/api/events', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: selectedEvent.id, floor_plan: updated }),
+    })
   }
 
   function addSpeakerNeed() {
@@ -197,6 +220,17 @@ export default function FloorPlanPage() {
               ))}
             </select>
           )}
+          {selectedEvent && (
+            <div className="inline-flex rounded-lg border border-zinc-700 overflow-hidden text-xs"
+              title="Sections per row">
+              {([2, 3] as const).map(n => (
+                <button key={n} onClick={() => setColumns(n)}
+                  className={`px-2.5 py-2 ${cols === n ? 'bg-amber-500 text-black font-semibold' : 'bg-zinc-900 text-zinc-400 hover:text-white'}`}>
+                  {n}-col
+                </button>
+              ))}
+            </div>
+          )}
           {!editing ? (
             <>
               <button onClick={() => setPresentMode(true)} disabled={!selectedEvent}
@@ -314,8 +348,8 @@ export default function FloorPlanPage() {
             </div>
           </div>
 
-          {/* Sections grid — responsive: 1 col mobile, 2 col tablet, 3 col desktop */}
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* Sections grid — responsive: 2 col mobile, then user's pick (2 or 3) on desktop */}
+          <div className={`grid grid-cols-2 ${cols === 3 ? 'lg:grid-cols-3' : ''} gap-4`}>
             {(display.sections ?? []).map((section, idx) => (
               <div key={section.id} className="text-center">
                 {editing ? (
@@ -499,8 +533,8 @@ export default function FloorPlanPage() {
               </div>
             </div>
 
-            {/* Sections — responsive grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Sections — responsive grid (user-chosen 2 or 3 columns) */}
+            <div className={`grid grid-cols-2 ${cols === 3 ? 'lg:grid-cols-3' : ''} gap-4`}>
               {(currentPlan.sections ?? []).map(section => (
                 <div key={section.id} className="text-center">
                   <h3 className="text-orange-400 text-xs uppercase tracking-widest font-bold mb-2">{section.label}</h3>
