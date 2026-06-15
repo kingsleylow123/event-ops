@@ -54,12 +54,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: (attErr ?? depErr)!.message }, { status: 500, headers: NO_STORE })
   }
 
-  // First attendee wins for a given event+name.
+  // When an event has duplicate attendees with the same name (e.g. one paid
+  // ticket + one pending deposit-holder), the deposit should track the PENDING
+  // one — otherwise the paid duplicate flips the deposit to 'paid' and the real
+  // outstanding balance disappears. Priority: pending > paid > free > refunded.
+  const STATUS_RANK: Record<string, number> = { pending: 0, paid: 1, free: 2, refunded: 3 }
   const attByKey = new Map<string, Att>()
   for (const a of (attendees ?? []) as Att[]) {
     if (!a.name || !a.event_id) continue
     const k = key(a.event_id, a.name)
-    if (!attByKey.has(k)) attByKey.set(k, a)
+    const prev = attByKey.get(k)
+    if (!prev) { attByKey.set(k, a); continue }
+    const prevRank = STATUS_RANK[prev.payment_status ?? ''] ?? 99
+    const curRank = STATUS_RANK[a.payment_status ?? ''] ?? 99
+    if (curRank < prevRank) attByKey.set(k, a)
   }
 
   const nowIso = new Date().toISOString()
