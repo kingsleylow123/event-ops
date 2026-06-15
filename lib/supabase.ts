@@ -126,7 +126,11 @@ export interface FloorPlanSection {
   orientation?: 'portrait' | 'landscape'
 }
 
-export interface FloorPlan {
+// One day's plan — sections + speaker + roles. A 1-day event uses the legacy
+// top-level fields on FloorPlan; multi-day events store an array of these on
+// `days` (each fully independent: own sections, speaker, videographer, etc.).
+export interface FloorPlanDay {
+  label?: string
   stage_speaker?: string | null
   speaker_needs?: string[]
   sections: FloorPlanSection[]
@@ -134,7 +138,13 @@ export interface FloorPlan {
   main_door?: string | null
   fnb?: string | null
   videographer?: string | null
-  columns?: 2 | 3 // sections per row in the floor-plan grid (defaults to 3)
+  columns?: 2 | 3
+}
+
+export interface FloorPlan extends FloorPlanDay {
+  // Optional multi-day plans. Absent on legacy/single-day events — in that case
+  // the top-level FloorPlanDay fields ARE Day 1's plan.
+  days?: FloorPlanDay[]
 }
 
 export interface Event {

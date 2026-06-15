@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
-import type { Event, FloorPlan, FloorPlanSection, FloorPlanSectionType } from '@/lib/supabase'
+import type { Event, FloorPlan, FloorPlanDay, FloorPlanSection, FloorPlanSectionType } from '@/lib/supabase'
 import { resolveInitialEvent, storeEventId } from '@/lib/event'
 
 const SECTION_TYPE_COLORS: Record<FloorPlanSectionType, string> = {
@@ -29,6 +29,15 @@ function emptyFloorPlan(): FloorPlan {
   return { stage_speaker: '', speaker_needs: [], sections: [], registration: '', main_door: '', fnb: '', videographer: '' }
 }
 
+// Normalize any floor_plan into a days[] array. Legacy single-day plans (no
+// `days` field) become days[0] so the page can always iterate by day.
+function getDays(plan: FloorPlan | null | undefined): FloorPlanDay[] {
+  if (plan?.days && plan.days.length > 0) return plan.days
+  if (!plan) return [{ sections: [] }]
+  const { days: _drop, ...legacy } = plan
+  return [legacy]
+}
+
 function eventLabel(ev: Event): string {
   return ev.name
 }
@@ -38,6 +47,8 @@ export default function FloorPlanPage() {
   const [selectedEventId, setSelectedEventId] = useState<string>('')
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<FloorPlan>(emptyFloorPlan())
+  // Selected day for multi-day events (0-indexed). Resets to 0 when the event changes.
+  const [dayIndex, setDayIndex] = useState(0)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [presentMode, setPresentMode] = useState(false)
@@ -62,8 +73,15 @@ export default function FloorPlanPage() {
 
   useEffect(() => { loadEvents() }, [])
 
+  // Switching events: reset to Day 1 of the new event.
+  useEffect(() => { setDayIndex(0) }, [selectedEventId])
+
   const selectedEvent = events.find(e => e.id === selectedEventId) ?? null
-  const currentPlan: FloorPlan = selectedEvent?.floor_plan ?? emptyFloorPlan()
+  // All days for the selected event (legacy single-plan → [single-plan]).
+  const allDays: FloorPlanDay[] = getDays(selectedEvent?.floor_plan)
+  // Clamp the active day to a valid index (e.g. after deleting a day).
+  const activeDay = Math.min(dayIndex, Math.max(0, allDays.length - 1))
+  const currentPlan: FloorPlan = (allDays[activeDay] ?? emptyFloorPlan()) as FloorPlan
 
   function startEdit() {
     setDraft({
@@ -144,10 +162,16 @@ export default function FloorPlanPage() {
   async function saveFloorPlan() {
     if (!selectedEvent) return
     setSaving(true)
+    // Splice the draft into the active day slot; preserve the other days.
+    // Legacy top-level fields mirror days[0] so older readers still see Day 1.
+    const days = [...allDays]
+    const { days: _drop, ...dayOnly } = draft as FloorPlan
+    days[activeDay] = dayOnly as FloorPlanDay
+    const payload: FloorPlan = { ...(days[0] as FloorPlan), days }
     const res = await fetch('/api/events', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: selectedEvent.id, floor_plan: draft }),
+      body: JSON.stringify({ id: selectedEvent.id, floor_plan: payload }),
     })
     if (res.ok) {
       const updated: Event = await res.json()
@@ -155,6 +179,41 @@ export default function FloorPlanPage() {
       setEditing(false)
     }
     setSaving(false)
+  }
+
+  // Add a new empty day to the event (view mode only — saves immediately).
+  async function addDay() {
+    if (!selectedEvent || editing) return
+    const days: FloorPlanDay[] = [...allDays, { sections: [], speaker_needs: [] }]
+    const payload: FloorPlan = { ...(allDays[0] ?? emptyFloorPlan()), days }
+    const res = await fetch('/api/events', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: selectedEvent.id, floor_plan: payload }),
+    })
+    if (res.ok) {
+      const updated: Event = await res.json()
+      setEvents(prev => prev.map(e => e.id === updated.id ? updated : e))
+      setDayIndex(days.length - 1)
+    }
+  }
+
+  // Remove the active day (view mode, and only if 2+ days exist).
+  async function removeDay() {
+    if (!selectedEvent || editing || allDays.length < 2) return
+    if (!window.confirm(`Remove Day ${activeDay + 1}? This deletes its sections and roles.`)) return
+    const days = allDays.filter((_, i) => i !== activeDay)
+    const payload: FloorPlan = { ...(days[0] ?? emptyFloorPlan()), days }
+    const res = await fetch('/api/events', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: selectedEvent.id, floor_plan: payload }),
+    })
+    if (res.ok) {
+      const updated: Event = await res.json()
+      setEvents(prev => prev.map(e => e.id === updated.id ? updated : e))
+      setDayIndex(Math.max(0, activeDay - 1))
+    }
   }
 
   const totals = useMemo(() => {
@@ -256,6 +315,38 @@ export default function FloorPlanPage() {
           )}
         </div>
       </div>
+
+      {/* Day tabs — each day has its own independent floor plan */}
+      {selectedEvent && (
+        <div className="flex items-center gap-1 flex-wrap">
+          {allDays.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => !editing && setDayIndex(i)}
+              disabled={editing && i !== activeDay}
+              title={editing && i !== activeDay ? 'Finish editing first' : ''}
+              className={`text-sm px-3 py-1.5 rounded-lg transition-colors ${
+                i === activeDay ? 'bg-amber-500 text-black font-semibold' : 'bg-zinc-900 text-zinc-400 hover:text-white disabled:opacity-50'
+              }`}
+            >
+              Day {i + 1}
+            </button>
+          ))}
+          {!editing && (
+            <button onClick={addDay}
+              className="text-sm px-3 py-1.5 rounded-lg bg-zinc-900 text-zinc-500 hover:text-amber-400 border border-dashed border-zinc-700">
+              + Add day
+            </button>
+          )}
+          {!editing && allDays.length >= 2 && (
+            <button onClick={removeDay}
+              title={`Delete Day ${activeDay + 1}`}
+              className="text-xs px-2 py-1.5 rounded-lg text-zinc-600 hover:text-red-400 ml-1">
+              ✕ Remove Day {activeDay + 1}
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Live arrivals — refreshes every 5s during check-in */}
       {selectedEvent && arrivals && arrivals.expected > 0 && (
