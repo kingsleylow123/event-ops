@@ -10,6 +10,7 @@ const SECTION_TYPE_COLORS: Record<FloorPlanSectionType, string> = {
   overflow: 'bg-amber-700',
   camera: 'bg-purple-700',
   other: 'bg-zinc-600',
+  spacer: 'bg-transparent',
 }
 
 const SECTION_TYPE_LABELS: Record<FloorPlanSectionType, string> = {
@@ -19,6 +20,7 @@ const SECTION_TYPE_LABELS: Record<FloorPlanSectionType, string> = {
   overflow: 'overflow',
   camera: 'camera',
   other: 'pax',
+  spacer: '',
 }
 
 function uid(): string {
@@ -141,6 +143,15 @@ export default function FloorPlanPage() {
     }))
   }
 
+  // A gap is just a section with type='spacer' — it reserves a grid cell so
+  // sections flow around it. No label/pax: it's an empty seat in the layout.
+  function addGap() {
+    setDraft(d => ({
+      ...d,
+      sections: [...d.sections, { id: uid(), label: '', type: 'spacer', pax: 0, note: null }],
+    }))
+  }
+
   function updateSection(index: number, patch: Partial<FloorPlanSection>) {
     setDraft(d => ({ ...d, sections: d.sections.map((s, i) => i === index ? { ...s, ...patch } : s) }))
   }
@@ -219,9 +230,10 @@ export default function FloorPlanPage() {
   const totals = useMemo(() => {
     const data = editing ? draft : currentPlan
     const result: Record<FloorPlanSectionType, number> = {
-      vip: 0, general: 0, creator: 0, overflow: 0, camera: 0, other: 0,
+      vip: 0, general: 0, creator: 0, overflow: 0, camera: 0, other: 0, spacer: 0,
     }
     for (const s of data.sections ?? []) {
+      if (s.type === 'spacer') continue // empty grid cell — no pax
       result[s.type] = (result[s.type] || 0) + (Number(s.pax) || 0)
     }
     const grand = Object.values(result).reduce((a, b) => a + b, 0)
@@ -441,7 +453,44 @@ export default function FloorPlanPage() {
 
           {/* Sections grid — responsive: 2 col mobile, then user's pick (2 or 3) on desktop */}
           <div className={`grid grid-cols-2 ${cols === 3 ? 'lg:grid-cols-3' : ''} gap-4`}>
-            {(display.sections ?? []).map((section, idx) => (
+            {(display.sections ?? []).map((section, idx) => section.type === 'spacer' ? (
+              // Gap — invisible cell in view mode; in edit mode, just controls so
+              // the user can change type / move / remove without seating boxes.
+              <div key={section.id} className="text-center">
+                {editing ? (
+                  <>
+                    <p className="text-[10px] text-zinc-600 uppercase tracking-widest italic py-1.5 border border-dashed border-zinc-800 rounded">— gap —</p>
+                    <div className="h-44" />
+                  </>
+                ) : (
+                  <div className="h-full" aria-hidden="true" />
+                )}
+                {editing && (
+                  <div className="mt-2 space-y-1">
+                    <select value={section.type} onChange={e => updateSection(idx, { type: e.target.value as FloorPlanSectionType })}
+                      className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-white text-xs">
+                      <option value="vip">VIP</option>
+                      <option value="general">General</option>
+                      <option value="creator">Creator</option>
+                      <option value="overflow">Overflow</option>
+                      <option value="camera">📹 Camera</option>
+                      <option value="other">Other</option>
+                      <option value="spacer">— gap —</option>
+                    </select>
+                    <div className="flex items-center justify-between gap-1">
+                      <div className="flex gap-1">
+                        <button type="button" onClick={() => moveSection(idx, -1)} disabled={idx === 0}
+                          className="text-xs text-zinc-500 hover:text-amber-400 disabled:opacity-30 px-2 py-1 border border-zinc-700 rounded">←</button>
+                        <button type="button" onClick={() => moveSection(idx, 1)} disabled={idx === display.sections.length - 1}
+                          className="text-xs text-zinc-500 hover:text-amber-400 disabled:opacity-30 px-2 py-1 border border-zinc-700 rounded">→</button>
+                      </div>
+                      <button type="button" onClick={() => removeSection(idx)}
+                        className="text-xs text-red-400 hover:text-red-300 px-2 py-1 border border-red-500/30 hover:border-red-500/60 rounded">Remove</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
               <div key={section.id} className="text-center">
                 {editing ? (
                   <input value={section.label} onChange={e => updateSection(idx, { label: e.target.value })}
@@ -474,6 +523,7 @@ export default function FloorPlanPage() {
                         <option value="overflow">Overflow</option>
                         <option value="camera">📹 Camera</option>
                         <option value="other">Other</option>
+                        <option value="spacer">— gap —</option>
                       </select>
                       <input type="number" min="0" value={section.pax}
                         onChange={e => updateSection(idx, { pax: Number(e.target.value) || 0 })}
@@ -509,10 +559,17 @@ export default function FloorPlanPage() {
               </div>
             ))}
             {editing && (
-              <button type="button" onClick={addSection}
-                className="border-2 border-dashed border-zinc-700 hover:border-amber-500/50 hover:text-amber-400 rounded-lg p-6 text-zinc-500 text-sm">
-                + Add section
-              </button>
+              <>
+                <button type="button" onClick={addSection}
+                  className="border-2 border-dashed border-zinc-700 hover:border-amber-500/50 hover:text-amber-400 rounded-lg p-6 text-zinc-500 text-sm">
+                  + Add section
+                </button>
+                <button type="button" onClick={addGap}
+                  title="Reserve an empty cell so sections flow around it"
+                  className="border-2 border-dashed border-zinc-800 hover:border-zinc-600 hover:text-zinc-300 rounded-lg p-6 text-zinc-600 text-sm">
+                  + Add gap
+                </button>
+              </>
             )}
             {!editing && (display.sections ?? []).length === 0 && (
               <div className="col-span-full text-center text-zinc-600 italic py-8">
@@ -626,7 +683,9 @@ export default function FloorPlanPage() {
 
             {/* Sections — responsive grid (user-chosen 2 or 3 columns) */}
             <div className={`grid grid-cols-2 ${cols === 3 ? 'lg:grid-cols-3' : ''} gap-4`}>
-              {(currentPlan.sections ?? []).map(section => (
+              {(currentPlan.sections ?? []).map(section => section.type === 'spacer' ? (
+                <div key={section.id} aria-hidden="true" />
+              ) : (
                 <div key={section.id} className="text-center">
                   <h3 className="text-orange-400 text-xs uppercase tracking-widest font-bold mb-2">{section.label}</h3>
                   <div className="flex justify-center items-center gap-2 h-44">
