@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useSearchParams } from 'next/navigation'
 import { TICKET_LABELS } from '@/lib/supabase'
 import type { TicketType } from '@/lib/supabase'
 
@@ -17,13 +17,17 @@ type CheckinState =
 export default function CheckinPage() {
   const params = useParams()
   const eventId = params.eventId as string
+  const searchParams = useSearchParams()
+  // ?day=1 / ?day=2 pre-selects the day (used by the day-specific print QRs).
+  const dayParam = searchParams.get('day')
+  const initialDay: 1 | 2 = dayParam === '2' ? 2 : 1
 
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [state, setState] = useState<CheckinState>({ status: 'idle' })
   // Multi-day events show a Day 1 / Day 2 toggle above the form.
   const [isMultiDay, setIsMultiDay] = useState(false)
-  const [day, setDay] = useState<1 | 2>(1)
+  const [day, setDay] = useState<1 | 2>(initialDay)
 
   // Detect multi-day via the public facts endpoint (no admin auth needed,
   // same one /start uses). Returns days_count derived from floor_plan.days.

@@ -494,52 +494,82 @@ export default function AttendeesPage() {
               <button onClick={() => setShowQRModal(false)} className="text-zinc-500 hover:text-white text-xl leading-none">✕</button>
             </div>
             {(() => {
-              const url = `https://event-ops-six.vercel.app/checkin/${selectedEventId}`
-              const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`
+              // For multi-day events, generate ONE QR per day so each day's QR
+              // can be printed and put up separately — staff don't have to
+              // remember to toggle Day 1 / Day 2 manually.
+              const origin = 'https://event-ops-six.vercel.app'
+              const baseUrl = `${origin}/checkin/${selectedEventId}`
+              const qr = (u: string) =>
+                `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(u)}`
+              const codes = isMultiDay
+                ? [
+                    { label: 'Day 1', url: `${baseUrl}?day=1` },
+                    { label: 'Day 2', url: `${baseUrl}?day=2` },
+                  ]
+                : [{ label: '', url: baseUrl }]
+              const eventName = event?.name ?? 'Workshop'
               return (
                 <>
-                  <div className="flex justify-center mb-4">
-                    <img
-                      src={qrSrc}
-                      alt="Check-in QR Code"
-                      width={220}
-                      height={220}
-                      className="rounded-xl border border-zinc-700"
-                    />
+                  <div className={`grid ${codes.length === 2 ? 'grid-cols-2 gap-3' : 'grid-cols-1'} mb-4`}>
+                    {codes.map(c => (
+                      <div key={c.label || 'all'} className="flex flex-col items-center">
+                        {c.label && <p className="text-xs text-zinc-400 mb-1 font-semibold">{c.label}</p>}
+                        <img
+                          src={qr(c.url)}
+                          alt={`Check-in QR ${c.label}`}
+                          width={codes.length === 2 ? 140 : 220}
+                          height={codes.length === 2 ? 140 : 220}
+                          className="rounded-xl border border-zinc-700 bg-white"
+                        />
+                      </div>
+                    ))}
                   </div>
-                  <p className="text-xs text-zinc-500 mb-2">Check-in URL</p>
-                  <div className="flex items-center gap-2 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 mb-4">
-                    <span className="text-xs text-zinc-300 truncate flex-1 text-left">{url}</span>
-                    <button
-                      onClick={() => navigator.clipboard.writeText(url)}
-                      className="text-xs text-amber-400 hover:text-amber-300 flex-shrink-0 font-medium"
-                    >
-                      Copy
-                    </button>
+                  <p className="text-xs text-zinc-500 mb-2">{codes.length === 2 ? 'Per-day URLs' : 'Check-in URL'}</p>
+                  <div className="space-y-2 mb-4">
+                    {codes.map(c => (
+                      <div key={'u-' + (c.label || 'all')} className="flex items-center gap-2 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2">
+                        {c.label && <span className="text-[10px] text-amber-400 font-semibold flex-shrink-0">{c.label}</span>}
+                        <span className="text-xs text-zinc-300 truncate flex-1 text-left">{c.url}</span>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(c.url)}
+                          className="text-xs text-amber-400 hover:text-amber-300 flex-shrink-0 font-medium"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    ))}
                   </div>
                   <div className="flex gap-2">
                     <button
                       onClick={() => {
-                        const w = window.open('', '_blank', 'width=600,height=700')
+                        const w = window.open('', '_blank', 'width=700,height=900')
                         if (!w) return
+                        const blocks = codes.map(c => `
+                          <div class="block">
+                            ${c.label ? `<div class="dayBadge">${c.label}</div>` : ''}
+                            <img src="${qr(c.url)}" />
+                            <h1>📲 Please scan your attendance</h1>
+                            <div class="badge">${eventName.replace(/[<>&"]/g, '')}</div>
+                          </div>
+                        `).join('<div class="pageBreak"></div>')
                         w.document.write(`<!DOCTYPE html><html><head><title>Check-in QR</title><style>
                           *{margin:0;padding:0;box-sizing:border-box;}
-                          body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:40px;}
+                          body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fff;}
+                          .block{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:40px;}
+                          .pageBreak{page-break-before:always;}
                           img{width:280px;height:280px;display:block;}
                           h1{font-size:28px;font-weight:800;color:#111;margin-top:24px;text-align:center;}
-                          p{font-size:15px;color:#666;margin-top:10px;text-align:center;}
                           .badge{margin-top:16px;background:#fff4e6;border:2px solid #e8563a;color:#e8563a;font-weight:700;font-size:13px;padding:6px 18px;border-radius:999px;letter-spacing:0.5px;}
+                          .dayBadge{margin-bottom:24px;background:#111;color:#fff;font-weight:800;font-size:22px;padding:8px 28px;border-radius:999px;letter-spacing:1px;}
                         </style></head><body>
-                          <img src="${qrSrc}" />
-                          <h1>📲 Please scan your attendance</h1>
-                          <div class="badge">Claude Malaysia Workshop</div>
+                          ${blocks}
                           <script>window.onload=()=>window.print()</script>
                         </body></html>`)
                         w.document.close()
                       }}
                       className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white text-sm py-2 rounded-lg font-medium"
                     >
-                      🖨 Print
+                      🖨 Print {codes.length === 2 ? 'both' : ''}
                     </button>
                     <button
                       onClick={() => setShowQRModal(false)}
