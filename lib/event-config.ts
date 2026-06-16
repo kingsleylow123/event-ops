@@ -18,6 +18,7 @@ export interface EventConfig {
   prep_variant?: 'halfday' | 'glcc' // 'glcc' switches /start to the 2-day pre-flight
   template_repo_url?: string // "Use this template" link for the org starter (→ <username>/glcc-ops)
   coach_github?: string // GitHub username participants add as a Read collaborator (coaching + backup)
+  glcc_docs_url?: string // written step-by-step install guide for GLCC (native installer); falls back to docs_url
   glcc_video_install?: string // YouTube — install Claude Code CLI
   glcc_video_keys?: string // YouTube — Claude Pro + Anthropic API key
   glcc_video_github?: string // YouTube — GitHub + copy the starter template

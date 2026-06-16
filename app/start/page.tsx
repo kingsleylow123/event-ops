@@ -386,14 +386,34 @@ function StartContent() {
             title="Install Claude Code (the CLI)" subtitle="Mac or Windows laptop — with a terminal">
             {stepVideo(cfg.glcc_loom_install, cfg.glcc_ts_install, '🎬 Watch: install Claude Code')}
             <p className="text-[13px] text-zinc-400 my-3 leading-relaxed">Two quick installs — <b className="text-zinc-200">no Homebrew needed</b>. First, install <b className="text-zinc-200">Node.js (LTS)</b> from nodejs.org (just click through the installer). Then open your terminal and paste the line for <b className="text-zinc-200">your</b> computer 👇</p>
-            <div className="mt-3">
-              <div className="text-[12px] font-semibold text-zinc-300 mb-1">🍎 On Mac — open <b className="text-white">Terminal</b> (Cmd+Space, type Terminal):</div>
-              <div className="rounded-xl px-3 py-2.5 text-[12px] font-mono text-amber-200 bg-black/40 border border-white/10 overflow-x-auto">curl -fsSL https://claude.ai/install.sh | bash</div>
+            <p className="text-[13px] text-zinc-400 mb-2">Which computer are you bringing?</p>
+            <div className="grid grid-cols-2 gap-2.5 mb-1">
+              <OsBtn label="🍎 Mac" active={os === 'mac'} onClick={() => chooseOs('mac')} />
+              <OsBtn label="🪟 Windows" active={os === 'windows'} onClick={() => chooseOs('windows')} />
             </div>
-            <div className="mt-3">
-              <div className="text-[12px] font-semibold text-zinc-300 mb-1">🪟 On Windows — open <b className="text-white">PowerShell</b> (Start, type PowerShell — not Command Prompt):</div>
-              <div className="rounded-xl px-3 py-2.5 text-[12px] font-mono text-amber-200 bg-black/40 border border-white/10 overflow-x-auto">irm https://claude.ai/install.ps1 | iex</div>
-            </div>
+            {(os === 'mac' || os === null) && (
+              <div className="mt-3">
+                <div className="text-[12px] font-semibold text-zinc-300 mb-1">🍎 On Mac — open <b className="text-white">Terminal</b> (Cmd+Space, type Terminal):</div>
+                <div className="rounded-xl px-3 py-2.5 text-[12px] font-mono text-amber-200 bg-black/40 border border-white/10 overflow-x-auto">curl -fsSL https://claude.ai/install.sh | bash</div>
+              </div>
+            )}
+            {(os === 'windows' || os === null) && (
+              <div className="mt-3">
+                <div className="text-[12px] font-semibold text-zinc-300 mb-1">🪟 On Windows — open <b className="text-white">PowerShell</b> (Start, type PowerShell — not Command Prompt):</div>
+                <div className="rounded-xl px-3 py-2.5 text-[12px] font-mono text-amber-200 bg-black/40 border border-white/10 overflow-x-auto">irm https://claude.ai/install.ps1 | iex</div>
+              </div>
+            )}
+            {/* Written step-by-step guide (clickable) */}
+            <a href={cfg.glcc_docs_url || cfg.docs_url} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-3 rounded-2xl px-4 py-3 mt-3 transition-all hover:brightness-110"
+              style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.16), rgba(59,130,246,0.10))', border: '1px solid rgba(99,102,241,0.30)' }}>
+              <span className="text-2xl">📄</span>
+              <span className="flex-1 min-w-0">
+                <span className="block text-sm font-bold text-white">Step-by-Step Installation Guide</span>
+                <span className="block text-[12px] text-indigo-200/80">Follow along — screenshots for every step</span>
+              </span>
+              <span className="text-indigo-300 text-lg shrink-0">›</span>
+            </a>
             <p className="text-[12px] text-zinc-500 mt-2">Then type <code className="px-1 rounded bg-white/10 text-amber-200 text-[11px]">claude</code> and log in.</p>
             <div className="rounded-xl px-3.5 py-3 mt-3 text-[12px] text-zinc-300 leading-relaxed"
               style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.22)' }}>
