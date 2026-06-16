@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { requireUser } from '@/lib/auth/guard'
-import { pingCheckin } from '@/lib/checkin-notify'
+import { pingCheckin, pingRegistration } from '@/lib/checkin-notify'
 
 const NO_STORE_HEADERS = { 'Cache-Control': 'no-store, no-cache, must-revalidate' } as const
 
@@ -25,6 +25,16 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const { data, error } = await supabaseAdmin.from('attendees').insert(body).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE_HEADERS })
+
+  // Fire-and-forget Telegram ping with the running registration count.
+  if (data?.event_id && data?.name) {
+    void pingRegistration({
+      event_id: data.event_id as string,
+      name: data.name as string,
+      payment_status: data.payment_status as string | null,
+      payment_amount: data.payment_amount as number | string | null,
+    })
+  }
   return NextResponse.json(data, { headers: NO_STORE_HEADERS })
 }
 
