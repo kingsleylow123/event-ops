@@ -172,37 +172,57 @@ export default function FloorPlanPage() {
 
   async function saveFloorPlan() {
     if (!selectedEvent) return
-    // Safety net: a draft that's lost sections vs the saved day is suspicious
-    // (likely an accidental edit). Confirm before overwriting a populated day
-    // with an empty one — same pattern as the refunded-deposit guard.
-    const savedSectionsCount = currentPlan.sections?.length ?? 0
-    const draftSectionsCount = draft.sections?.length ?? 0
-    if (savedSectionsCount > 0 && draftSectionsCount < savedSectionsCount) {
-      const dayLabel = `Day ${activeDay + 1}`
-      const ok = window.confirm(
-        `${dayLabel} has ${savedSectionsCount} section${savedSectionsCount === 1 ? '' : 's'} saved. ` +
-        `This save will reduce it to ${draftSectionsCount}. Continue?`
-      )
-      if (!ok) return
-    }
     setSaving(true)
-    // Splice the draft into the active day slot; preserve the other days.
-    // Legacy top-level fields mirror days[0] so older readers still see Day 1.
-    const days = [...allDays]
-    const { days: _drop, ...dayOnly } = draft as FloorPlan
-    days[activeDay] = dayOnly as FloorPlanDay
-    const payload: FloorPlan = { ...(days[0] as FloorPlan), days }
-    const res = await fetch('/api/events', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: selectedEvent.id, floor_plan: payload }),
-    })
-    if (res.ok) {
-      const updated: Event = await res.json()
-      setEvents(prev => prev.map(e => e.id === updated.id ? updated : e))
-      setEditing(false)
+    try {
+      // RE-FETCH THE LATEST FLOOR PLAN FROM THE SERVER BEFORE SAVING.
+      // The previous code spliced the draft into the in-memory `allDays`, then
+      // PATCHed the entire floor_plan. If another tab/day had been updated
+      // since this tab loaded, the stale in-memory copy of THOSE days would
+      // silently overwrite the server's good data. Now we read fresh, splice
+      // only the editing day, and let every other day's server state win.
+      const freshRes = await fetch(`/api/events`, { cache: 'no-store' })
+      const freshList: Event[] = freshRes.ok ? await freshRes.json() : []
+      const freshEvent = freshList.find(e => e.id === selectedEvent.id) ?? selectedEvent
+      const serverDays: FloorPlanDay[] = getDays(freshEvent.floor_plan)
+
+      // Splice the draft into the active day slot; preserve every other day
+      // exactly as the server has it.
+      const days = [...serverDays]
+      // Pad with empty days if the server has fewer (shouldn't happen, but
+      // guards against an in-memory addDay that didn't persist).
+      while (days.length <= activeDay) days.push({ sections: [] })
+      const { days: _drop, ...dayOnly } = draft as FloorPlan
+      days[activeDay] = dayOnly as FloorPlanDay
+
+      // Safety net: confirm before saving with FEWER sections than the
+      // server's saved copy of this day (catches stale-view wipes).
+      const serverDay = (serverDays[activeDay] ?? { sections: [] }) as FloorPlanDay
+      const savedSectionsCount = serverDay.sections?.length ?? 0
+      const draftSectionsCount = draft.sections?.length ?? 0
+      if (savedSectionsCount > 0 && draftSectionsCount < savedSectionsCount) {
+        const dayLabel = `Day ${activeDay + 1}`
+        const ok = window.confirm(
+          `${dayLabel} on the server has ${savedSectionsCount} section${savedSectionsCount === 1 ? '' : 's'}. ` +
+          `Saving now will reduce it to ${draftSectionsCount}. Continue?`
+        )
+        if (!ok) { setSaving(false); return }
+      }
+
+      // Legacy top-level fields mirror days[0] so back-compat readers work.
+      const payload: FloorPlan = { ...(days[0] as FloorPlan), days }
+      const res = await fetch('/api/events', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: selectedEvent.id, floor_plan: payload }),
+      })
+      if (res.ok) {
+        const updated: Event = await res.json()
+        setEvents(prev => prev.map(e => e.id === updated.id ? updated : e))
+        setEditing(false)
+      }
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
   }
 
   // Add a new empty day to the event (view mode only — saves immediately).
