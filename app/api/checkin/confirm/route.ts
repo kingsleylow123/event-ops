@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
-import { TICKET_PRICES } from '@/lib/supabase'
-import type { TicketType } from '@/lib/supabase'
 import { pingCheckin } from '@/lib/checkin-notify'
 
 export const dynamic = 'force-dynamic'
@@ -21,7 +19,7 @@ export async function POST(req: NextRequest) {
 
   const { data: attendee, error: fetchError } = await supabase
     .from('attendees')
-    .select('id, name, event_id, ticket_type, payment_amount, payment_status, attendance_confirmed, day1_attended, day2_attended')
+    .select('id, name, phone, event_id, ticket_type, payment_amount, payment_status, attendance_confirmed, day1_attended, day2_attended')
     .eq('id', attendeeId)
     .single()
 
@@ -48,8 +46,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'db_error' }, { status: 500, headers: NO_STORE_HEADERS })
   }
 
-  const standard = TICKET_PRICES[attendee.ticket_type as TicketType] ?? 0
-  const is_double = standard > 0 && Number(attendee.payment_amount) >= standard * 1.8
+  // "+1 guest" detection: 2+ attendee records in this event share the same
+  // name OR phone (e.g. couple registered as 'Sarah' + 'Sarah +1'). Replaces
+  // the old payment-amount heuristic that triggered on custom-priced events.
+  const { data: siblings } = await supabase
+    .from('attendees').select('name, phone')
+    .eq('event_id', attendee.event_id as string)
+    .in('payment_status', ['paid', 'free'])
+  const phoneDigits = (s: string | null | undefined) => {
+    const d = (s ?? '').replace(/\D/g, '')
+    return d.startsWith('60') ? d.slice(2) : d
+  }
+  const nameKey = (attendee.name as string ?? '').trim().toLowerCase()
+  const matchedPhone = phoneDigits(attendee.phone as string | null)
+  let matchCount = 0
+  for (const a of siblings ?? []) {
+    const sameName = nameKey && (a.name as string ?? '').trim().toLowerCase() === nameKey
+    const samePhone = matchedPhone && phoneDigits(a.phone as string | null).length >= 8 && phoneDigits(a.phone as string | null) === matchedPhone
+    if (sameName || samePhone) matchCount++
+  }
+  const is_double = matchCount >= 2
 
   // Fire-and-forget Telegram ping with the running per-day count.
   void pingCheckin({ event_id: attendee.event_id as string, name: attendee.name as string, day: checkDay })
