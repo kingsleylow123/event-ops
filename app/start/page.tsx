@@ -134,7 +134,7 @@ function StartContent() {
   // The step only counts as done when all three are set.
   function commitStep7(nextTrack: PrepTrackKey | null, nextTool: string | null, nextApi: boolean) {
     const done7 = !!(nextTrack && nextTool && nextTool.trim() && nextApi)
-    const next = { ...steps, '8': done7 }
+    const next = { ...steps, '9': done7 }
     setSteps(next)
     try { localStorage.setItem(STEPS_KEY, JSON.stringify(next)) } catch { /* ignore */ }
     if (phone) syncToCloud(next, ipadAck, phone, nextTrack, consentAck, nextTool, nextApi)
@@ -386,34 +386,14 @@ function StartContent() {
             title="Install Claude Code (the CLI)" subtitle="Mac or Windows laptop — with a terminal">
             {stepVideo(cfg.glcc_loom_install, cfg.glcc_ts_install, '🎬 Watch: install Claude Code')}
             <p className="text-[13px] text-zinc-400 my-3 leading-relaxed">Two quick installs — <b className="text-zinc-200">no Homebrew needed</b>. First, install <b className="text-zinc-200">Node.js (LTS)</b> from nodejs.org (just click through the installer). Then open your terminal and paste the line for <b className="text-zinc-200">your</b> computer 👇</p>
-            <p className="text-[13px] text-zinc-400 mb-2">Which computer are you bringing?</p>
-            <div className="grid grid-cols-2 gap-2.5 mb-1">
-              <OsBtn label="🍎 Mac" active={os === 'mac'} onClick={() => chooseOs('mac')} />
-              <OsBtn label="🪟 Windows" active={os === 'windows'} onClick={() => chooseOs('windows')} />
+            <div className="mt-3">
+              <div className="text-[12px] font-semibold text-zinc-300 mb-1">🍎 On Mac — open <b className="text-white">Terminal</b> (Cmd+Space, type Terminal):</div>
+              <div className="rounded-xl px-3 py-2.5 text-[12px] font-mono text-amber-200 bg-black/40 border border-white/10 overflow-x-auto">curl -fsSL https://claude.ai/install.sh | bash</div>
             </div>
-            {(os === 'mac' || os === null) && (
-              <div className="mt-3">
-                <div className="text-[12px] font-semibold text-zinc-300 mb-1">🍎 On Mac — open <b className="text-white">Terminal</b> (Cmd+Space, type Terminal):</div>
-                <div className="rounded-xl px-3 py-2.5 text-[12px] font-mono text-amber-200 bg-black/40 border border-white/10 overflow-x-auto">curl -fsSL https://claude.ai/install.sh | bash</div>
-              </div>
-            )}
-            {(os === 'windows' || os === null) && (
-              <div className="mt-3">
-                <div className="text-[12px] font-semibold text-zinc-300 mb-1">🪟 On Windows — open <b className="text-white">PowerShell</b> (Start, type PowerShell — not Command Prompt):</div>
-                <div className="rounded-xl px-3 py-2.5 text-[12px] font-mono text-amber-200 bg-black/40 border border-white/10 overflow-x-auto">irm https://claude.ai/install.ps1 | iex</div>
-              </div>
-            )}
-            {/* Written step-by-step guide (clickable) */}
-            <a href={cfg.glcc_docs_url || cfg.docs_url} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-3 rounded-2xl px-4 py-3 mt-3 transition-all hover:brightness-110"
-              style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.16), rgba(59,130,246,0.10))', border: '1px solid rgba(99,102,241,0.30)' }}>
-              <span className="text-2xl">📄</span>
-              <span className="flex-1 min-w-0">
-                <span className="block text-sm font-bold text-white">Step-by-Step Installation Guide</span>
-                <span className="block text-[12px] text-indigo-200/80">Follow along — screenshots for every step</span>
-              </span>
-              <span className="text-indigo-300 text-lg shrink-0">›</span>
-            </a>
+            <div className="mt-3">
+              <div className="text-[12px] font-semibold text-zinc-300 mb-1">🪟 On Windows — open <b className="text-white">PowerShell</b> (Start, type PowerShell — not Command Prompt):</div>
+              <div className="rounded-xl px-3 py-2.5 text-[12px] font-mono text-amber-200 bg-black/40 border border-white/10 overflow-x-auto">irm https://claude.ai/install.ps1 | iex</div>
+            </div>
             <p className="text-[12px] text-zinc-500 mt-2">Then type <code className="px-1 rounded bg-white/10 text-amber-200 text-[11px]">claude</code> and log in.</p>
             <div className="rounded-xl px-3.5 py-3 mt-3 text-[12px] text-zinc-300 leading-relaxed"
               style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.22)' }}>
@@ -437,8 +417,35 @@ function StartContent() {
             </button>
           </StepCard>
 
-          {/* GLCC 2 — Download Claude for Chrome */}
-          <StepCard n="2" done={steps['2']} onToggle={() => toggleStep('2')} locked={isLocked('2')}
+          {/* GLCC 2 — Install your dev tools (Homebrew / Git), OS-aware */}
+          <StepCard n="2" done={steps['2']} onToggle={() => toggleStep('2')} critical locked={isLocked('2')}
+            title="Install your dev tools" subtitle="Homebrew (Mac) or Git (Windows)">
+            <div className="rounded-xl px-3 py-2 mb-3 text-[12px] font-semibold text-red-300 inline-flex items-center gap-1.5"
+              style={{ background: 'rgba(239,68,68,0.10)', border: '1px solid rgba(239,68,68,0.25)' }}>
+              🚨 Critical — the class can&apos;t start without this
+            </div>
+            <p className="text-[13px] text-zinc-400 mb-3">Which computer are you bringing?</p>
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              <OsBtn label="🍎 Mac" active={os === 'mac'} onClick={() => chooseOs('mac')} />
+              <OsBtn label="🪟 Windows" active={os === 'windows'} onClick={() => chooseOs('windows')} />
+            </div>
+            {os === 'mac' && <Video id={cfg.mac_video_id} label="🍎 Install Homebrew on Mac" full />}
+            {os === 'windows' && <Video id={cfg.windows_video_id} label="🪟 Install Git (& Claude) on Windows" full />}
+            {!os && <div className="text-[12px] text-zinc-600 text-center py-3">👆 Pick your OS to see the right guide</div>}
+            <a href={cfg.docs_url} target="_blank" rel="noopener noreferrer"
+              className="mt-3 flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all active:scale-[0.98]"
+              style={{ background: 'linear-gradient(135deg, rgba(59,130,246,0.18), rgba(99,102,241,0.12))', border: '1px solid rgba(99,102,241,0.35)' }}>
+              <span className="w-10 h-10 shrink-0 rounded-xl flex items-center justify-center text-lg" style={{ background: 'rgba(99,102,241,0.25)' }}>📄</span>
+              <span className="flex-1 min-w-0">
+                <span className="block text-sm font-bold text-white">Step-by-Step Installation Guide</span>
+                <span className="block text-[12px] text-indigo-200/80">Follow along — screenshots for every step</span>
+              </span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-indigo-300"><path d="M9 18l6-6-6-6" /></svg>
+            </a>
+          </StepCard>
+
+          {/* GLCC 3 — Download Claude for Chrome */}
+          <StepCard n="3" done={steps['3']} onToggle={() => toggleStep('3')} locked={isLocked('3')}
             title="Download Claude for Chrome" subtitle="So the AI can set things up in your browser">
             {stepVideo(cfg.glcc_loom_chrome, cfg.glcc_ts_chrome, '🎬 Watch: Claude for Chrome')}
             <p className="text-[13px] text-zinc-400 my-3 leading-relaxed">Install the <b className="text-zinc-200">Claude for Chrome</b> extension and sign in. It lets your setup co-pilot (and Claude in class) <b className="text-amber-300">click through your browser for you</b>.</p>
@@ -446,8 +453,8 @@ function StartContent() {
             <p className="text-[12px] text-zinc-500 mt-2">After adding it, pin it and grant it permission to control the browser when asked.</p>
           </StepCard>
 
-          {/* GLCC 3 — Claude Pro + API key */}
-          <StepCard n="3" done={steps['3']} onToggle={() => toggleStep('3')} locked={isLocked('3')}
+          {/* GLCC 4 — Claude Pro + API key */}
+          <StepCard n="4" done={steps['4']} onToggle={() => toggleStep('4')} locked={isLocked('4')}
             title="Claude Pro + an API key" subtitle="Load USD $5 (about RM23) of credit">
             {stepVideo(cfg.glcc_loom_keys, cfg.glcc_ts_keys, '🎬 Watch: Claude Pro + API key')}
             <p className="text-[13px] text-zinc-400 my-3 leading-relaxed">Get <b className="text-zinc-200">Claude Pro</b> (Free can&apos;t run Claude Code), then create an <b className="text-zinc-200">Anthropic API key</b> and load <b className="text-amber-300">USD $5 (about RM23)</b> — your Telegram bot uses it. Keep the cap low; the key is billable.</p>
@@ -455,8 +462,8 @@ function StartContent() {
             <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer" className="cta-ghost mt-2">🔑 Create API key + add credit</a>
           </StepCard>
 
-          {/* GLCC 4 — GitHub account + copy the starter template into their own repo */}
-          <StepCard n="4" done={steps['4']} onToggle={() => toggleStep('4')} locked={isLocked('4')}
+          {/* GLCC 5 — GitHub account + copy the starter template into their own repo */}
+          <StepCard n="5" done={steps['5']} onToggle={() => toggleStep('5')} locked={isLocked('5')}
             title="GitHub + your project repo" subtitle="Your project's home for the workshop">
             {stepVideo(cfg.glcc_loom_github, cfg.glcc_ts_github, '🎬 Watch: GitHub + your repo')}
             <p className="text-[13px] text-zinc-400 my-3 leading-relaxed">Create a free <b className="text-zinc-200">GitHub</b> account, then make your own copy of our starter — one click gives you your <b className="text-amber-300">glcc-ops</b> repo, the home for everything you build.</p>
@@ -465,24 +472,24 @@ function StartContent() {
             <p className="text-[12px] text-zinc-500 mt-2">Name it <b className="text-zinc-300">glcc-ops</b>, keep it <b className="text-zinc-300">Public</b>, and you&apos;re done. (Coaching access is optional and set up later, on Day 2.)</p>
           </StepCard>
 
-          {/* GLCC 5 — Supabase */}
-          <StepCard n="5" done={steps['5']} onToggle={() => toggleStep('5')} locked={isLocked('5')}
+          {/* GLCC 6 — Supabase */}
+          <StepCard n="6" done={steps['6']} onToggle={() => toggleStep('6')} locked={isLocked('6')}
             title="Create a Supabase project" subtitle="Your free cloud database — the 'second brain'">
             {stepVideo(cfg.glcc_loom_supabase, cfg.glcc_ts_supabase, '🎬 Watch: create Supabase')}
             <a href="https://supabase.com/dashboard" target="_blank" rel="noopener noreferrer" className="cta mt-3">🗄️ Create Supabase project</a>
             <p className="text-[12px] text-zinc-500 mt-2">Free tier is plenty. Make ONE empty project, <b className="text-zinc-300">save the database password</b>, pick Singapore — we run the rest in class.</p>
           </StepCard>
 
-          {/* GLCC 6 — Vercel */}
-          <StepCard n="6" done={steps['6']} onToggle={() => toggleStep('6')} locked={isLocked('6')}
+          {/* GLCC 7 — Vercel */}
+          <StepCard n="7" done={steps['7']} onToggle={() => toggleStep('7')} locked={isLocked('7')}
             title="Create a Vercel account" subtitle="Where your app goes live — sign in with GitHub">
             {stepVideo(cfg.glcc_loom_vercel, cfg.glcc_ts_vercel, '🎬 Watch: create Vercel')}
             <a href="https://vercel.com/signup" target="_blank" rel="noopener noreferrer" className="cta mt-3">▲ Create Vercel account</a>
             <p className="text-[12px] text-zinc-500 mt-2">Choose <b className="text-zinc-300">Continue with GitHub</b> so it links to your repo automatically. No project needed — we deploy in class.</p>
           </StepCard>
 
-          {/* GLCC 7 — Telegram bot + user ID */}
-          <StepCard n="7" done={steps['7']} onToggle={() => toggleStep('7')} critical locked={isLocked('7')}
+          {/* GLCC 8 — Telegram bot + user ID */}
+          <StepCard n="8" done={steps['8']} onToggle={() => toggleStep('8')} critical locked={isLocked('8')}
             title="Telegram bot + your user ID" subtitle="So your Jarvis can text you">
             {stepVideo(cfg.glcc_loom_telegram, cfg.glcc_ts_telegram, '🎬 Watch: Telegram bot + user ID')}
             <p className="text-[13px] text-zinc-400 my-3 leading-relaxed">In Telegram: message <b className="text-zinc-200">@BotFather</b> → <code className="px-1 rounded bg-white/10 text-amber-200 text-[11px]">/newbot</code> → save the <b className="text-zinc-200">token</b>. Then message <b className="text-zinc-200">@userinfobot</b> → tap Start → save the <b className="text-zinc-200">number</b> (your user ID).</p>
@@ -494,8 +501,8 @@ function StartContent() {
             </div>
           </StepCard>
 
-          {/* GLCC 8 — Pick your track + tool */}
-          <StepCard n="8" done={steps['8']} onToggle={() => { /* completed by choosing track + tool + API below */ }} locked={isLocked('8')}
+          {/* GLCC 9 — Pick your track + tool */}
+          <StepCard n="9" done={steps['9']} onToggle={() => { /* completed by choosing track + tool + API below */ }} locked={isLocked('9')}
             title="Pick your track & tool" subtitle="What will YOUR system run?">
             {stepVideo(cfg.glcc_loom_track, undefined, '🎬 Watch: pick your track & tool')}
             <p className="text-[12px] text-zinc-500 mb-2">1. Choose your track:</p>
@@ -549,8 +556,8 @@ function StartContent() {
             )}
           </StepCard>
 
-          {/* GLCC 9 — Bring your data */}
-          <StepCard n="9" done={steps['9']} onToggle={() => toggleStep('9')} locked={isLocked('9')}
+          {/* GLCC 10 — Bring your data */}
+          <StepCard n="10" done={steps['10']} onToggle={() => toggleStep('10')} locked={isLocked('10')}
             title="Bring your data" subtitle="Excel or Google Sheets — we'll plug it in">
             {stepVideo(cfg.glcc_loom_data, cfg.glcc_ts_data, '🎬 Watch: bring your data')}
             <p className="text-[13px] text-zinc-400 my-3 leading-relaxed">Bring <b className="text-zinc-200">real numbers from your own business</b> (sales, leads, expenses — whatever your track needs) in an <b className="text-zinc-200">Excel or Google Sheets</b> file. We plug it straight into <b className="text-amber-300">your live system</b> on Day 2.</p>

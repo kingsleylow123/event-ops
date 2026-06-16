@@ -44,25 +44,26 @@ export function zeroStepCounts(): Record<string, number> {
 export const PREP_VARIANTS = ['halfday', 'glcc'] as const
 export type PrepVariant = (typeof PREP_VARIANTS)[number]
 
-export const GLCC_PREP_STEP_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const
+export const GLCC_PREP_STEP_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'] as const
 
 // Full labels (Insights per-step bars / readiness dashboard)
 export const GLCC_PREP_STEP_LABELS: Record<string, string> = {
   '1': 'Install Claude Code (CLI)',
-  '2': 'Claude for Chrome',
-  '3': 'Claude Pro + API key',
-  '4': 'GitHub + project repo',
-  '5': 'Supabase project',
-  '6': 'Vercel account',
-  '7': 'Telegram bot + user ID',
-  '8': 'Pick your track',
-  '9': 'Bring your data',
+  '2': 'Install dev tools (Homebrew/Git)',
+  '3': 'Claude for Chrome',
+  '4': 'Claude Pro + API key',
+  '5': 'GitHub + project repo',
+  '6': 'Supabase project',
+  '7': 'Vercel account',
+  '8': 'Telegram bot + user ID',
+  '9': 'Pick your track',
+  '10': 'Bring your data',
 }
 
 // Compact labels (Jarvis /prep on Telegram)
 export const GLCC_PREP_STEP_SHORT: Record<string, string> = {
-  '1': 'Claude Code', '2': 'Chrome', '3': 'Pro+API', '4': 'GitHub', '5': 'Supabase',
-  '6': 'Vercel', '7': 'Telegram', '8': 'Track', '9': 'Data',
+  '1': 'Claude Code', '2': 'Dev tools', '3': 'Chrome', '4': 'Pro+API', '5': 'GitHub',
+  '6': 'Supabase', '7': 'Vercel', '8': 'Telegram', '9': 'Track', '10': 'Data',
 }
 
 // The 5 vertical tracks — canonical keys MUST match the GLCC coaching enum
