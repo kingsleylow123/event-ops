@@ -3,6 +3,7 @@ import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
 import { TICKET_PRICES } from '@/lib/supabase'
 import type { TicketType } from '@/lib/supabase'
 import { rateLimit, clientIp, tooManyResponse, tooLong } from '@/lib/rate-limit'
+import { pingCheckin } from '@/lib/checkin-notify'
 
 export const dynamic = 'force-dynamic'
 
@@ -122,6 +123,9 @@ export async function POST(req: NextRequest) {
   }
 
   const double = isDouble(attendee.ticket_type as TicketType, Number(attendee.payment_amount))
+
+  // Fire-and-forget Telegram ping with the running per-day count.
+  void pingCheckin({ event_id: eventId, name: attendee.name as string, day: checkDay })
 
   return NextResponse.json(
     { success: true, attendee: { name: attendee.name, ticket_type: attendee.ticket_type, is_double: double }, day: checkDay },
