@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { requireUser } from '@/lib/auth/guard'
+import { pingCheckin } from '@/lib/checkin-notify'
 
 const NO_STORE_HEADERS = { 'Cache-Control': 'no-store, no-cache, must-revalidate' } as const
 
@@ -31,8 +32,17 @@ export async function PATCH(req: NextRequest) {
   const g = await requireUser('PATCH /api/attendees'); if (g.response) return g.response
   const body = await req.json()
   const { id, ...updates } = body
+  // Detect whether this PATCH is checking someone in for a day (toggling from
+  // false → true). If so, we'll ping Jarvis after the update.
+  const checkingInDay: 1 | 2 | null =
+    updates.day1_attended === true ? 1 : updates.day2_attended === true ? 2 : null
+
   const { data, error } = await supabaseAdmin.from('attendees').update(updates).eq('id', id).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE_HEADERS })
+
+  if (checkingInDay && data?.event_id && data?.name) {
+    void pingCheckin({ event_id: data.event_id as string, name: data.name as string, day: checkingInDay })
+  }
   return NextResponse.json(data, { headers: NO_STORE_HEADERS })
 }
 

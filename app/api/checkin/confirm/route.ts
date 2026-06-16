@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
 import { TICKET_PRICES } from '@/lib/supabase'
 import type { TicketType } from '@/lib/supabase'
+import { pingCheckin } from '@/lib/checkin-notify'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest) {
 
   const { data: attendee, error: fetchError } = await supabase
     .from('attendees')
-    .select('id, name, ticket_type, payment_amount, payment_status, attendance_confirmed, day1_attended, day2_attended')
+    .select('id, name, event_id, ticket_type, payment_amount, payment_status, attendance_confirmed, day1_attended, day2_attended')
     .eq('id', attendeeId)
     .single()
 
@@ -49,6 +50,9 @@ export async function POST(req: NextRequest) {
 
   const standard = TICKET_PRICES[attendee.ticket_type as TicketType] ?? 0
   const is_double = standard > 0 && Number(attendee.payment_amount) >= standard * 1.8
+
+  // Fire-and-forget Telegram ping with the running per-day count.
+  void pingCheckin({ event_id: attendee.event_id as string, name: attendee.name as string, day: checkDay })
 
   return NextResponse.json(
     { success: true, attendee: { name: attendee.name, ticket_type: attendee.ticket_type, is_double }, day: checkDay },
