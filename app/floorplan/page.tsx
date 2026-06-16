@@ -172,6 +172,19 @@ export default function FloorPlanPage() {
 
   async function saveFloorPlan() {
     if (!selectedEvent) return
+    // Safety net: a draft that's lost sections vs the saved day is suspicious
+    // (likely an accidental edit). Confirm before overwriting a populated day
+    // with an empty one — same pattern as the refunded-deposit guard.
+    const savedSectionsCount = currentPlan.sections?.length ?? 0
+    const draftSectionsCount = draft.sections?.length ?? 0
+    if (savedSectionsCount > 0 && draftSectionsCount < savedSectionsCount) {
+      const dayLabel = `Day ${activeDay + 1}`
+      const ok = window.confirm(
+        `${dayLabel} has ${savedSectionsCount} section${savedSectionsCount === 1 ? '' : 's'} saved. ` +
+        `This save will reduce it to ${draftSectionsCount}. Continue?`
+      )
+      if (!ok) return
+    }
     setSaving(true)
     // Splice the draft into the active day slot; preserve the other days.
     // Legacy top-level fields mirror days[0] so older readers still see Day 1.
