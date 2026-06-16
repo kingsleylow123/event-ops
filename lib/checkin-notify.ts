@@ -1,9 +1,47 @@
-// Sends a real-time Telegram ping to admins each time someone is checked in,
-// with the running per-day count (e.g. "Day 1: 3 / 14"). Best-effort: never
-// blocks the request or throws — Telegram outages must not break check-in.
+// Real-time Telegram pings to admins for the attendee lifecycle:
+//   pingRegistration  → fires when a new attendee is added (any source)
+//   pingCheckin       → fires when an attendee checks in for a day
+// Both are best-effort: wrapped in try/catch so Telegram outages or missing
+// env vars can never block the underlying request.
 
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
 import { notifyAdmins, esc, b } from '@/lib/telegram'
+
+export async function pingRegistration(opts: {
+  event_id: string
+  name: string
+  payment_status?: string | null
+  payment_amount?: number | string | null
+}): Promise<void> {
+  try {
+    const { event_id, name, payment_status, payment_amount } = opts
+
+    // Total registered for this event (refunded excluded — they're not really registered).
+    const [{ count: totalCount }, { data: ev }] = await Promise.all([
+      supabase.from('attendees').select('id', { count: 'exact', head: true })
+        .eq('event_id', event_id).neq('payment_status', 'refunded'),
+      supabase.from('events').select('name, capacity').eq('id', event_id).maybeSingle(),
+    ])
+
+    const total = totalCount ?? 0
+    const cap = Number(ev?.capacity ?? 0)
+    const left = cap > 0 ? Math.max(0, cap - total) : null
+    const eventName = (ev?.name as string) || 'event'
+    const amt = Number(payment_amount ?? 0)
+    const status = String(payment_status ?? 'pending')
+    const icon = status === 'paid' ? '✅' : status === 'pending' ? '⏳' : '🎟'
+    const amountPart = amt > 0 ? ` · RM ${amt.toLocaleString('en-MY')}` : ''
+    const capPart = left !== null ? `  ·  ${b(left)} seat${left === 1 ? '' : 's'} left` : ''
+
+    const msg = `📝 ${b(esc(name))} just registered — ${esc(eventName)}\n` +
+      `   ${icon} ${esc(status)}${amountPart}\n` +
+      `   👥 ${b(total)} registered${capPart}`
+
+    await notifyAdmins(msg)
+  } catch {
+    // never block the request on telegram failure
+  }
+}
 
 export async function pingCheckin(opts: {
   event_id: string
