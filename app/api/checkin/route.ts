@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
-import { TICKET_PRICES } from '@/lib/supabase'
 import type { TicketType } from '@/lib/supabase'
 import { rateLimit, clientIp, tooManyResponse, tooLong } from '@/lib/rate-limit'
 import { pingCheckin } from '@/lib/checkin-notify'
@@ -9,11 +8,24 @@ export const dynamic = 'force-dynamic'
 
 const NO_STORE_HEADERS = { 'Cache-Control': 'no-store, no-cache, must-revalidate' } as const
 
-function isDouble(ticketType: TicketType, paymentAmount: number): boolean {
-  const standard = TICKET_PRICES[ticketType] ?? 0
-  if (standard <= 0) return false
-  // If they paid ~1.8× or more of the standard price, it's a x2 ticket
-  return paymentAmount >= standard * 1.8
+// "Has a +1" = there are TWO OR MORE attendee records in this event sharing
+// the same name OR phone (e.g. couple registered as 'Sarah' + 'Sarah +1').
+// Replaces the old payment-amount heuristic, which triggered false positives
+// for custom-priced events (e.g. RM 2,299 GLCC ticket vs RM 297 standard).
+function hasPlusOne(matched: { name?: string | null; phone?: string | null }, allEligible: { name?: string | null; phone?: string | null }[]): boolean {
+  const nameKey = (matched.name ?? '').trim().toLowerCase()
+  const phoneDigits = (s: string | null | undefined) => {
+    const d = (s ?? '').replace(/\D/g, '')
+    return d.startsWith('60') ? d.slice(2) : d
+  }
+  const matchedPhone = phoneDigits(matched.phone)
+  let count = 0
+  for (const a of allEligible) {
+    const sameName = nameKey && (a.name ?? '').trim().toLowerCase() === nameKey
+    const samePhone = matchedPhone && phoneDigits(a.phone).length >= 8 && phoneDigits(a.phone) === matchedPhone
+    if (sameName || samePhone) count++
+  }
+  return count >= 2
 }
 
 export async function POST(req: NextRequest) {
@@ -122,7 +134,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'db_error', detail: updateError.message }, { status: 500, headers: NO_STORE_HEADERS })
   }
 
-  const double = isDouble(attendee.ticket_type as TicketType, Number(attendee.payment_amount))
+  const double = hasPlusOne(attendee, allAttendees)
 
   // Fire-and-forget Telegram ping with the running per-day count.
   void pingCheckin({ event_id: eventId, name: attendee.name as string, day: checkDay })
