@@ -76,6 +76,7 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
         { href: '/insights', label: 'Insights', icon: icons.insights },
         { href: '/checklist', label: 'Checklist', icon: icons.checklist },
         { href: '/team', label: 'Claude Intern', icon: icons.team },
+        ...(isAdmin ? [{ href: '/team-profiles', label: 'Team Profiles', icon: icons.team }] : []),
         { href: '/floorplan', label: 'Floor Plan', icon: icons.floorplan },
         { href: '/briefing', label: 'Briefing', icon: icons.briefing },
       ],
