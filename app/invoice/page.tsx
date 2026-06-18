@@ -11,6 +11,8 @@ type AttendeeLite = {
   ticket_type: TicketType
   payment_amount: number | null
   notes?: string | null
+  email?: string | null
+  stripe_session_id?: string | null
 }
 
 type LineItem = { desc: string; qty: string; unit: string }
@@ -95,6 +97,11 @@ function InvoiceContent() {
   const [pushing, setPushing] = useState(false)
   const [pushMsg, setPushMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
+  // ── Email invoice to client (attaches the same PDF as "Save as PDF")
+  const [clientEmail, setClientEmail] = useState('')
+  const [emailing, setEmailing] = useState(false)
+  const [emailMsg, setEmailMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
   async function pushToBukku() {
     const isBalance = mode === 'balance'
     const total = isBalance ? subtotal : amountNum
@@ -145,7 +152,10 @@ function InvoiceContent() {
     }
   }
 
-  async function exportPDF() {
+  // Shared PDF builder. action 'save' downloads it (📄 Save as PDF);
+  // action 'datauri' returns the SAME PDF as a base64 data URI for emailing.
+  // The captured invoice is byte-for-byte identical either way.
+  async function renderPdf(action: 'save' | 'datauri'): Promise<string | undefined> {
     const el = document.getElementById('invoice-page-printable')
     if (!el) return
 
@@ -212,7 +222,7 @@ function InvoiceContent() {
       await new Promise(r => requestAnimationFrame(() => r(null)))
 
       const html2pdf = (await import('html2pdf.js')).default
-      await html2pdf()
+      const worker = html2pdf()
         .set({
           margin: 0,
           filename: `Invoice-${safeName}.pdf`,
@@ -232,7 +242,12 @@ function InvoiceContent() {
           pagebreak: { mode: ['avoid-all'], avoid: '*' },
         })
         .from(el)
-        .save()
+
+      if (action === 'datauri') {
+        return (await worker.outputPdf('datauristring')) as string
+      }
+      await worker.save()
+      return
     } finally {
       // Restore inputs/textareas — reverse order so siblings line up
       for (let i = swaps.length - 1; i >= 0; i--) {
@@ -247,6 +262,68 @@ function InvoiceContent() {
         else e.style.removeProperty(prop)
       })
       flushSync(() => setExporting(false))
+    }
+  }
+
+  async function exportPDF() {
+    await renderPdf('save')
+  }
+
+  async function emailInvoice() {
+    const isBalance = mode === 'balance'
+    const total = isBalance ? subtotal : amountNum
+    if (!name || name.trim().toUpperCase() === 'CLIENT NAME') {
+      setEmailMsg({ ok: false, text: 'Enter the client name first.' })
+      return
+    }
+    const to = clientEmail.trim()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+      setEmailMsg({ ok: false, text: 'Enter a valid client email first.' })
+      return
+    }
+    if (total <= 0) {
+      setEmailMsg({ ok: false, text: 'Add a line with a non-zero amount first.' })
+      return
+    }
+    if (!window.confirm(`Email this invoice to ${to}?`)) return
+
+    setEmailing(true)
+    setEmailMsg(null)
+    try {
+      const dataUri = await renderPdf('datauri')
+      if (!dataUri) {
+        setEmailMsg({ ok: false, text: 'Could not generate the PDF.' })
+        return
+      }
+      const base64 = dataUri.split(',')[1] || ''
+      const safeName = (name || 'Invoice').replace(/[^a-zA-Z0-9 _-]/g, '').trim().replace(/\s+/g, '-')
+
+      const res = await fetch('/api/invoice/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to,
+          client_name: name,
+          filename: `Invoice-${safeName}.pdf`,
+          pdf_base64: base64,
+          company_name: companyName,
+          company_email: companyEmail,
+          company_phone: companyPhone,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.ok) {
+        const reason = data.reason === 'no_key'
+          ? 'Email not set up yet (RESEND_API_KEY missing).'
+          : `Failed to send (${res.status})`
+        setEmailMsg({ ok: false, text: data.error || reason })
+      } else {
+        setEmailMsg({ ok: true, text: `✅ Invoice emailed to ${to}` })
+      }
+    } catch (e) {
+      setEmailMsg({ ok: false, text: (e as Error).message })
+    } finally {
+      setEmailing(false)
     }
   }
 
@@ -279,22 +356,39 @@ function InvoiceContent() {
     return attendees.filter(a => a.name?.toLowerCase().includes(q)).slice(0, 8)
   }, [attendees, query])
 
-  function pickAttendee(a: AttendeeLite) {
+  async function pickAttendee(a: AttendeeLite) {
     const ticketLabel = TICKET_LABELS[a.ticket_type] || 'Ticket'
     setName(a.name)
+    setClientEmail(a.email || '')
+    setQuery('')
+    setShowResults(false)
+
+    // Try Stripe first for the real product name; fall back to template
+    let stripeDesc: string | null = null
+    if (a.stripe_session_id) {
+      try {
+        const r = await fetch(`/api/stripe/product?session_id=${encodeURIComponent(a.stripe_session_id)}`, { cache: 'no-store' })
+        if (r.ok) {
+          const j = await r.json()
+          stripeDesc = (j.product_name as string | null) || null
+        }
+      } catch { /* fall through to template */ }
+    }
+    const fallbackDesc = `[${ticketLabel}] Claude Workshop`
+    const finalDesc = stripeDesc || fallbackDesc
+
     if (mode === 'quick') {
-      setDesc(`[${ticketLabel}] Claude Workshop`)
-      setNote(a.notes || '[non refundable')
+      setDesc(finalDesc)
+      // Stripe product name already contains "(non-refundable)" — skip the note line
+      setNote(stripeDesc ? '' : (a.notes || '[non refundable'))
       setAmount(String(a.payment_amount ?? 0))
     } else {
       // Add as a line item in balance mode
       setLineItems(items => [
         ...items.filter(li => li.desc || li.unit !== '0'),
-        { desc: `[${ticketLabel}] Claude Workshop`, qty: '1', unit: String(a.payment_amount ?? 0) },
+        { desc: finalDesc, qty: '1', unit: String(a.payment_amount ?? 0) },
       ])
     }
-    setQuery('')
-    setShowResults(false)
   }
 
   // ── Line items + payments helpers
@@ -370,6 +464,21 @@ function InvoiceContent() {
           </button>
           <button className="secondary" onClick={() => window.close()}>Close</button>
 
+          {/* ── Email invoice to client ── */}
+          <div className="email-row">
+            <input
+              type="email"
+              placeholder="✉️ Client email…"
+              value={clientEmail}
+              onChange={e => setClientEmail(e.target.value)}
+              className="search-input"
+              style={{ maxWidth: 280 }}
+            />
+            <button onClick={emailInvoice} disabled={emailing}>
+              {emailing ? '⏳ Sending…' : '✉️ Send invoice'}
+            </button>
+          </div>
+
           {pushMsg && (
             <div
               style={{
@@ -381,6 +490,20 @@ function InvoiceContent() {
               }}
             >
               {pushMsg.text}
+            </div>
+          )}
+
+          {emailMsg && (
+            <div
+              style={{
+                flexBasis: '100%',
+                textAlign: 'center',
+                fontSize: 13,
+                fontWeight: 600,
+                color: emailMsg.ok ? '#2c7a2f' : '#c0271f',
+              }}
+            >
+              {emailMsg.text}
             </div>
           )}
         </div>
@@ -716,6 +839,18 @@ const INVOICE_CSS = `
     color: #111;
     border: 1px solid #999;
   }
+  .invoice-toolbar button:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+  .email-row {
+    flex-basis: 100%;
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    align-items: center;
+  }
+  .email-row .search-input { width: auto; }
   .search-input {
     width: 100%;
     padding: 10px 14px;
