@@ -47,6 +47,7 @@ export interface EventConfig {
   glcc_loom_telegram?: string
   glcc_loom_track?: string
   glcc_loom_data?: string
+  glcc_loom_orgchart?: string
 }
 
 export const DEFAULT_EVENT_CONFIG: EventConfig = {

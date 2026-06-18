@@ -44,7 +44,7 @@ export function zeroStepCounts(): Record<string, number> {
 export const PREP_VARIANTS = ['halfday', 'glcc'] as const
 export type PrepVariant = (typeof PREP_VARIANTS)[number]
 
-export const GLCC_PREP_STEP_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'] as const
+export const GLCC_PREP_STEP_KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'] as const
 
 // Full labels (Insights per-step bars / readiness dashboard)
 export const GLCC_PREP_STEP_LABELS: Record<string, string> = {
@@ -58,12 +58,13 @@ export const GLCC_PREP_STEP_LABELS: Record<string, string> = {
   '8': 'Telegram bot + user ID',
   '9': 'Pick your track',
   '10': 'Bring your data',
+  '11': 'Bring your org chart',
 }
 
 // Compact labels (Jarvis /prep on Telegram)
 export const GLCC_PREP_STEP_SHORT: Record<string, string> = {
   '1': 'Claude Code', '2': 'Dev tools', '3': 'Chrome', '4': 'Pro+API', '5': 'GitHub',
-  '6': 'Supabase', '7': 'Vercel', '8': 'Telegram', '9': 'Track', '10': 'Data',
+  '6': 'Supabase', '7': 'Vercel', '8': 'Telegram', '9': 'Track', '10': 'Data', '11': 'Org chart',
 }
 
 // The 5 vertical tracks — canonical keys MUST match the GLCC coaching enum

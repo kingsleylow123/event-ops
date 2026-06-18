@@ -566,6 +566,35 @@ function StartContent() {
               💡 Messy real data beats perfect fake data — a simple month-by-month sheet is enough.
             </div>
           </StepCard>
+
+          {/* GLCC 11 — Bring your org chart */}
+          <StepCard n="11" done={steps['11']} onToggle={() => toggleStep('11')} locked={isLocked('11')}
+            title="Bring your org chart" subtitle="Your team structure — CEO → departments → roles">
+            {stepVideo(cfg.glcc_loom_orgchart, undefined, '🎬 Watch: bring your org chart')}
+            <p className="text-[13px] text-zinc-400 my-3 leading-relaxed">Sketch your <b className="text-zinc-200">organisational structure</b> — 3 simple levels: <b className="text-zinc-200">you / the CEO</b> at the top, your <b className="text-zinc-200">departments</b>, then the <b className="text-amber-300">roles or jobs</b> under each. We use it on Day 2 to set up your team, contacts and AI agents.</p>
+            <div className="rounded-xl px-3 py-3.5 mb-3" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <div className="flex flex-col items-center gap-1.5 text-[11px]">
+                <div className="px-3 py-1 rounded-md bg-white/10 text-white font-semibold">CEO / You</div>
+                <div className="text-zinc-600 leading-none">│</div>
+                <div className="flex gap-1.5">
+                  <div className="px-2 py-1 rounded-md text-amber-200" style={{ background: 'rgba(245,158,11,0.14)' }}>Sales</div>
+                  <div className="px-2 py-1 rounded-md text-amber-200" style={{ background: 'rgba(245,158,11,0.14)' }}>Ops</div>
+                  <div className="px-2 py-1 rounded-md text-amber-200" style={{ background: 'rgba(245,158,11,0.14)' }}>Finance</div>
+                </div>
+                <div className="text-zinc-600 leading-none">│</div>
+                <div className="flex gap-1.5 flex-wrap justify-center text-zinc-400">
+                  <div className="px-2 py-0.5 rounded bg-white/[0.04]">role</div>
+                  <div className="px-2 py-0.5 rounded bg-white/[0.04]">role</div>
+                  <div className="px-2 py-0.5 rounded bg-white/[0.04]">role</div>
+                  <div className="px-2 py-0.5 rounded bg-white/[0.04]">role</div>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-xl px-3.5 py-3 text-[12px] text-zinc-300 leading-relaxed"
+              style={{ background: 'rgba(99,102,241,0.07)', border: '1px solid rgba(99,102,241,0.22)' }}>
+              💡 A quick photo of a hand-drawn chart is perfectly fine — even just your departments and who does what.
+            </div>
+          </StepCard>
         </div>
         </>)}
 
