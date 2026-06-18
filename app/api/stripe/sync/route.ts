@@ -5,121 +5,43 @@ import type { TicketType, Event } from '@/lib/supabase'
 
 const NO_STORE_HEADERS = { 'Cache-Control': 'no-store, no-cache, must-revalidate' } as const
 
-
 export const dynamic = 'force-dynamic'
 
-type PriceConfig = {
-  amounts: number[]
-  ticketTypeByAmount: Record<number, TicketType>
+const MONTHS = [
+  'january', 'february', 'march', 'april', 'may', 'june',
+  'july', 'august', 'september', 'october', 'november', 'december',
+] as const
+
+// Matches "5th July", "1st June", "12th July", etc. inside Stripe product names.
+const ORDINAL_DATE_RE = /(\d{1,2})(?:st|nd|rd|th)\s+(january|february|march|april|may|june|july|august|september|october|november|december)/i
+
+function dateTokenFromName(name: string | null | undefined): string | null {
+  if (!name) return null
+  const m = name.match(ORDINAL_DATE_RE)
+  return m ? `${parseInt(m[1], 10)} ${m[2].toLowerCase()}` : null
 }
 
-const EVENT_PRICE_MAP: Record<string, PriceConfig> = {
-  'may-16': {
-    amounts: [97, 159, 297, 397],
-    ticketTypeByAmount: {
-      97: 'early_bird_general',
-      159: 'standard_general',
-      297: 'early_bird_vip',
-      397: 'standard_vip',
-    },
-  },
-  'june-1': {
-    amounts: [249, 297, 347, 497, 597, 697],
-    ticketTypeByAmount: {
-      249: 'super_early_bird_general',
-      297: 'early_bird_general',
-      347: 'standard_general',
-      497: 'super_early_bird_vip',
-      597: 'early_bird_vip',
-      697: 'standard_vip',
-    },
-  },
-  'june-7': {
-    amounts: [297, 347, 397, 547, 647],
-    ticketTypeByAmount: {
-      297: 'super_early_bird_general',
-      347: 'early_bird_general',
-      397: 'standard_general',
-      547: 'super_early_bird_vip',
-      647: 'early_bird_vip',
-    },
-  },
-  'glcc': {
-    amounts: [2299, 2499, 2899, 3199],
-    ticketTypeByAmount: {
-      2299: 'early_bird_general',
-      2499: 'standard_general',
-      2899: 'early_bird_vip',
-      3199: 'standard_vip',
-    },
-  },
+function dateTokenFromEvent(ev: Event): string | null {
+  if (!ev.date) return null
+  const d = new Date(ev.date)
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`
 }
 
-// Cutoff: payments after this date go to June 7th+, not June 1st
-const JUNE1_CUTOFF = new Date('2026-05-29T00:00:00Z').getTime() / 1000
-
-function slugForEvent(event: Event): string | null {
-  if (!event.date) return null
-  const d = new Date(event.date)
-  const year = d.getUTCFullYear()
-  const month = d.getUTCMonth()
-  const day = d.getUTCDate()
-  if (year === 2026 && month === 4) return 'may-16'
-  if (year === 2026 && month === 5 && day === 1) return 'june-1'
-  if (year === 2026 && month === 5 && day === 7) return 'june-7'
-  if (year === 2026 && month === 5 && day === 20) return 'glcc'
-  return null
+function isVip(productName: string | null): boolean {
+  return !!productName && /\bvip\b/i.test(productName)
 }
 
-type EventWithSlug = Event & { slug: string; priceConfig: PriceConfig }
-
-function resolveEvent(
-  amountRm: number,
-  sessionCreatedSec: number,
-  events: EventWithSlug[],
-): EventWithSlug | null {
-  const sessionDate = new Date(sessionCreatedSec * 1000)
-
-  // Hard cutoff: payments after May 29 belong to June 7th or later, not June 1st
-  const june1Event = events.find(e => e.slug === 'june-1')
-  const june7Event = events.find(e => e.slug === 'june-7')
-  if (june1Event && june7Event && sessionCreatedSec >= JUNE1_CUTOFF) {
-    // Force assign to June 7th if price matches
-    if (june7Event.priceConfig.amounts.includes(amountRm)) return june7Event
+// Tier name is derived from amount because Stripe doesn't carry the
+// super/early/standard label. Event routing comes from the product name.
+function ticketTypeFor(amountRm: number, vip: boolean): TicketType {
+  if (vip) {
+    if (amountRm <= 497) return 'super_early_bird_vip'
+    if (amountRm <= 597) return 'early_bird_vip'
+    return 'standard_vip'
   }
-
-  const matchesByPrice = events.filter(e => e.priceConfig.amounts.includes(amountRm))
-
-  if (matchesByPrice.length === 1) return matchesByPrice[0]
-
-  const candidates = matchesByPrice.length > 1 ? matchesByPrice : events
-
-  let best: EventWithSlug | null = null
-  let bestDelta = Infinity
-  for (const ev of candidates) {
-    if (!ev.date) continue
-    const evDate = new Date(ev.date)
-    const delta = evDate.getTime() - sessionDate.getTime()
-    if (delta < 0) continue
-    if (delta < bestDelta) {
-      bestDelta = delta
-      best = ev
-    }
-  }
-
-  if (best) return best
-
-  let fallback: EventWithSlug | null = null
-  let fallbackDelta = Infinity
-  for (const ev of candidates) {
-    if (!ev.date) continue
-    const delta = Math.abs(new Date(ev.date).getTime() - sessionDate.getTime())
-    if (delta < fallbackDelta) {
-      fallbackDelta = delta
-      fallback = ev
-    }
-  }
-  return fallback
+  if (amountRm <= 249) return 'super_early_bird_general'
+  if (amountRm <= 297) return 'early_bird_general'
+  return 'standard_general'
 }
 
 export async function POST(req: NextRequest) {
@@ -134,20 +56,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: eventsErr.message }, { status: 500, headers: NO_STORE_HEADERS })
     }
 
-    const events: EventWithSlug[] = (rawEvents ?? [])
-      .map((ev: Event) => {
-        const slug = slugForEvent(ev)
-        if (!slug) return null
-        const priceConfig = EVENT_PRICE_MAP[slug]
-        if (!priceConfig) return null
-        return { ...ev, slug, priceConfig }
-      })
-      .filter((e): e is EventWithSlug => e !== null)
-
+    const events: Event[] = (rawEvents ?? []) as Event[]
     if (events.length === 0) {
       return NextResponse.json(
-        { error: 'No events found that match a known price config (may-16 or june-1).' },
-        { status: 400 },
+        { error: 'No events found.' },
+        { status: 400, headers: NO_STORE_HEADERS },
       )
     }
 
@@ -172,16 +85,28 @@ export async function POST(req: NextRequest) {
       })
 
       for (const session of sessions.data) {
-        const amountRm = (session.amount_total ?? 0) / 100
-        const resolved = resolveEvent(amountRm, session.created, events)
+        const full = await stripe.checkout.sessions.retrieve(session.id, {
+          expand: ['line_items.data.price.product'],
+        })
+        const li = full.line_items?.data[0]
+        const product = li?.price?.product
+        const productName =
+          product && typeof product === 'object' && !('deleted' in product)
+            ? product.name
+            : null
+
+        const token = dateTokenFromName(productName) ?? dateTokenFromName(li?.description)
+        const resolved = token
+          ? events.find(e => dateTokenFromEvent(e) === token) ?? null
+          : null
 
         if (!resolved) {
           unmatched++
           continue
         }
 
-        const ticketType =
-          resolved.priceConfig.ticketTypeByAmount[amountRm] ?? 'standard_general'
+        const amountRm = (session.amount_total ?? 0) / 100
+        const ticketType = ticketTypeFor(amountRm, isVip(productName))
 
         const attendee = {
           event_id: resolved.id,
@@ -196,26 +121,19 @@ export async function POST(req: NextRequest) {
           paid_at: new Date(session.created * 1000).toISOString(),
         }
 
-        // Check if record exists — preserve manually-set phone/name/event_id
+        // Preserve manually-edited name/phone when Stripe has nothing better.
         const { data: existing } = await supabase
           .from('attendees')
-          .select('phone, name, event_id, ticket_type')
+          .select('phone, name')
           .eq('stripe_session_id', session.id)
           .maybeSingle()
 
-        const june7Id = events.find(e => e.slug === 'june-7')?.id
-        // If record was manually assigned to June 7th, keep it there
-        const preserveJune7 = existing?.event_id && june7Id && existing.event_id === june7Id
-
         const finalAttendee = {
           ...attendee,
-          // Keep manually set phone if Stripe doesn't have one
           phone: attendee.phone ?? existing?.phone ?? null,
-          // Keep manually set name if Stripe returns empty/whitespace
-          name: (attendee.name && attendee.name.trim()) ? attendee.name : (existing?.name ?? 'Unknown'),
-          // Preserve manual June 7th assignment — don't let sync move it back to June 1st
-          event_id: preserveJune7 ? existing!.event_id : attendee.event_id,
-          ticket_type: preserveJune7 ? (existing!.ticket_type ?? attendee.ticket_type) : attendee.ticket_type,
+          name: (attendee.name && attendee.name.trim())
+            ? attendee.name
+            : (existing?.name ?? 'Unknown'),
         }
 
         const { error } = await supabase
