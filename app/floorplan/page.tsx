@@ -28,7 +28,7 @@ function uid(): string {
 }
 
 function emptyFloorPlan(): FloorPlan {
-  return { stage_speaker: '', speaker_needs: [], sections: [], registration: '', main_door: '', fnb: '', videographer: '' }
+  return { stage_speaker: '', speaker_needs: [], sections: [], registration: '', main_door: '', fnb: '', videographer: '', facilitators: [] }
 }
 
 // Normalize any floor_plan into a days[] array. Legacy single-day plans (no
@@ -54,6 +54,9 @@ export default function FloorPlanPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [presentMode, setPresentMode] = useState(false)
+  // Speaker Needs + Facilitators live in a collapsible panel so they don't crowd the
+  // canvas. Auto-opens in edit mode so the user can actually fill them in.
+  const [infoOpen, setInfoOpen] = useState(false)
 
   async function loadEvents() {
     try {
@@ -94,9 +97,20 @@ export default function FloorPlanPage() {
       main_door: currentPlan.main_door ?? '',
       fnb: currentPlan.fnb ?? '',
       videographer: currentPlan.videographer ?? '',
+      facilitators: (currentPlan.facilitators ?? []).map(f => ({ ...f })),
       columns: currentPlan.columns ?? 3,
     })
     setEditing(true)
+  }
+
+  function addFacilitator() {
+    setDraft(d => ({ ...d, facilitators: [...(d.facilitators ?? []), { id: uid(), name: '', role: null }] }))
+  }
+  function updateFacilitator(idx: number, patch: Partial<{ name: string; role: string | null }>) {
+    setDraft(d => ({ ...d, facilitators: (d.facilitators ?? []).map((f, i) => i === idx ? { ...f, ...patch } : f) }))
+  }
+  function removeFacilitator(idx: number) {
+    setDraft(d => ({ ...d, facilitators: (d.facilitators ?? []).filter((_, i) => i !== idx) }))
   }
 
   // Current column count (defaults to 3, persists in the saved floor plan).
@@ -425,55 +439,21 @@ export default function FloorPlanPage() {
         <div className="text-center text-zinc-500 py-20">No event selected.</div>
       ) : (
         <div className="bg-[#0d0d0d] border border-zinc-800 rounded-xl p-6 space-y-6">
-          {/* Stage stays truly centered. Speaker Needs floats absolutely to the right on wider screens. */}
-          <div className="relative">
-            <div className="flex justify-center">
-              <div className="bg-blue-900 border border-blue-800 rounded-lg px-10 py-4 text-center min-w-[300px]">
-                <p className="text-[10px] text-zinc-400 tracking-widest">★ STAGE ★</p>
-                {editing ? (
-                  <input value={draft.stage_speaker ?? ''}
-                    onChange={e => setDraft(d => ({ ...d, stage_speaker: e.target.value }))}
-                    placeholder="Speaker name"
-                    autoComplete="off" spellCheck={false} name="floorplan-stage-speaker"
-                    className="bg-transparent border-b border-blue-700 mt-2 text-white text-center text-lg font-bold uppercase w-full focus:outline-none focus:border-blue-400" />
-                ) : (
-                  <p className="text-white text-lg font-bold uppercase mt-2">{display.stage_speaker || '—'}</p>
-                )}
-              </div>
+          {/* Stage — centered. Speaker Needs + Facilitators moved to a collapsible
+              panel below the totals to keep the canvas clean. */}
+          <div className="flex justify-center">
+            <div className="bg-blue-900 border border-blue-800 rounded-lg px-10 py-4 text-center min-w-[300px]">
+              <p className="text-[10px] text-zinc-400 tracking-widest">★ STAGE ★</p>
+              {editing ? (
+                <input value={draft.stage_speaker ?? ''}
+                  onChange={e => setDraft(d => ({ ...d, stage_speaker: e.target.value }))}
+                  placeholder="Speaker name"
+                  autoComplete="off" spellCheck={false} name="floorplan-stage-speaker"
+                  className="bg-transparent border-b border-blue-700 mt-2 text-white text-center text-lg font-bold uppercase w-full focus:outline-none focus:border-blue-400" />
+              ) : (
+                <p className="text-white text-lg font-bold uppercase mt-2">{display.stage_speaker || '—'}</p>
+              )}
             </div>
-
-            {(editing || (display.speaker_needs ?? []).length > 0) && (
-              <div className="lg:absolute lg:top-0 lg:right-0 lg:w-64 lg:mt-0 mt-4 max-w-md mx-auto bg-blue-950/30 border border-blue-800/40 rounded-lg p-3">
-                <p className="text-[10px] text-blue-300 uppercase tracking-wider font-semibold mb-1.5">🎤 Speaker needs</p>
-                {editing ? (
-                  <div className="space-y-1.5">
-                    {(draft.speaker_needs ?? []).map((need, idx) => (
-                      <div key={idx} className="flex gap-1 items-center">
-                        <input value={need} onChange={e => updateSpeakerNeed(idx, e.target.value)}
-                          placeholder="e.g. Lapel mic"
-                          autoComplete="off" spellCheck={false} name={`floorplan-need-${idx}`}
-                          className="flex-1 bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-white text-xs" />
-                        <button type="button" onClick={() => removeSpeakerNeed(idx)}
-                          className="text-zinc-500 hover:text-red-400 text-[10px] px-1.5 py-0.5 border border-zinc-700 hover:border-red-500/50 rounded">✕</button>
-                      </div>
-                    ))}
-                    <button type="button" onClick={addSpeakerNeed}
-                      className="text-[10px] text-blue-400 hover:text-blue-300 border border-blue-500/40 hover:border-blue-500/70 rounded px-2 py-1 w-full">
-                      + Add item
-                    </button>
-                  </div>
-                ) : (
-                  <ul className="space-y-0.5">
-                    {(display.speaker_needs ?? []).map((need, i) => need && (
-                      <li key={i} className="text-xs text-zinc-300 flex items-start gap-1.5">
-                        <span className="text-blue-400 flex-shrink-0">•</span>
-                        <span>{need}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            )}
           </div>
 
           {/* Totals bar */}
@@ -485,6 +465,106 @@ export default function FloorPlanPage() {
               {' = '} <span className="text-orange-300">{totals.grand} PAX</span>
             </div>
           </div>
+
+          {/* Collapsible Speaker Needs + Facilitators panel. Default closed in view mode
+              so the canvas stays uncluttered. Auto-open in edit mode (so you can actually
+              fill them in) by OR-ing `editing` with the manual toggle. */}
+          {(() => {
+            const needsCount = (display.speaker_needs ?? []).filter(n => n).length
+            const facilCount = (display.facilitators ?? []).filter(f => f.name).length
+            const open = editing || infoOpen
+            return (
+              <div className="flex flex-col items-center gap-2">
+                <button type="button" onClick={() => setInfoOpen(v => !v)}
+                  className="text-xs text-zinc-400 hover:text-white border border-zinc-700 hover:border-zinc-500 rounded-full px-3 py-1.5 flex items-center gap-2">
+                  <span>🎤 Speaker needs {needsCount > 0 && <span className="text-blue-300">· {needsCount}</span>}</span>
+                  <span className="text-zinc-600">·</span>
+                  <span>🧑‍🏫 Facilitators {facilCount > 0 && <span className="text-purple-300">· {facilCount}</span>}</span>
+                  <span className="text-zinc-500">{open ? '▴' : '▾'}</span>
+                </button>
+                {open && (
+                  <div className="grid sm:grid-cols-2 gap-3 w-full max-w-2xl">
+                    {/* Speaker needs */}
+                    <div className="bg-blue-950/30 border border-blue-800/40 rounded-lg p-3">
+                      <p className="text-[10px] text-blue-300 uppercase tracking-wider font-semibold mb-1.5">🎤 Speaker needs</p>
+                      {editing ? (
+                        <div className="space-y-1.5">
+                          {(draft.speaker_needs ?? []).map((need, idx) => (
+                            <div key={idx} className="flex gap-1 items-center">
+                              <input value={need} onChange={e => updateSpeakerNeed(idx, e.target.value)}
+                                placeholder="e.g. Lapel mic"
+                                autoComplete="off" spellCheck={false} name={`floorplan-need-${idx}`}
+                                className="flex-1 bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-white text-xs" />
+                              <button type="button" onClick={() => removeSpeakerNeed(idx)}
+                                className="text-zinc-500 hover:text-red-400 text-[10px] px-1.5 py-0.5 border border-zinc-700 hover:border-red-500/50 rounded">✕</button>
+                            </div>
+                          ))}
+                          <button type="button" onClick={addSpeakerNeed}
+                            className="text-[10px] text-blue-400 hover:text-blue-300 border border-blue-500/40 hover:border-blue-500/70 rounded px-2 py-1 w-full">
+                            + Add item
+                          </button>
+                        </div>
+                      ) : needsCount > 0 ? (
+                        <ul className="space-y-0.5">
+                          {(display.speaker_needs ?? []).map((need, i) => need && (
+                            <li key={i} className="text-xs text-zinc-300 flex items-start gap-1.5">
+                              <span className="text-blue-400 flex-shrink-0">•</span>
+                              <span>{need}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-zinc-500 text-[11px] italic">—</p>
+                      )}
+                    </div>
+
+                    {/* Facilitators */}
+                    <div className="bg-purple-900/15 border border-purple-700/40 rounded-lg p-3">
+                      <p className="text-[10px] text-purple-300 uppercase tracking-wider font-semibold mb-1.5">🧑‍🏫 Facilitators</p>
+                      {editing ? (
+                        <div className="space-y-2">
+                          {(draft.facilitators ?? []).map((f, idx) => (
+                            <div key={f.id} className="flex gap-1 items-start">
+                              <div className="flex-1 space-y-1">
+                                <input value={f.name} onChange={e => updateFacilitator(idx, { name: e.target.value })}
+                                  placeholder="Name"
+                                  autoComplete="off" spellCheck={false} name={`floorplan-facilitator-name-${f.id}`}
+                                  className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-white text-xs" />
+                                <input value={f.role ?? ''} onChange={e => updateFacilitator(idx, { role: e.target.value || null })}
+                                  placeholder="Role (optional)"
+                                  autoComplete="off" spellCheck={false} name={`floorplan-facilitator-role-${f.id}`}
+                                  className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-purple-300 text-[11px]" />
+                              </div>
+                              <button type="button" onClick={() => removeFacilitator(idx)}
+                                className="text-zinc-500 hover:text-red-400 text-[10px] px-1.5 py-0.5 border border-zinc-700 hover:border-red-500/50 rounded">✕</button>
+                            </div>
+                          ))}
+                          <button type="button" onClick={addFacilitator}
+                            className="text-[10px] text-purple-400 hover:text-purple-300 border border-purple-500/40 hover:border-purple-500/70 rounded px-2 py-1 w-full">
+                            + Add facilitator
+                          </button>
+                        </div>
+                      ) : facilCount > 0 ? (
+                        <ul className="space-y-0.5">
+                          {(display.facilitators ?? []).map((f, i) => f.name && (
+                            <li key={f.id ?? i} className="text-xs text-zinc-300 flex items-start gap-1.5 leading-tight">
+                              <span className="text-purple-400 flex-shrink-0">•</span>
+                              <span>
+                                {f.name}
+                                {f.role && <span className="text-purple-300/70"> — {f.role}</span>}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-zinc-500 text-[11px] italic">—</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
 
           {/* Sections grid — responsive: 2 col mobile, then user's pick (2 or 3) on desktop */}
           <div className={`grid grid-cols-2 ${cols === 3 ? 'lg:grid-cols-[1fr_0.4fr_1fr]' : ''} gap-x-3 gap-y-4`}>
@@ -690,27 +770,13 @@ export default function FloorPlanPage() {
               )}
             </div>
 
-            {/* Stage truly centered; Speaker Needs floats absolutely to the right on wider screens */}
-            <div className="relative">
-              <div className="flex justify-center">
-                <div className="bg-blue-900 border border-blue-800 rounded-xl px-10 py-6 text-center min-w-[300px]">
-                  <p className="text-xs text-zinc-400 tracking-widest">★ STAGE ★</p>
-                  <p className="text-white text-2xl font-bold uppercase mt-2">{currentPlan.stage_speaker || '—'}</p>
-                </div>
+            {/* Stage centered. Speaker Needs moves into the right sidebar below
+                (alongside Facilitators) to match edit/view mode and avoid overlap. */}
+            <div className="flex justify-center">
+              <div className="bg-blue-900 border border-blue-800 rounded-xl px-10 py-6 text-center min-w-[300px]">
+                <p className="text-xs text-zinc-400 tracking-widest">★ STAGE ★</p>
+                <p className="text-white text-2xl font-bold uppercase mt-2">{currentPlan.stage_speaker || '—'}</p>
               </div>
-              {(currentPlan.speaker_needs ?? []).filter(n => n).length > 0 && (
-                <div className="lg:absolute lg:top-0 lg:right-0 lg:w-56 lg:mt-0 mt-4 max-w-md mx-auto bg-blue-950/30 border border-blue-800/40 rounded-lg p-3">
-                  <p className="text-[10px] text-blue-300 uppercase tracking-wider font-semibold mb-1.5">🎤 Speaker needs</p>
-                  <ul className="space-y-0.5">
-                    {(currentPlan.speaker_needs ?? []).map((need, i) => need && (
-                      <li key={i} className="text-xs text-zinc-300 flex items-start gap-1.5">
-                        <span className="text-blue-400 flex-shrink-0">•</span>
-                        <span>{need}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
             </div>
 
             {/* Totals */}
@@ -722,6 +788,8 @@ export default function FloorPlanPage() {
               </div>
             </div>
 
+            {/* Sections grid + Facilitator sidebar — present mode */}
+            <div className="lg:grid lg:grid-cols-[1fr_180px] lg:gap-6">
             {/* Sections — responsive grid (user-chosen 2 or 3 columns) */}
             <div className={`grid grid-cols-2 ${cols === 3 ? 'lg:grid-cols-[1fr_0.4fr_1fr]' : ''} gap-x-3 gap-y-4`}>
               {(currentPlan.sections ?? []).map(section => section.type === 'spacer' ? (
@@ -751,6 +819,41 @@ export default function FloorPlanPage() {
                   </p>
                 </div>
               ))}
+            </div>
+
+            {((currentPlan.speaker_needs ?? []).filter(n => n).length > 0 || (currentPlan.facilitators ?? []).length > 0) && (
+              <div className="mt-6 lg:mt-0 lg:border-l lg:border-dashed lg:border-zinc-700 lg:pl-4 space-y-5">
+                {(currentPlan.speaker_needs ?? []).filter(n => n).length > 0 && (
+                  <div className="bg-blue-950/30 border border-blue-800/40 rounded-lg p-3">
+                    <p className="text-[10px] text-blue-300 uppercase tracking-wider font-semibold mb-1.5">🎤 Speaker needs</p>
+                    <ul className="space-y-0.5">
+                      {(currentPlan.speaker_needs ?? []).map((need, i) => need && (
+                        <li key={i} className="text-xs text-zinc-300 flex items-start gap-1.5">
+                          <span className="text-blue-400 flex-shrink-0">•</span>
+                          <span>{need}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {(currentPlan.facilitators ?? []).some(f => f.name) && (
+                  <div className="bg-purple-900/15 border border-purple-700/40 rounded-lg p-3">
+                    <p className="text-[10px] text-purple-300 uppercase tracking-wider font-semibold mb-1.5">🧑‍🏫 Facilitators</p>
+                    <ul className="space-y-1">
+                      {(currentPlan.facilitators ?? []).map((f, i) => f.name && (
+                        <li key={f.id ?? i} className="text-xs text-zinc-300 flex items-start gap-1.5">
+                          <span className="text-purple-400 flex-shrink-0">•</span>
+                          <span>
+                            {f.name}
+                            {f.role && <span className="text-purple-300/70 text-[10px] block">{f.role}</span>}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
             </div>
 
             {/* Videographer strip — present mode */}

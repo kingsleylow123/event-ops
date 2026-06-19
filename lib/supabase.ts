@@ -138,6 +138,7 @@ export interface FloorPlanDay {
   main_door?: string | null
   fnb?: string | null
   videographer?: string | null
+  facilitators?: { id: string; name: string; role?: string | null }[]
   columns?: 2 | 3
 }
 
