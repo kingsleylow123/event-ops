@@ -342,9 +342,8 @@ export default function AttendeesPage() {
       {facilitatorMode && (() => {
         const eligible = (facilStatsData ?? []).filter(s => !EXCLUDED_NAMES.has(s.name.trim().toLowerCase()))
         const top = [...eligible]
-          .sort((a, b) => b.longest_streak - a.longest_streak || b.total_events - a.total_events)
-          .slice(0, 3)
           .filter(s => s.longest_streak >= 2)
+          .sort((a, b) => b.longest_streak - a.longest_streak || b.total_events - a.total_events)
         const completers = [...eligible]
           .filter(s => s.two_day_completions >= 1)
           .sort((a, b) => b.two_day_completions - a.two_day_completions || a.name.localeCompare(b.name))
@@ -354,7 +353,7 @@ export default function AttendeesPage() {
             {top.length > 0 && (
               <div className="bg-[#111] border border-emerald-500/30 rounded-xl p-5">
                 <h3 className="text-emerald-400 font-bold mb-4 flex items-center gap-2 text-sm tracking-wide">
-                  <span>🏆</span> TOP 3 FACILITATOR
+                  <span>🏆</span> TOP FACILITATORS
                 </h3>
                 <div className="space-y-3 h-28 overflow-y-scroll pr-2 [scrollbar-width:thin] [scrollbar-color:rgb(52_211_153)_rgba(63,63,70,0.4)] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-zinc-800/40 [&::-webkit-scrollbar-track]:rounded [&::-webkit-scrollbar-thumb]:bg-emerald-500/70 [&::-webkit-scrollbar-thumb]:rounded">
                   {top.map((s, i) => (
