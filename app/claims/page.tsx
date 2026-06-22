@@ -80,6 +80,15 @@ export default function ClaimsPage() {
     })
   }, [events, claims])
 
+  // Amount tracks the picked event's open-claim total. Editable after.
+  useEffect(() => {
+    if (!form.event_id) return
+    const total = claims
+      .filter(c => c.event_id === form.event_id && (c.status === 'pending' || c.status === 'approved'))
+      .reduce((s, c) => s + c.amount, 0)
+    setForm(f => ({ ...f, amount: total > 0 ? total.toFixed(2) : '' }))
+  }, [form.event_id, claims])
+
   // On every load: show what's tracked, then sync claims from event expenses
   // (de-duped — only adds expenses not already claimed, preserves your edits).
   useEffect(() => {
