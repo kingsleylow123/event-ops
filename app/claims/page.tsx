@@ -41,7 +41,7 @@ export default function ClaimsPage() {
   const [err, setErr] = useState('')
   const [tab, setTab] = useState<'open' | 'paid' | 'rejected'>('open')
 
-  const [form, setForm] = useState({ event_id: '', description: '', amount: '', claimant_name: '' })
+  const [form, setForm] = useState({ event_id: '', amount: '', claimant_name: '' })
 
   const load = useCallback(async (): Promise<Claim[]> => {
     try {
@@ -108,7 +108,6 @@ export default function ClaimsPage() {
     e.preventDefault()
     setErr('')
     if (!form.event_id) { setErr('Pick an event.'); return }
-    if (!form.description.trim()) { setErr('Enter what the claim is for.'); return }
     const amt = Number(form.amount)
     if (!Number.isFinite(amt) || amt <= 0) { setErr('Enter a valid amount.'); return }
     setSaving(true)
@@ -118,14 +117,14 @@ export default function ClaimsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           event_id: form.event_id,
-          description: form.description.trim(),
+          description: 'Manual claim',
           amount: amt,
           claimant_name: form.claimant_name.trim(),
         }),
       })
       const j = await res.json()
       if (!res.ok) { setErr(j.error || 'Failed to add claim.'); return }
-      setForm(f => ({ ...f, description: '', amount: '', claimant_name: '' }))
+      setForm(f => ({ ...f, amount: '', claimant_name: '' }))
       await load()
     } finally {
       setSaving(false)
@@ -198,8 +197,12 @@ export default function ClaimsPage() {
 
       {/* Add manual claim */}
       <form onSubmit={addClaim} className="bg-[#111] border border-zinc-800 rounded-xl p-4 flex flex-wrap gap-2 items-start">
-        <input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-          placeholder="What for" className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm flex-1 min-w-[160px]" />
+        <select value={form.event_id} onChange={e => setForm(f => ({ ...f, event_id: e.target.value }))}
+          className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm flex-1 min-w-[200px] cursor-pointer focus:border-amber-500 focus:outline-none">
+          {pendingEvents.length === 0
+            ? <option value="" disabled>No pending-payment events</option>
+            : pendingEvents.map(ev => <option key={ev.id} value={ev.id}>{ev.name}</option>)}
+        </select>
         <input value={form.claimant_name} onChange={e => setForm(f => ({ ...f, claimant_name: e.target.value }))}
           placeholder="Paid by (optional)" className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm w-40" />
         <input value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
@@ -211,16 +214,7 @@ export default function ClaimsPage() {
         </button>
         {err
           ? <p className="w-full text-xs text-red-400">{err}</p>
-          : <p className="w-full text-xs text-zinc-600 flex items-center gap-1.5 flex-wrap">
-              Adds to
-              <select value={form.event_id} onChange={e => setForm(f => ({ ...f, event_id: e.target.value }))}
-                className="bg-zinc-900 border border-zinc-700 rounded-md px-2 py-0.5 text-zinc-400 text-xs hover:text-white focus:text-white focus:border-amber-500 focus:outline-none cursor-pointer">
-                {pendingEvents.length === 0
-                  ? <option value="" disabled>No pending-payment events</option>
-                  : pendingEvents.map(ev => <option key={ev.id} value={ev.id}>{ev.name}</option>)}
-              </select>
-              . Event expenses are pulled in automatically.
-            </p>}
+          : <p className="w-full text-xs text-zinc-600">Event expenses are pulled in automatically.</p>}
       </form>
 
       {/* Tabs — paid claims move into Reimbursed */}
