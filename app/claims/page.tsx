@@ -206,6 +206,11 @@ export default function ClaimsPage() {
   const paidClaims = scoped.filter(c => c.status === 'paid')
   const rejectedClaims = scoped.filter(c => c.status === 'rejected')
   const toReimburse = open.reduce((s, c) => s + c.amount, 0)
+  const openByName = Object.entries(open.reduce<Record<string, number>>((acc, c) => {
+    const k = c.notes?.trim() || 'Unassigned'
+    acc[k] = (acc[k] || 0) + c.amount
+    return acc
+  }, {})).sort(([a], [b]) => a.localeCompare(b))
   const reimbursed = paidClaims.reduce((s, c) => s + c.amount, 0)
   const shown = tab === 'open' ? open : tab === 'paid' ? paidClaims : rejectedClaims
   const selectedEventName = events.find(e => e.id === form.event_id)?.name
@@ -255,7 +260,14 @@ export default function ClaimsPage() {
         </button>
         {err
           ? <p className="w-full text-xs text-red-400">{err}</p>
-          : <p className="w-full text-xs text-zinc-600">Event expenses are pulled in automatically.</p>}
+          : openByName.length === 0
+            ? <p className="w-full text-xs text-zinc-600">Event expenses are pulled in automatically.</p>
+            : <p className="w-full text-xs text-zinc-500 flex flex-wrap gap-x-3 gap-y-1">
+                {openByName.map(([name, amt]) => (
+                  <span key={name}>{name} <span className="text-zinc-300">{rm(amt)}</span></span>
+                ))}
+                <span className="text-zinc-500">Total <span className="text-amber-400 font-medium">{rm(toReimburse)}</span></span>
+              </p>}
       </form>
 
       {/* Tabs — paid claims move into Reimbursed */}
