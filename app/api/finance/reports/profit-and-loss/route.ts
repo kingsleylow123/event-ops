@@ -1,5 +1,5 @@
 // GET /api/finance/reports/profit-and-loss?from=YYYY-MM-DD&to=YYYY-MM-DD&event_id=<id|all>
-// Returns the income + expense line items for a Bukku-style P&L over the date range.
+// Senior-finance shape: Income → Cost of Sales → Gross Profit → Operating Expenses → Net Profit.
 
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
@@ -11,13 +11,46 @@ const NO_STORE = { 'Cache-Control': 'no-store' } as const
 const MYT = 8 * 3600 * 1000
 
 export type PLLine = { code: string; name: string; amount: number }
+export type PLSection = { lines: PLLine[]; total: number }
 export type PLPayload = {
   scope_label: string
-  from: string // YYYY-MM-DD
+  from: string
   to: string
-  income: { lines: PLLine[]; total: number }
-  expense: { lines: PLLine[]; total: number }
+  income: PLSection
+  cost_of_sales: PLSection
+  gross_profit: number
+  operating_expense: PLSection
   net: number
+}
+
+// Categories that count as direct event-delivery cost (Cost of Sales).
+// Anything else falls under Operating Expenses.
+const COST_OF_SALES = new Set(['Venue Rental', 'Catering', 'Materials', 'Production', 'Transport & Logistics'])
+
+// Stable, human-readable account codes by category.
+// 5xxx Revenue · 6xxx Cost of Sales · 7xxx Operating Expenses
+const ACCOUNT_CODES: Record<string, string> = {
+  'Ticket Sales': '5010',
+  'Other Income': '5090',
+
+  'Venue Rental': '6010',
+  'Catering': '6020',
+  'Materials': '6030',
+  'Production': '6040',
+  'Transport & Logistics': '6050',
+
+  'Affiliate Commission': '7010',
+  'Hospitality': '7020',
+  'Marketing': '7030',
+  'Admin': '7040',
+  'Other Expense': '7090',
+}
+
+function codeFor(name: string, fallbackPrefix: number): string {
+  if (ACCOUNT_CODES[name]) return ACCOUNT_CODES[name]
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0
+  return String(fallbackPrefix + (h % 89) + 1)
 }
 
 function dayKey(ts: string | null | undefined): string | null {
@@ -31,21 +64,14 @@ function inRange(key: string | null, from: string, to: string): boolean {
   return !!key && key >= from && key <= to
 }
 
-// Stable account code assigned by category name → keeps codes consistent run to run.
-function codeFor(prefix: number, name: string): string {
-  let h = 0
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0
-  return String(prefix + (h % 90))
-}
-
-function groupLines(prefix: number, rows: { name: string; amount: number }[]): PLLine[] {
+function groupLines(rows: { name: string; amount: number }[], fallbackPrefix: number): PLLine[] {
   const m = new Map<string, number>()
   for (const r of rows) {
     const key = (r.name || 'Other').trim() || 'Other'
     m.set(key, (m.get(key) ?? 0) + Number(r.amount || 0))
   }
   return [...m.entries()]
-    .map(([name, amount]) => ({ code: codeFor(prefix, name), name, amount: r2(amount) }))
+    .map(([name, amount]) => ({ code: codeFor(name, fallbackPrefix), name, amount: r2(amount) }))
     .sort((a, b) => b.amount - a.amount)
 }
 
@@ -92,9 +118,16 @@ export async function GET(req: Request) {
     if (inRange(dayKey(f.entry_date), from, to)) incomeRows.push({ name: f.category || 'Other Income', amount: Number(f.amount ?? 0) })
   }
 
-  const expenseRows: { name: string; amount: number }[] = []
+  const cosRows: { name: string; amount: number }[] = []
+  const opexRows: { name: string; amount: number }[] = []
+  const pushExpense = (name: string, amount: number) => {
+    if (amount <= 0) return
+    ;(COST_OF_SALES.has(name) ? cosRows : opexRows).push({ name, amount })
+  }
+
   for (const e of exp ?? []) {
-    if (inRange(dayKey(e.created_at), from, to)) expenseRows.push({ name: e.category || 'Other Expense', amount: Number(e.amount ?? 0) })
+    if (!inRange(dayKey(e.created_at), from, to)) continue
+    pushExpense(e.category || 'Other Expense', Number(e.amount ?? 0))
   }
   const rateByAffiliate = new Map<string, number>((affs ?? []).map(a => [a.id as string, Number(a.commission_rate ?? 0)]))
   const attendeeById = new Map<string, { payment_status: string | null; payment_amount: number | null; paid_at: string | null; created_at: string | null }>(
@@ -106,26 +139,32 @@ export async function GET(req: Request) {
     const key = dayKey(a.paid_at ?? a.created_at)
     if (!inRange(key, from, to)) continue
     const rate = rateByAffiliate.get(ab.affiliate_id as string) ?? 0
-    const commission = Number(a.payment_amount ?? 0) * rate
-    if (commission > 0) expenseRows.push({ name: 'Affiliate Commission', amount: commission })
+    pushExpense('Affiliate Commission', Number(a.payment_amount ?? 0) * rate)
   }
   for (const f of fin ?? []) {
     if (f.type !== 'expense') continue
-    if (inRange(dayKey(f.entry_date), from, to)) expenseRows.push({ name: f.category || 'Other Expense', amount: Number(f.amount ?? 0) })
+    if (!inRange(dayKey(f.entry_date), from, to)) continue
+    pushExpense(f.category || 'Other Expense', Number(f.amount ?? 0))
   }
 
-  const incomeLines = groupLines(5000, incomeRows)
-  const expenseLines = groupLines(6500, expenseRows)
+  const incomeLines = groupLines(incomeRows, 5000)
+  const cosLines    = groupLines(cosRows, 6000)
+  const opexLines   = groupLines(opexRows, 7000)
   const incomeTotal = r2(incomeLines.reduce((s, l) => s + l.amount, 0))
-  const expenseTotal = r2(expenseLines.reduce((s, l) => s + l.amount, 0))
+  const cosTotal    = r2(cosLines.reduce((s, l) => s + l.amount, 0))
+  const opexTotal   = r2(opexLines.reduce((s, l) => s + l.amount, 0))
+  const grossProfit = r2(incomeTotal - cosTotal)
+  const net         = r2(grossProfit - opexTotal)
 
   const payload: PLPayload = {
     scope_label,
     from,
     to,
-    income: { lines: incomeLines, total: incomeTotal },
-    expense: { lines: expenseLines, total: expenseTotal },
-    net: r2(incomeTotal - expenseTotal),
+    income:           { lines: incomeLines, total: incomeTotal },
+    cost_of_sales:    { lines: cosLines,    total: cosTotal },
+    gross_profit:     grossProfit,
+    operating_expense:{ lines: opexLines,   total: opexTotal },
+    net,
   }
   return NextResponse.json(payload, { headers: NO_STORE })
 }

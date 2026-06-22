@@ -88,4 +88,15 @@ body {
   .print-sky   { color: #0369a1 !important; }
   .print-green { color: #15803d !important; }
   .print-muted { color: #71717a !important; }
+
+  /* Net Profit row gets weight + a soft band so it reads as THE answer */
+  .print-net td {
+    background: #fef7e7 !important;
+    border-top: 1.5px solid #b45309 !important;
+    border-bottom: 1.5px solid #b45309 !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+  }
 }
