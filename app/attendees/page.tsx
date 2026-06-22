@@ -502,16 +502,6 @@ export default function AttendeesPage() {
                 <tr key={a.id} className="border-b border-zinc-900 hover:bg-zinc-900/30">
                   <td className="px-4 py-3 font-medium">
                     {a.name}
-                    {facilitatorMode && (() => {
-                      const s = facilStats.get((a.name ?? '').trim().toLowerCase())
-                      if (!s || s.current_streak < 2) return null
-                      return (
-                        <span title={`Active streak — ${s.current_streak} events in a row`}
-                          className="ml-2 text-[10px] bg-orange-500/20 text-orange-300 px-1.5 py-0.5 rounded font-semibold">
-                          🔥 {s.current_streak}
-                        </span>
-                      )
-                    })()}
                     {!facilitatorMode && (() => {
                       const k = identityKey(a.phone, a.email)
                       const n = k ? dupCounts[k] : 0
