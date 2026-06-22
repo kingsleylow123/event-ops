@@ -341,9 +341,11 @@ export default function AttendeesPage() {
       {/* Facilitator leaderboards — only in facilitator mode. Left: top 3 by longest streak. Right: 2-day completers. Huda excluded. */}
       {facilitatorMode && (() => {
         const eligible = (facilStatsData ?? []).filter(s => !EXCLUDED_NAMES.has(s.name.trim().toLowerCase()))
+        // "Streak" counts total events facilitated (not consecutive) — so
+        // removing someone from one event doesn't punish them for the others.
         const top = [...eligible]
-          .filter(s => s.longest_streak >= 2)
-          .sort((a, b) => b.longest_streak - a.longest_streak || b.total_events - a.total_events)
+          .filter(s => s.total_events >= 2)
+          .sort((a, b) => b.total_events - a.total_events || b.longest_streak - a.longest_streak)
         const completers = [...eligible]
           .filter(s => s.two_day_completions >= 1)
           .sort((a, b) => b.two_day_completions - a.two_day_completions || a.name.localeCompare(b.name))
@@ -362,7 +364,7 @@ export default function AttendeesPage() {
                         <span className="text-zinc-500 mr-3">{i + 1}.</span>
                         {s.name}
                       </span>
-                      <span className="text-orange-400 font-semibold">🔥 {s.longest_streak}</span>
+                      <span className="text-orange-400 font-semibold">🔥 {s.total_events}</span>
                     </div>
                   ))}
                 </div>
