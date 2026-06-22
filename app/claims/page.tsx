@@ -63,12 +63,22 @@ export default function ClaimsPage() {
     if (eventsData) setEvents(eventsData)
   }, [eventsData])
 
-  // Manual claims attach to the active event (no picker).
+  // Default the picker to a pending-payment event when one exists, else fall
+  // back to the resolved active event. Never overrides a manual selection.
   useEffect(() => {
-    setForm(f => (f.event_id && events.some(e => e.id === f.event_id))
-      ? f
-      : { ...f, event_id: resolveInitialEvent(events)?.id ?? events[0]?.id ?? '' })
-  }, [events])
+    setForm(f => {
+      if (f.event_id && events.some(e => e.id === f.event_id)) return f
+      const openIds = new Set(
+        claims.filter(c => c.status === 'pending' || c.status === 'approved').map(c => c.event_id)
+      )
+      const resolved = resolveInitialEvent(events)
+      const pendingPick = resolved && openIds.has(resolved.id)
+        ? resolved
+        : events.find(e => openIds.has(e.id))
+      const pick = pendingPick ?? resolved ?? events[0]
+      return { ...f, event_id: pick?.id ?? '' }
+    })
+  }, [events, claims])
 
   // On every load: show what's tracked, then sync claims from event expenses
   // (de-duped — only adds expenses not already claimed, preserves your edits).
@@ -152,6 +162,8 @@ export default function ClaimsPage() {
   const open = claims.filter(c => c.status === 'pending' || c.status === 'approved')
   const paidClaims = claims.filter(c => c.status === 'paid')
   const rejectedClaims = claims.filter(c => c.status === 'rejected')
+  const pendingPaymentEventIds = new Set(open.map(c => c.event_id))
+  const pendingEvents = events.filter(e => pendingPaymentEventIds.has(e.id))
   const toReimburse = open.reduce((s, c) => s + c.amount, 0)
   const reimbursed = paidClaims.reduce((s, c) => s + c.amount, 0)
   const shown = tab === 'open' ? open : tab === 'paid' ? paidClaims : rejectedClaims
@@ -199,7 +211,16 @@ export default function ClaimsPage() {
         </button>
         {err
           ? <p className="w-full text-xs text-red-400">{err}</p>
-          : <p className="w-full text-xs text-zinc-600">Adds to <span className="text-zinc-400">{events.find(e => e.id === form.event_id)?.name ?? '—'}</span>. Event expenses are pulled in automatically.</p>}
+          : <p className="w-full text-xs text-zinc-600 flex items-center gap-1.5 flex-wrap">
+              Adds to
+              <select value={form.event_id} onChange={e => setForm(f => ({ ...f, event_id: e.target.value }))}
+                className="bg-zinc-900 border border-zinc-700 rounded-md px-2 py-0.5 text-zinc-400 text-xs hover:text-white focus:text-white focus:border-amber-500 focus:outline-none cursor-pointer">
+                {pendingEvents.length === 0
+                  ? <option value="" disabled>No pending-payment events</option>
+                  : pendingEvents.map(ev => <option key={ev.id} value={ev.id}>{ev.name}</option>)}
+              </select>
+              . Event expenses are pulled in automatically.
+            </p>}
       </form>
 
       {/* Tabs — paid claims move into Reimbursed */}
