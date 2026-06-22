@@ -274,8 +274,8 @@ export default function AttendeesPage() {
               ))}
             </select>
           )}
-          {isAdmin && syncMsg && <span className="text-xs text-zinc-400 self-center">{syncMsg}</span>}
-          {isAdmin && (
+          {isAdmin && !facilitatorMode && syncMsg && <span className="text-xs text-zinc-400 self-center">{syncMsg}</span>}
+          {isAdmin && !facilitatorMode && (
             <button onClick={syncStripe} disabled={syncing}
               className="bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg">
               {syncing ? 'Syncing...' : '⚡ Sync Stripe'}
@@ -299,12 +299,12 @@ export default function AttendeesPage() {
       {/* Totals bar */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {[
-          { label: facilitatorMode ? 'Total Facilitators' : 'Total Participants', value: roster.length, color: 'text-white', border: 'border-amber-500/50', adminOnly: false },
-          { label: 'Paid', value: totalPaid, color: 'text-green-400', border: 'border-zinc-800', adminOnly: false },
-          { label: 'Pending', value: totalPending, color: 'text-yellow-400', border: 'border-zinc-800', adminOnly: true },
-          { label: 'Free', value: totalFree, color: 'text-blue-400', border: 'border-zinc-800', adminOnly: true },
-          { label: 'Revenue', value: `RM ${totalRevenue.toLocaleString()}`, color: 'text-amber-400', border: 'border-zinc-800', adminOnly: true },
-        ].filter(s => !s.adminOnly || isAdmin).map(s => {
+          { label: facilitatorMode ? 'Total Facilitators' : 'Total Participants', value: roster.length, color: 'text-white', border: 'border-amber-500/50', adminOnly: false, hideForFacilitators: false },
+          { label: 'Paid', value: totalPaid, color: 'text-green-400', border: 'border-zinc-800', adminOnly: false, hideForFacilitators: true },
+          { label: 'Pending', value: totalPending, color: 'text-yellow-400', border: 'border-zinc-800', adminOnly: true, hideForFacilitators: true },
+          { label: 'Free', value: totalFree, color: 'text-blue-400', border: 'border-zinc-800', adminOnly: true, hideForFacilitators: true },
+          { label: 'Revenue', value: `RM ${totalRevenue.toLocaleString()}`, color: 'text-amber-400', border: 'border-zinc-800', adminOnly: true, hideForFacilitators: true },
+        ].filter(s => (!s.adminOnly || isAdmin) && !(facilitatorMode && s.hideForFacilitators)).map(s => {
           const isRevenue = s.label === 'Revenue'
           const displayValue = isRevenue && revenueHidden ? 'RM ••••••' : s.value
           return (
@@ -329,18 +329,22 @@ export default function AttendeesPage() {
 
       {/* Filters */}
       <div className="flex gap-2 flex-wrap text-sm">
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-          className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-white">
-          <option value="all">All Status</option>
-          <option value="paid">Paid</option>
-          <option value="pending">Pending</option>
-          <option value="free">Free</option>
-        </select>
-        <select value={filterTicket} onChange={e => setFilterTicket(e.target.value)}
-          className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-white">
-          <option value="all">All Tickets</option>
-          {Object.entries(TICKET_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
+        {!facilitatorMode && (
+          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+            className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-white">
+            <option value="all">All Status</option>
+            <option value="paid">Paid</option>
+            <option value="pending">Pending</option>
+            <option value="free">Free</option>
+          </select>
+        )}
+        {!facilitatorMode && (
+          <select value={filterTicket} onChange={e => setFilterTicket(e.target.value)}
+            className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-white">
+            <option value="all">All Tickets</option>
+            {Object.entries(TICKET_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+        )}
         <select value={filterAttendance} onChange={e => setFilterAttendance(e.target.value)}
           className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 text-white">
           <option value="all">All Attendance</option>
@@ -375,11 +379,11 @@ export default function AttendeesPage() {
             <tr className="text-left text-zinc-500 border-b border-zinc-800">
               <th className="px-4 py-3">Name</th>
               <th className="px-4 py-3">Phone</th>
-              {isAdmin && <th className="px-4 py-3">Ticket</th>}
-              {isAdmin && <th className="px-4 py-3 text-right">Amount</th>}
-              <th className="px-4 py-3">Payment Date</th>
-              {isAdmin && <th className="px-4 py-3">Method</th>}
-              {isAdmin && <th className="px-4 py-3">Status</th>}
+              {isAdmin && !facilitatorMode && <th className="px-4 py-3">Ticket</th>}
+              {isAdmin && !facilitatorMode && <th className="px-4 py-3 text-right">Amount</th>}
+              {!facilitatorMode && <th className="px-4 py-3">Payment Date</th>}
+              {isAdmin && !facilitatorMode && <th className="px-4 py-3">Method</th>}
+              {isAdmin && !facilitatorMode && <th className="px-4 py-3">Status</th>}
               {isMultiDay ? (
                 <>
                   <th className="px-4 py-3 text-center">Day 1</th>
@@ -393,7 +397,7 @@ export default function AttendeesPage() {
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={(isAdmin ? 9 : 4) + (isMultiDay ? 1 : 0)} className="text-center text-zinc-500 py-10">No attendees found</td></tr>
+              <tr><td colSpan={(facilitatorMode ? (isAdmin ? 4 : 3) : (isAdmin ? 9 : 4)) + (isMultiDay ? 1 : 0)} className="text-center text-zinc-500 py-10">{facilitatorMode ? 'No facilitators found' : 'No attendees found'}</td></tr>
             )}
             {filtered.map(a => {
               const waUrl = toWhatsApp(a.phone)
@@ -412,23 +416,25 @@ export default function AttendeesPage() {
                     {a.email && <div className="text-xs text-zinc-500">{a.email}</div>}
                   </td>
                   <td className="px-4 py-3 text-zinc-300">{a.phone ?? '—'}</td>
-                  {isAdmin && (
+                  {isAdmin && !facilitatorMode && (
                     <td className="px-4 py-3 text-zinc-300">{TICKET_LABELS[a.ticket_type] ?? a.ticket_type}</td>
                   )}
-                  {isAdmin && (
+                  {isAdmin && !facilitatorMode && (
                     <td className="px-4 py-3 text-right font-mono">
                       {a.payment_amount > 0 ? `RM ${a.payment_amount}` : '—'}
                     </td>
                   )}
-                  <td className="px-4 py-3 text-zinc-400 whitespace-nowrap">
-                    {a.paid_at || a.created_at
-                      ? new Date(a.paid_at ?? a.created_at).toLocaleDateString('en-MY', { dateStyle: 'medium' })
-                      : '—'}
-                  </td>
-                  {isAdmin && (
+                  {!facilitatorMode && (
+                    <td className="px-4 py-3 text-zinc-400 whitespace-nowrap">
+                      {a.paid_at || a.created_at
+                        ? new Date(a.paid_at ?? a.created_at).toLocaleDateString('en-MY', { dateStyle: 'medium' })
+                        : '—'}
+                    </td>
+                  )}
+                  {isAdmin && !facilitatorMode && (
                     <td className="px-4 py-3 text-zinc-400">{METHOD_LABELS[a.payment_method]}</td>
                   )}
-                  {isAdmin && (
+                  {isAdmin && !facilitatorMode && (
                     <td className="px-4 py-3">
                       <button
                         onClick={() => a.payment_method === 'bank_transfer' ? togglePaid(a) : undefined}
