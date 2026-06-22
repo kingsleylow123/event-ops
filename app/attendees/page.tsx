@@ -29,10 +29,20 @@ function eventLabel(ev: Event): string {
 // to decide whether an event is in the past; minutes of staleness is fine.
 const PAGE_OPENED_TS = Date.now()
 
+type FacilitatorStat = { name: string; total_events: number; current_streak: number; longest_streak: number }
+
 export default function AttendeesPage() {
   const searchParams = useSearchParams()
   const facilitatorMode = searchParams.get('type') === 'facilitator'
   const { data: eventsData } = useCachedFetch<Event[]>('events', '/api/events')
+  const { data: facilStatsData } = useCachedFetch<FacilitatorStat[]>(
+    facilitatorMode ? 'facilitator-stats' : null,
+    facilitatorMode ? '/api/facilitator-stats' : null,
+    facilitatorMode,
+  )
+  const facilStats = new Map<string, FacilitatorStat>(
+    (facilStatsData ?? []).map(s => [s.name.trim().toLowerCase(), s])
+  )
   const { data: meData } = useCachedFetch<{ is_admin: boolean }>('me', '/api/me')
   const [events, setEvents] = useState<Event[]>([])
   const [selectedEventId, setSelectedEventId] = useState<string>('')
@@ -405,7 +415,27 @@ export default function AttendeesPage() {
                 <tr key={a.id} className="border-b border-zinc-900 hover:bg-zinc-900/30">
                   <td className="px-4 py-3 font-medium">
                     {a.name}
-                    {(() => {
+                    {facilitatorMode && (() => {
+                      const s = facilStats.get((a.name ?? '').trim().toLowerCase())
+                      if (!s) return null
+                      return (
+                        <>
+                          {s.current_streak >= 2 && (
+                            <span title={`Active streak — ${s.current_streak} events in a row`}
+                              className="ml-2 text-[10px] bg-orange-500/20 text-orange-300 px-1.5 py-0.5 rounded font-semibold">
+                              🔥 {s.current_streak}
+                            </span>
+                          )}
+                          {s.total_events >= 2 && (
+                            <span title={`Facilitated ${s.total_events} events total · longest streak ${s.longest_streak}`}
+                              className="ml-2 text-[10px] bg-zinc-700/50 text-zinc-300 px-1.5 py-0.5 rounded">
+                              {s.total_events}×
+                            </span>
+                          )}
+                        </>
+                      )
+                    })()}
+                    {!facilitatorMode && (() => {
                       const k = identityKey(a.phone, a.email)
                       const n = k ? dupCounts[k] : 0
                       return n > 1 ? (
