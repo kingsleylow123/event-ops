@@ -29,7 +29,16 @@ function eventLabel(ev: Event): string {
 // to decide whether an event is in the past; minutes of staleness is fine.
 const PAGE_OPENED_TS = Date.now()
 
-type FacilitatorStat = { name: string; total_events: number; current_streak: number; longest_streak: number }
+type FacilitatorStat = {
+  name: string
+  total_events: number
+  current_streak: number
+  longest_streak: number
+  two_day_completions: number
+  two_day_event_names: string[]
+}
+// Leaderboards exclude the user themselves (Huda) — she doesn't want to see her own name ranked.
+const EXCLUDED_NAMES = new Set(['huda'])
 
 export default function AttendeesPage() {
   const searchParams = useSearchParams()
@@ -318,29 +327,57 @@ export default function AttendeesPage() {
         </div>
       </div>
 
-      {/* Top-3 Facilitator leaderboard — only in facilitator mode, only when stats are loaded and at least one streak ≥ 2. */}
+      {/* Facilitator leaderboards — only in facilitator mode. Left: top 3 by longest streak. Right: 2-day completers. Huda excluded. */}
       {facilitatorMode && (() => {
-        const top = [...(facilStatsData ?? [])]
+        const eligible = (facilStatsData ?? []).filter(s => !EXCLUDED_NAMES.has(s.name.trim().toLowerCase()))
+        const top = [...eligible]
           .sort((a, b) => b.longest_streak - a.longest_streak || b.total_events - a.total_events)
           .slice(0, 3)
           .filter(s => s.longest_streak >= 2)
-        if (top.length === 0) return null
+        const completers = [...eligible]
+          .filter(s => s.two_day_completions >= 1)
+          .sort((a, b) => b.two_day_completions - a.two_day_completions || a.name.localeCompare(b.name))
+        if (top.length === 0 && completers.length === 0) return null
         return (
-          <div className="bg-[#111] border border-emerald-500/30 rounded-xl p-5 max-w-md">
-            <h3 className="text-emerald-400 font-bold mb-3 flex items-center gap-2 text-sm tracking-wide">
-              <span>🏆</span> TOP 3 FACILITATOR
-            </h3>
-            <div className="space-y-2">
-              {top.map((s, i) => (
-                <div key={s.name} className="flex items-center justify-between text-base">
-                  <span className="text-white">
-                    <span className="text-zinc-500 mr-3">{i + 1}.</span>
-                    {s.name}
-                  </span>
-                  <span className="text-orange-400 font-semibold">🔥 {s.longest_streak}</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {top.length > 0 && (
+              <div className="bg-[#111] border border-emerald-500/30 rounded-xl p-5">
+                <h3 className="text-emerald-400 font-bold mb-3 flex items-center gap-2 text-sm tracking-wide">
+                  <span>🏆</span> TOP 3 FACILITATOR
+                </h3>
+                <div className="space-y-2">
+                  {top.map((s, i) => (
+                    <div key={s.name} className="flex items-center justify-between text-base">
+                      <span className="text-white">
+                        <span className="text-zinc-500 mr-3">{i + 1}.</span>
+                        {s.name}
+                      </span>
+                      <span className="text-orange-400 font-semibold">🔥 {s.longest_streak}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
+            {completers.length > 0 && (
+              <div className="bg-[#111] border border-sky-500/30 rounded-xl p-5">
+                <h3 className="text-sky-400 font-bold mb-3 flex items-center gap-2 text-sm tracking-wide">
+                  <span>✅</span> COMPLETED 2-DAY WORKSHOP
+                </h3>
+                <div className="space-y-2">
+                  {completers.map((s, i) => (
+                    <div key={s.name} className="flex items-center justify-between text-base">
+                      <span className="text-white">
+                        <span className="text-zinc-500 mr-3">{i + 1}.</span>
+                        {s.name}
+                      </span>
+                      <span className="text-sky-300 font-semibold">
+                        {s.two_day_completions > 1 ? `×${s.two_day_completions}` : '✓'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )
       })()}
