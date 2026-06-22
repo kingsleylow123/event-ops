@@ -20,6 +20,7 @@ type Claim = {
   submitted_at: string
   paid_at: string | null
   notes: string | null
+  receipt_url: string | null
 }
 
 const STATUS_COLORS: Record<Status, string> = {
@@ -41,7 +42,8 @@ export default function ClaimsPage() {
   const [err, setErr] = useState('')
   const [tab, setTab] = useState<'open' | 'paid' | 'rejected'>('open')
 
-  const [form, setForm] = useState({ event_id: '', amount: '', claimant_name: '' })
+  const [form, setForm] = useState({ event_id: '', amount: '' })
+  const [uploadingId, setUploadingId] = useState<string | null>(null)
 
   const load = useCallback(async (): Promise<Claim[]> => {
     try {
@@ -128,12 +130,11 @@ export default function ClaimsPage() {
           event_id: form.event_id,
           description: 'Manual claim',
           amount: amt,
-          claimant_name: form.claimant_name.trim(),
         }),
       })
       const j = await res.json()
       if (!res.ok) { setErr(j.error || 'Failed to add claim.'); return }
-      setForm(f => ({ ...f, amount: '', claimant_name: '' }))
+      setForm(f => ({ ...f, amount: '' }))
       await load()
     } finally {
       setSaving(false)
@@ -150,15 +151,32 @@ export default function ClaimsPage() {
     await load()
   }
 
-  async function setPaidBy(c: Claim) {
-    const raw = window.prompt('Who paid / who to reimburse?', c.claimant_name ?? '')
-    if (raw === null) return
-    await fetch('/api/claims', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: c.id, claimant_name: raw.trim() }),
-    })
-    await load()
+  async function uploadReceipt(c: Claim, file: File) {
+    setUploadingId(c.id)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const res = await fetch(`/api/claims/${c.id}/receipt`, { method: 'POST', body: fd })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        window.alert(j.error || 'Failed to upload receipt.')
+        return
+      }
+      await load()
+    } finally {
+      setUploadingId(null)
+    }
+  }
+
+  async function removeReceipt(c: Claim) {
+    if (!window.confirm('Remove this receipt?')) return
+    setUploadingId(c.id)
+    try {
+      await fetch(`/api/claims/${c.id}/receipt`, { method: 'DELETE' })
+      await load()
+    } finally {
+      setUploadingId(null)
+    }
   }
 
   async function deleteClaim(id: string) {
@@ -215,8 +233,6 @@ export default function ClaimsPage() {
             ? <option value="" disabled>No pending-payment events</option>
             : pendingEvents.map(ev => <option key={ev.id} value={ev.id}>{ev.name}</option>)}
         </select>
-        <input value={form.claimant_name} onChange={e => setForm(f => ({ ...f, claimant_name: e.target.value }))}
-          placeholder="Paid by (optional)" className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm w-40" />
         <input value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
           placeholder="Amount (RM)" inputMode="decimal"
           className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm w-32" />
@@ -250,7 +266,7 @@ export default function ClaimsPage() {
                 <th className="px-4 py-3">For</th>
                 <th className="px-4 py-3">Event</th>
                 <th className="px-4 py-3 text-right">Amount</th>
-                <th className="px-4 py-3">Paid by</th>
+                <th className="px-4 py-3">Receipt</th>
                 <th className="px-4 py-3">Submitted</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3"></th>
@@ -263,10 +279,25 @@ export default function ClaimsPage() {
                   <td className="px-4 py-3 text-zinc-500">{c.event_name}</td>
                   <td className="px-4 py-3 text-right font-mono">{rm(c.amount)}</td>
                   <td className="px-4 py-3">
-                    <button onClick={() => setPaidBy(c)} title="Set who to reimburse"
-                      className={c.claimant_name ? 'text-zinc-300 hover:text-amber-400' : 'text-zinc-600 hover:text-amber-400'}>
-                      {c.claimant_name || '+ add'}
-                    </button>
+                    {c.receipt_url ? (
+                      <div className="flex items-center gap-2">
+                        <a href={c.receipt_url} target="_blank" rel="noopener noreferrer"
+                          className="block w-10 h-10 rounded overflow-hidden bg-zinc-900 border border-zinc-700 hover:border-amber-500">
+                          {/\.pdf$/i.test(c.receipt_url)
+                            ? <span className="flex items-center justify-center w-full h-full text-[10px] text-zinc-400">PDF</span>
+                            : <img src={c.receipt_url} alt="receipt" className="w-full h-full object-cover" />}
+                        </a>
+                        <button onClick={() => removeReceipt(c)} disabled={uploadingId === c.id}
+                          className="text-zinc-600 hover:text-red-400 text-xs disabled:opacity-50" title="Remove receipt">✕</button>
+                      </div>
+                    ) : (
+                      <label className={`text-xs cursor-pointer ${uploadingId === c.id ? 'text-zinc-500' : 'text-zinc-600 hover:text-amber-400'}`}>
+                        {uploadingId === c.id ? 'Uploading…' : '+ add'}
+                        <input type="file" accept="image/*,application/pdf" className="hidden"
+                          disabled={uploadingId === c.id}
+                          onChange={e => { const f = e.target.files?.[0]; if (f) uploadReceipt(c, f); e.target.value = '' }} />
+                      </label>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-zinc-400 whitespace-nowrap">{fmtDate(c.submitted_at)}</td>
                   <td className="px-4 py-3">

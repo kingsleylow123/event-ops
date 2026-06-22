@@ -25,7 +25,7 @@ export async function GET(req: Request) {
   const event_id = new URL(req.url).searchParams.get('event_id') || 'all'
   let q = supabaseAdmin
     .from('claims')
-    .select('id, event_id, claimant_name, claimant_phone, description, category, amount, status, expense_id, submitted_at, paid_at, notes')
+    .select('id, event_id, claimant_name, claimant_phone, description, category, amount, status, expense_id, submitted_at, paid_at, notes, receipt_url')
     .order('submitted_at', { ascending: false })
   if (event_id !== 'all') q = q.eq('event_id', event_id)
 
