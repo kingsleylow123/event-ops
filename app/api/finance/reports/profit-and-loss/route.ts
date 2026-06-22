@@ -25,7 +25,7 @@ export type PLPayload = {
 
 // Categories that count as direct event-delivery cost (Cost of Sales).
 // Anything else falls under Operating Expenses.
-const COST_OF_SALES = new Set(['Venue Rental', 'Catering', 'Materials', 'Production', 'Transport & Logistics'])
+const COST_OF_SALES = new Set(['Venue Rental', 'Food & Beverages', 'Materials', 'Production', 'Transport & Logistics'])
 
 // Stable, human-readable account codes by category.
 // 5xxx Revenue · 6xxx Cost of Sales · 7xxx Operating Expenses
@@ -34,7 +34,7 @@ const ACCOUNT_CODES: Record<string, string> = {
   'Other Income': '5090',
 
   'Venue Rental': '6010',
-  'Catering': '6020',
+  'Food & Beverages': '6020',
   'Materials': '6030',
   'Production': '6040',
   'Transport & Logistics': '6050',
