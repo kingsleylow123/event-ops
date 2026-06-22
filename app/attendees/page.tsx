@@ -342,10 +342,10 @@ export default function AttendeesPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {top.length > 0 && (
               <div className="bg-[#111] border border-emerald-500/30 rounded-xl p-5">
-                <h3 className="text-emerald-400 font-bold mb-3 flex items-center gap-2 text-sm tracking-wide">
+                <h3 className="text-emerald-400 font-bold mb-4 flex items-center gap-2 text-sm tracking-wide">
                   <span>🏆</span> TOP 3 FACILITATOR
                 </h3>
-                <div className="space-y-2">
+                <div className="space-y-3 h-72 overflow-y-auto pr-2 [scrollbar-width:thin] [scrollbar-color:rgb(52_211_153)_transparent]">
                   {top.map((s, i) => (
                     <div key={s.name} className="flex items-center justify-between text-base">
                       <span className="text-white">
@@ -360,10 +360,10 @@ export default function AttendeesPage() {
             )}
             {completers.length > 0 && (
               <div className="bg-[#111] border border-sky-500/30 rounded-xl p-5">
-                <h3 className="text-sky-400 font-bold mb-3 flex items-center gap-2 text-sm tracking-wide">
+                <h3 className="text-sky-400 font-bold mb-4 flex items-center gap-2 text-sm tracking-wide">
                   <span>✅</span> COMPLETED 2-DAY WORKSHOP
                 </h3>
-                <div className="space-y-2 max-h-48 overflow-y-auto pr-1 [scrollbar-width:thin] [scrollbar-color:#3f3f46_transparent]">
+                <div className="space-y-3 h-72 overflow-y-auto pr-2 [scrollbar-width:thin] [scrollbar-color:rgb(56_189_248)_transparent]">
                   {completers.map((s, i) => (
                     <div key={s.name} className="flex items-center justify-between text-base">
                       <span className="text-white">
