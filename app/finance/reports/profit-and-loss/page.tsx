@@ -1,5 +1,6 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
+import Image from 'next/image'
 import ReportLayout, { type ReportFilters } from '@/components/finance/ReportLayout'
 import type { PLPayload } from './types'
 
@@ -9,6 +10,17 @@ const fmt = (n: number) =>
 function pct(part: number, whole: number): string {
   if (!whole) return '—'
   return ((part / whole) * 100).toFixed(2)
+}
+
+function fmtRange(from: string, to: string, lifetime: boolean): string {
+  if (lifetime) return 'All time'
+  const d = (s: string) => `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}`
+  return `${d(from)} – ${d(to)}`
+}
+
+const todayDisplay = () => {
+  const d = new Date()
+  return `${String(d.getDate()).padStart(2, '0')} ${d.toLocaleString('en-MY', { month: 'short' })} ${d.getFullYear()}`
 }
 
 export default function ProfitAndLossPage() {
@@ -51,6 +63,36 @@ export default function ProfitAndLossPage() {
 
   return (
     <ReportLayout title="Profit & Loss" subtitle={data?.scope_label} onFilters={onFilters}>
+      <div className="no-print flex justify-end mb-2">
+        <button onClick={() => window.print()} disabled={!data}
+          className="text-xs px-3 py-1.5 rounded-lg border border-zinc-700 text-zinc-300 hover:text-amber-400 hover:border-amber-500 disabled:opacity-50">
+          Print PDF
+        </button>
+      </div>
+
+      {/* Print-only branded header */}
+      <div className="print-only" style={{ marginBottom: '18px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: '14px', borderBottom: '0.5px solid #d4d4d8' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <Image src="/claude-logo.jpg" alt="Claude Malaysia" width={44} height={44} style={{ borderRadius: '10px' }} />
+            <div>
+              <p style={{ margin: 0, fontSize: '15px', fontWeight: 500 }}>Claude Malaysia</p>
+              <p className="print-amber" style={{ margin: '2px 0 0', fontSize: '10px', fontWeight: 500, letterSpacing: '0.08em' }}>EVENTOPS</p>
+            </div>
+          </div>
+          <div className="print-muted" style={{ textAlign: 'right', fontSize: '11px' }}>
+            <p style={{ margin: 0 }}>Generated {todayDisplay()}</p>
+          </div>
+        </div>
+        <div style={{ textAlign: 'center', padding: '16px 0 4px' }}>
+          <p style={{ margin: 0, fontSize: '17px', fontWeight: 500 }}>Profit &amp; Loss</p>
+          <p style={{ margin: '4px 0 0', fontSize: '12px' }}>{data?.scope_label ?? ''}</p>
+          <p className="print-muted" style={{ margin: '2px 0 0', fontSize: '11px' }}>
+            {data ? fmtRange(data.from, data.to, !!filters?.lifetime) : ''} · Accrual basis
+          </p>
+        </div>
+      </div>
+
       {loading && !data ? (
         <p className="text-center text-zinc-500 text-sm py-8">Loading…</p>
       ) : (
@@ -122,6 +164,20 @@ export default function ProfitAndLossPage() {
           </tbody>
         </table>
       )}
+
+      {/* Print-only signature block */}
+      <div className="print-only" style={{ marginTop: '28px', paddingTop: '14px', borderTop: '0.5px dashed #d4d4d8', display: 'flex', justifyContent: 'space-between', fontSize: '10px' }}>
+        <div>
+          <p className="print-muted" style={{ margin: 0 }}>Prepared by</p>
+          <p style={{ margin: '18px 0 0' }}>_______________________</p>
+          <p className="print-muted" style={{ margin: '2px 0 0' }}>Finance, Claude Malaysia</p>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <p className="print-muted" style={{ margin: 0 }}>Approved by</p>
+          <p style={{ margin: '18px 0 0' }}>_______________________</p>
+          <p className="print-muted" style={{ margin: '2px 0 0' }}>Kingsley Low · Founder</p>
+        </div>
+      </div>
     </ReportLayout>
   )
 }
