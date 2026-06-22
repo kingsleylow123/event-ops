@@ -227,8 +227,11 @@ export default function AttendeesPage() {
     }
   }
 
-  const filtered = attendees.filter(a => {
-    if (facilitatorMode && a.ticket_type != null) return false
+  // Facilitators are stored in the same table but with ticket_type IS NULL.
+  // Default Attendees view shows only real participants; Facilitators view shows only crew.
+  const roster = attendees.filter(a => facilitatorMode ? a.ticket_type == null : a.ticket_type != null)
+
+  const filtered = roster.filter(a => {
     if (!facilitatorMode && filterStatus !== 'all' && a.payment_status !== filterStatus) return false
     if (!facilitatorMode && filterTicket !== 'all' && a.ticket_type !== filterTicket) return false
     if (filterAttendance === 'yes' && !a.attendance_confirmed) return false
@@ -236,13 +239,13 @@ export default function AttendeesPage() {
     return true
   })
 
-  const totalPaid = attendees.filter(a => a.payment_status === 'paid').length
-  const totalPending = attendees.filter(a => a.payment_status === 'pending').length
-  const totalFree = attendees.filter(a => a.payment_status === 'free').length
-  const totalRevenue = attendees.filter(a => a.payment_status === 'paid').reduce((s, a) => s + (a.payment_amount ?? 0), 0)
+  const totalPaid = roster.filter(a => a.payment_status === 'paid').length
+  const totalPending = roster.filter(a => a.payment_status === 'pending').length
+  const totalFree = roster.filter(a => a.payment_status === 'free').length
+  const totalRevenue = roster.filter(a => a.payment_status === 'paid').reduce((s, a) => s + (a.payment_amount ?? 0), 0)
 
   // Duplicate detection: count attendees sharing a normalized phone/email identity.
-  const dupCounts = attendees.reduce<Record<string, number>>((acc, a) => {
+  const dupCounts = roster.reduce<Record<string, number>>((acc, a) => {
     const key = identityKey(a.phone, a.email)
     if (key) acc[key] = (acc[key] ?? 0) + 1
     return acc
@@ -254,7 +257,7 @@ export default function AttendeesPage() {
     <div className="space-y-3 sm:space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold">Attendees</h1>
+          <h1 className="text-xl font-bold">{facilitatorMode ? 'Facilitators' : 'Attendees'}</h1>
           {event && (
             <p className="text-sm text-zinc-400">{eventLabel(event)}</p>
           )}
@@ -296,7 +299,7 @@ export default function AttendeesPage() {
       {/* Totals bar */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {[
-          { label: 'Total Participants', value: attendees.length, color: 'text-white', border: 'border-amber-500/50', adminOnly: false },
+          { label: facilitatorMode ? 'Total Facilitators' : 'Total Participants', value: roster.length, color: 'text-white', border: 'border-amber-500/50', adminOnly: false },
           { label: 'Paid', value: totalPaid, color: 'text-green-400', border: 'border-zinc-800', adminOnly: false },
           { label: 'Pending', value: totalPending, color: 'text-yellow-400', border: 'border-zinc-800', adminOnly: true },
           { label: 'Free', value: totalFree, color: 'text-blue-400', border: 'border-zinc-800', adminOnly: true },
@@ -348,7 +351,7 @@ export default function AttendeesPage() {
           // No-shows: paid but never checked in, once the event is in the past.
           const ev = events.find(e => e.id === selectedEventId)
           const eventPast = ev?.date ? new Date(ev.date).getTime() < PAGE_OPENED_TS : false
-          const noShows = attendees.filter(a => a.payment_status === 'paid' && !a.attendance_confirmed).length
+          const noShows = roster.filter(a => a.payment_status === 'paid' && !a.attendance_confirmed).length
           const active = filterStatus === 'paid' && filterAttendance === 'no'
           if (!eventPast || noShows === 0) return null
           return (
@@ -362,7 +365,7 @@ export default function AttendeesPage() {
             </button>
           )
         })()}
-        <span className="self-center text-zinc-500 text-xs">{filtered.length} of {attendees.length} shown</span>
+        <span className="self-center text-zinc-500 text-xs">{filtered.length} of {roster.length} shown</span>
       </div>
 
       {/* Table */}
