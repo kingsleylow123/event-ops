@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import type { Event, Attendee, TicketType, PaymentMethod, PaymentStatus } from '@/lib/supabase'
 import { TICKET_LABELS, TICKET_PRICES, toWhatsApp } from '@/lib/supabase'
 import { resolveInitialEvent, storeEventId } from '@/lib/event'
@@ -29,6 +30,8 @@ function eventLabel(ev: Event): string {
 const PAGE_OPENED_TS = Date.now()
 
 export default function AttendeesPage() {
+  const searchParams = useSearchParams()
+  const facilitatorMode = searchParams.get('type') === 'facilitator'
   const { data: eventsData } = useCachedFetch<Event[]>('events', '/api/events')
   const { data: meData } = useCachedFetch<{ is_admin: boolean }>('me', '/api/me')
   const [events, setEvents] = useState<Event[]>([])
@@ -225,8 +228,9 @@ export default function AttendeesPage() {
   }
 
   const filtered = attendees.filter(a => {
-    if (filterStatus !== 'all' && a.payment_status !== filterStatus) return false
-    if (filterTicket !== 'all' && a.ticket_type !== filterTicket) return false
+    if (facilitatorMode && a.ticket_type != null) return false
+    if (!facilitatorMode && filterStatus !== 'all' && a.payment_status !== filterStatus) return false
+    if (!facilitatorMode && filterTicket !== 'all' && a.ticket_type !== filterTicket) return false
     if (filterAttendance === 'yes' && !a.attendance_confirmed) return false
     if (filterAttendance === 'no' && a.attendance_confirmed) return false
     return true

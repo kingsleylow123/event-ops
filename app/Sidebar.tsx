@@ -47,6 +47,7 @@ const icons = {
   finance: I(<><path d="M21.21 15.89A10 10 0 1 1 8 2.83" /><path d="M22 12A10 10 0 0 0 12 2v10z" /></>),
   claims: I(<><path d="M5 3v18l2-1 2 1 2-1 2 1 2-1 2 1V3l-2 1-2-1-2 1-2-1-2 1z" /><path d="M9 8h6M9 12h5" /></>),
   deposits: I(<><rect x="2" y="6" width="20" height="13" rx="2" /><circle cx="12" cy="12.5" r="3" /><path d="M6 6V4h14a2 2 0 0 1 2 2v9" /></>),
+  reports: I(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M8 13h2M8 17h2M14 13h2M14 17h2" /></>),
 }
 
 export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarProps) {
@@ -84,6 +85,7 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
     {
       id: 'during', title: 'During Event', items: [
         { href: '/attendees', label: 'Attendees', icon: icons.attendees },
+        { href: '/attendees?type=facilitator', label: 'Facilitators', icon: icons.team },
         { href: '/meetings', label: 'Activity', icon: icons.activity },
       ],
     },
@@ -98,6 +100,7 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
     ...(isAdmin ? [{
       id: 'finance', title: 'Finance', items: [
         { href: '/finance', label: 'Finance', icon: icons.finance },
+        { href: '/finance/reports', label: 'Reports', icon: icons.reports },
         { href: '/invoice', label: 'Invoice', icon: icons.invoice },
         { href: '/payout', label: 'Payout', icon: icons.payout },
         { href: '/claims', label: 'Claims', icon: icons.claims },
