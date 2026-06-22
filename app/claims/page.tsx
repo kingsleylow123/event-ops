@@ -151,6 +151,19 @@ export default function ClaimsPage() {
     await load()
   }
 
+  async function setNotes(c: Claim) {
+    const raw = window.prompt('Notes (e.g. "Pay to Kingsley")', c.notes ?? '')
+    if (raw === null) return
+    const next = raw.trim() || null
+    setClaims(prev => prev.map(x => (x.id === c.id ? { ...x, notes: next } : x)))
+    await fetch('/api/claims', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: c.id, notes: next }),
+    })
+    await load()
+  }
+
   async function uploadReceipt(c: Claim, file: File) {
     setUploadingId(c.id)
     try {
@@ -267,6 +280,7 @@ export default function ClaimsPage() {
                 <th className="px-4 py-3">Event</th>
                 <th className="px-4 py-3 text-right">Amount</th>
                 <th className="px-4 py-3">Receipt</th>
+                <th className="px-4 py-3">Notes</th>
                 <th className="px-4 py-3">Submitted</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3"></th>
@@ -298,6 +312,12 @@ export default function ClaimsPage() {
                           onChange={e => { const f = e.target.files?.[0]; if (f) uploadReceipt(c, f); e.target.value = '' }} />
                       </label>
                     )}
+                  </td>
+                  <td className="px-4 py-3 max-w-[200px]">
+                    <button onClick={() => setNotes(c)} title={c.notes || 'Add a note'}
+                      className={`text-xs text-left truncate block w-full ${c.notes ? 'text-zinc-300 hover:text-amber-400' : 'text-zinc-600 hover:text-amber-400'}`}>
+                      {c.notes || '+ add'}
+                    </button>
                   </td>
                   <td className="px-4 py-3 text-zinc-400 whitespace-nowrap">{fmtDate(c.submitted_at)}</td>
                   <td className="px-4 py-3">
