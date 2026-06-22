@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 
-const PUBLIC_PATHS = ['/login', '/auth/callback', '/pending', '/reset-password', '/api/notify-signup', '/checkin', '/api/checkin', '/meeting-checkin', '/api/meeting-checkin', '/survey', '/api/survey', '/team-survey', '/api/team-survey', '/briefing', '/api/telegram', '/api/affiliates/cron', '/api/jarvis', '/start', '/api/prep', '/capture', '/api/pipeline', '/glcc-batch', '/api/glcc-batch', '/glcc-skill', '/api/glcc-verify', '/api/glcc-student', '/api/webhooks/stripe']
+const PUBLIC_PATHS = ['/login', '/auth/callback', '/pending', '/reset-password', '/api/notify-signup', '/checkin', '/api/checkin', '/meeting-checkin', '/api/meeting-checkin', '/survey', '/api/survey', '/team-survey', '/api/team-survey', '/briefing', '/api/telegram', '/api/affiliates/cron', '/api/jarvis', '/start', '/api/prep', '/capture', '/api/pipeline', '/glcc-batch', '/api/glcc-batch', '/glcc-skill', '/api/glcc-verify', '/api/glcc-student', '/api/webhooks/stripe', '/api/webhooks/calcom', '/api/calcom/sync']
 
 function isPublicPath(pathname: string) {
   return PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))
