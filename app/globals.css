@@ -57,24 +57,25 @@ body {
 .print-only { display: none; }
 
 @media print {
-  @page { size: A4; margin: 10mm 12mm 12mm; }
+  @page { size: A4; margin: 6mm 12mm 8mm; }
 
   html, body { background: #fff !important; color: #111 !important; }
-  body * { color: #111 !important; background: transparent !important; border-color: #d4d4d8 !important; }
+  body * { color: #111 !important; background: transparent !important; border-color: #d4d4d8 !important; box-shadow: none !important; }
 
   aside, .no-print { display: none !important; }
   .print-only { display: block !important; }
 
   main { padding: 0 !important; margin: 0 !important; max-width: none !important; }
 
-  /* Strip dark card chrome so reports flow as plain blocks on the page */
-  .bg-\[\#0f0f0f\], .bg-\[\#111\], .bg-\[\#0a0a0a\] {
+  /* Strip card chrome from every rounded container so reports flow flat. */
+  [class*="rounded-xl"], [class*="rounded-2xl"], [class*="rounded-lg"] {
     background: transparent !important;
-    border: none !important;
+    border: 0 !important;
     border-radius: 0 !important;
     padding: 0 !important;
   }
-  .space-y-4 > * + * { margin-top: 0 !important; }
+  /* Collapse vertical rhythm between hidden filter card and the report */
+  [class*="space-y-"] > * + * { margin-top: 0 !important; }
 
   table { page-break-inside: auto; }
   tr    { page-break-inside: avoid; page-break-after: auto; }
