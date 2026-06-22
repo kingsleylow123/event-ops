@@ -369,7 +369,7 @@ export default function AttendeesPage() {
                 </div>
               </div>
             )}
-            {completers.length > 0 && (
+            {isMultiDay && completers.length > 0 && (
               <div className="bg-[#111] border border-sky-500/30 rounded-xl p-5">
                 <h3 className="text-sky-400 font-bold mb-4 flex items-center gap-2 text-sm tracking-wide">
                   <span>✅</span> COMPLETED 2-DAY WORKSHOP
