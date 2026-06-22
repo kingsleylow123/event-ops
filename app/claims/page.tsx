@@ -38,11 +38,9 @@ export default function ClaimsPage() {
   const [events, setEvents] = useState<Event[]>([])
   const [claims, setClaims] = useState<Claim[]>([])
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [err, setErr] = useState('')
   const [tab, setTab] = useState<'open' | 'paid' | 'rejected'>('open')
 
-  const [form, setForm] = useState({ event_id: '', amount: '' })
+  const [form, setForm] = useState({ event_id: '' })
   const [uploadingId, setUploadingId] = useState<string | null>(null)
 
   const load = useCallback(async (): Promise<Claim[]> => {
@@ -82,15 +80,6 @@ export default function ClaimsPage() {
     })
   }, [events, claims])
 
-  // Amount tracks the picked event's open-claim total. Editable after.
-  useEffect(() => {
-    if (!form.event_id) return
-    const total = claims
-      .filter(c => c.event_id === form.event_id && (c.status === 'pending' || c.status === 'approved'))
-      .reduce((s, c) => s + c.amount, 0)
-    setForm(f => ({ ...f, amount: total > 0 ? total.toFixed(2) : '' }))
-  }, [form.event_id, claims])
-
   // On every load: show what's tracked, then sync claims from event expenses
   // (de-duped — only adds expenses not already claimed, preserves your edits).
   useEffect(() => {
@@ -114,32 +103,6 @@ export default function ClaimsPage() {
     })()
     return () => { cancelled = true }
   }, [load])
-
-  async function addClaim(e: React.FormEvent) {
-    e.preventDefault()
-    setErr('')
-    if (!form.event_id) { setErr('Pick an event.'); return }
-    const amt = Number(form.amount)
-    if (!Number.isFinite(amt) || amt <= 0) { setErr('Enter a valid amount.'); return }
-    setSaving(true)
-    try {
-      const res = await fetch('/api/claims', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          event_id: form.event_id,
-          description: 'Manual claim',
-          amount: amt,
-        }),
-      })
-      const j = await res.json()
-      if (!res.ok) { setErr(j.error || 'Failed to add claim.'); return }
-      setForm(f => ({ ...f, amount: '' }))
-      await load()
-    } finally {
-      setSaving(false)
-    }
-  }
 
   async function setStatus(c: Claim, status: Status) {
     setClaims(prev => prev.map(x => (x.id === c.id ? { ...x, status } : x)))
@@ -243,32 +206,23 @@ export default function ClaimsPage() {
         </div>
       </div>
 
-      {/* Add manual claim */}
-      <form onSubmit={addClaim} className="bg-[#111] border border-zinc-800 rounded-xl p-4 flex flex-wrap gap-2 items-start">
+      {/* Event picker */}
+      <div className="bg-[#111] border border-zinc-800 rounded-xl p-4 flex flex-wrap gap-2 items-start">
         <select value={form.event_id} onChange={e => setForm(f => ({ ...f, event_id: e.target.value }))}
           className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm flex-1 min-w-[200px] cursor-pointer focus:border-amber-500 focus:outline-none">
           {pendingEvents.length === 0
             ? <option value="" disabled>No pending-payment events</option>
             : pendingEvents.map(ev => <option key={ev.id} value={ev.id}>{ev.name}</option>)}
         </select>
-        <input value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
-          placeholder="Amount (RM)" inputMode="decimal"
-          className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm w-32" />
-        <button type="submit" disabled={saving}
-          className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-semibold text-sm px-4 py-2 rounded-lg">
-          {saving ? 'Adding…' : '+ Add Claim'}
-        </button>
-        {err
-          ? <p className="w-full text-xs text-red-400">{err}</p>
-          : openByName.length === 0
-            ? <p className="w-full text-xs text-zinc-600">Event expenses are pulled in automatically.</p>
-            : <p className="w-full text-xs text-zinc-500 flex flex-wrap gap-x-3 gap-y-1">
-                {openByName.map(([name, amt]) => (
-                  <span key={name}>{name} <span className="text-zinc-300">{rm(amt)}</span></span>
-                ))}
-                <span className="text-zinc-500">Total <span className="text-amber-400 font-medium">{rm(toReimburse)}</span></span>
-              </p>}
-      </form>
+        {openByName.length === 0
+          ? <p className="w-full text-xs text-zinc-600">Event expenses are pulled in automatically.</p>
+          : <p className="w-full text-xs text-zinc-500 flex flex-wrap gap-x-3 gap-y-1">
+              {openByName.map(([name, amt]) => (
+                <span key={name}>{name} <span className="text-zinc-300">{rm(amt)}</span></span>
+              ))}
+              <span className="text-zinc-500">Total <span className="text-amber-400 font-medium">{rm(toReimburse)}</span></span>
+            </p>}
+      </div>
 
       {/* Tabs — paid claims move into Reimbursed */}
       <div className="flex gap-1">
