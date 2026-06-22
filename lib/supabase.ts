@@ -188,6 +188,7 @@ export interface Attendee {
   notes: string | null
   paid_at: string | null
   created_at: string
+  is_facilitator: boolean
 }
 
 export interface ChecklistItem {

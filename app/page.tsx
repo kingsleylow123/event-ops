@@ -24,9 +24,9 @@ export default function Dashboard() {
     event ? `/api/attendees?event_id=${event.id}` : null,
     !!event,
   )
-  // Dashboard counts paying participants only — facilitators (ticket_type IS NULL)
+  // Dashboard counts paying participants only — facilitators (is_facilitator=true)
   // are tracked in the same table but excluded from totals/revenue/Bukku sync.
-  const attendees = (attData ?? []).filter(a => a.ticket_type != null)
+  const attendees = (attData ?? []).filter(a => !a.is_facilitator)
   // Spinner only when we have NO cached events yet (first ever load)
   const loading = loadingEvents && !events
 

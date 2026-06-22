@@ -229,6 +229,7 @@ export default function AttendeesPage() {
           payment_amount: null,
           payment_status: null,
           attendance_confirmed: true,
+          is_facilitator: true,
         }
       : {
           ...form,
@@ -236,6 +237,7 @@ export default function AttendeesPage() {
           payment_method: isFreeTier ? 'free' : form.payment_method,
           payment_status: isFreeTier ? 'free' : form.payment_status,
           payment_amount: isFreeTier ? 0 : form.payment_amount,
+          is_facilitator: false,
         }
     try {
       const res = await fetch('/api/attendees', {
@@ -258,9 +260,10 @@ export default function AttendeesPage() {
     }
   }
 
-  // Facilitators are stored in the same table but with ticket_type IS NULL.
-  // Default Attendees view shows only real participants; Facilitators view shows only crew.
-  const roster = attendees.filter(a => facilitatorMode ? a.ticket_type == null : a.ticket_type != null)
+  // Facilitators are flagged via the is_facilitator column — a row can be a paying
+  // attendee and a facilitator at the same time (e.g. Steven at GLCC). Default
+  // Attendees view shows everyone with a ticket; Facilitators view shows crew.
+  const roster = attendees.filter(a => facilitatorMode ? a.is_facilitator : !a.is_facilitator)
 
   const filtered = roster.filter(a => {
     if (!facilitatorMode && filterStatus !== 'all' && a.payment_status !== filterStatus) return false
@@ -493,22 +496,12 @@ export default function AttendeesPage() {
                     {a.name}
                     {facilitatorMode && (() => {
                       const s = facilStats.get((a.name ?? '').trim().toLowerCase())
-                      if (!s) return null
+                      if (!s || s.current_streak < 2) return null
                       return (
-                        <>
-                          {s.current_streak >= 2 && (
-                            <span title={`Active streak — ${s.current_streak} events in a row`}
-                              className="ml-2 text-[10px] bg-orange-500/20 text-orange-300 px-1.5 py-0.5 rounded font-semibold">
-                              🔥 {s.current_streak}
-                            </span>
-                          )}
-                          {s.total_events >= 2 && (
-                            <span title={`Facilitated ${s.total_events} events total · longest streak ${s.longest_streak}`}
-                              className="ml-2 text-[10px] bg-zinc-700/50 text-zinc-300 px-1.5 py-0.5 rounded">
-                              {s.total_events}×
-                            </span>
-                          )}
-                        </>
+                        <span title={`Active streak — ${s.current_streak} events in a row`}
+                          className="ml-2 text-[10px] bg-orange-500/20 text-orange-300 px-1.5 py-0.5 rounded font-semibold">
+                          🔥 {s.current_streak}
+                        </span>
                       )
                     })()}
                     {!facilitatorMode && (() => {

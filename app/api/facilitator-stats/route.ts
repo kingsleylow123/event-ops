@@ -12,7 +12,7 @@ export async function GET() {
 
   const [eventsRes, facilsRes] = await Promise.all([
     supabaseAdmin.from('events').select('id, name, date, floor_plan').order('date', { ascending: true }),
-    supabaseAdmin.from('attendees').select('name, event_id, day1_attended, day2_attended').is('ticket_type', null),
+    supabaseAdmin.from('attendees').select('name, event_id, day1_attended, day2_attended').eq('is_facilitator', true),
   ])
 
   if (eventsRes.error) return NextResponse.json({ error: eventsRes.error.message }, { status: 500 })
