@@ -173,7 +173,7 @@ export default function ProfitAndLossPage() {
       )}
 
       {/* Print-only signature block */}
-      <div className="print-only print-keep" style={{ marginTop: '22px', paddingTop: '12px', borderTop: '0.5px dashed #d4d4d8', display: 'flex', justifyContent: 'space-between', fontSize: '10px' }}>
+      <div className="print-only print-flex print-keep" style={{ marginTop: '22px', paddingTop: '12px', borderTop: '0.5px dashed #d4d4d8', justifyContent: 'space-between', fontSize: '10px' }}>
         <div>
           <p className="print-muted" style={{ margin: 0 }}>Prepared by</p>
           <p style={{ margin: '18px 0 0' }}>_______________________</p>

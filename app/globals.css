@@ -64,6 +64,7 @@ body {
 
   aside, .no-print { display: none !important; }
   .print-only { display: block !important; }
+  .print-only.print-flex { display: flex !important; }
 
   main { padding: 0 !important; margin: 0 !important; max-width: none !important; }
 
