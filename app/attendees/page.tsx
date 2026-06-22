@@ -262,8 +262,16 @@ export default function AttendeesPage() {
 
   // Facilitators are flagged via the is_facilitator column — a row can be a paying
   // attendee and a facilitator at the same time (e.g. Steven at GLCC). Default
-  // Attendees view shows everyone with a ticket; Facilitators view shows crew.
-  const roster = attendees.filter(a => facilitatorMode ? a.is_facilitator : !a.is_facilitator)
+  // Attendees view shows everyone with a ticket; Facilitators view shows crew
+  // except Huda (the dashboard owner — she doesn't want her own name in this list).
+  const roster = attendees.filter(a => {
+    if (facilitatorMode) {
+      if (!a.is_facilitator) return false
+      if (EXCLUDED_NAMES.has((a.name ?? '').trim().toLowerCase())) return false
+      return true
+    }
+    return !a.is_facilitator
+  })
 
   const filtered = roster.filter(a => {
     if (!facilitatorMode && filterStatus !== 'all' && a.payment_status !== filterStatus) return false

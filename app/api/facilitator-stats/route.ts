@@ -22,9 +22,12 @@ export async function GET() {
   type FacilRow = { name: string | null; event_id: string; day1_attended: boolean | null; day2_attended: boolean | null }
 
   const allEvents = (eventsRes.data ?? []) as EventRow[]
-  const facilRows = (facilsRes.data ?? []) as FacilRow[]
-
+  // Owner-name suppression: Huda runs the dashboard and doesn't want her own
+  // name in any facilitator widget. Filter at the source so leaderboards,
+  // stats, and 2-day completer lists are all consistent.
+  const EXCLUDED_NAMES = new Set(['huda'])
   const norm = (s: string | null) => (s ?? '').trim().toLowerCase()
+  const facilRows = ((facilsRes.data ?? []) as FacilRow[]).filter(r => !EXCLUDED_NAMES.has(norm(r.name)))
   const isMultiDay = (e: EventRow) => Array.isArray(e.floor_plan?.days) && (e.floor_plan?.days?.length ?? 0) >= 2
   const eventName = (id: string) => allEvents.find(e => e.id === id)?.name ?? ''
 
