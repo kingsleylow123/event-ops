@@ -167,14 +167,17 @@ export default function ClaimsPage() {
     await load()
   }
 
-  const open = claims.filter(c => c.status === 'pending' || c.status === 'approved')
-  const paidClaims = claims.filter(c => c.status === 'paid')
-  const rejectedClaims = claims.filter(c => c.status === 'rejected')
-  const pendingPaymentEventIds = new Set(open.map(c => c.event_id))
+  const openAll = claims.filter(c => c.status === 'pending' || c.status === 'approved')
+  const pendingPaymentEventIds = new Set(openAll.map(c => c.event_id))
   const pendingEvents = events.filter(e => pendingPaymentEventIds.has(e.id))
+  const scoped = form.event_id ? claims.filter(c => c.event_id === form.event_id) : claims
+  const open = scoped.filter(c => c.status === 'pending' || c.status === 'approved')
+  const paidClaims = scoped.filter(c => c.status === 'paid')
+  const rejectedClaims = scoped.filter(c => c.status === 'rejected')
   const toReimburse = open.reduce((s, c) => s + c.amount, 0)
   const reimbursed = paidClaims.reduce((s, c) => s + c.amount, 0)
   const shown = tab === 'open' ? open : tab === 'paid' ? paidClaims : rejectedClaims
+  const selectedEventName = events.find(e => e.id === form.event_id)?.name
 
   if (loading && !claims.length) {
     return <div className="text-zinc-500 mt-20 text-center">Loading…</div>
@@ -185,7 +188,7 @@ export default function ClaimsPage() {
       {/* Header */}
       <div>
         <h1 className="text-xl font-bold">Claims</h1>
-        <p className="text-sm text-zinc-400">Event spending to reimburse · all events</p>
+        <p className="text-sm text-zinc-400">Event spending to reimburse · {selectedEventName ?? 'all events'}</p>
       </div>
 
       {/* Totals */}
