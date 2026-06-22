@@ -62,17 +62,36 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Amount must be a number ≥ 0.' }, { status: 400, headers: NO_STORE })
   }
 
+  const descClean = String(description).trim()
+  const catClean = (category ? String(category).trim() : '') || 'Other Expense'
+  const amtR2 = r2(amt)
+
+  // Manual claim → also create an expense row so P&L, Month-End, and the
+  // Finance Dashboard reflect the spend. Claims auto-import will mirror the
+  // expense back, but we pre-link via expense_id so it isn't double-counted.
+  const { data: expRow, error: expErr } = await supabaseAdmin
+    .from('expenses')
+    .insert({ event_id, description: descClean, category: catClean, amount: amtR2 })
+    .select('id')
+    .single()
+  if (expErr) return NextResponse.json({ error: expErr.message }, { status: 500, headers: NO_STORE })
+
   const insert = {
     event_id,
+    expense_id: expRow!.id,
     claimant_name: claimant_name ? String(claimant_name).trim() : '',
     claimant_phone: claimant_phone ? String(claimant_phone).trim() : null,
-    description: String(description).trim(),
-    category: (category ? String(category).trim() : '') || 'Reimbursement',
-    amount: r2(amt),
+    description: descClean,
+    category: catClean,
+    amount: amtR2,
     notes: notes ? String(notes).trim() : null,
   }
   const { data, error } = await supabaseAdmin.from('claims').insert(insert).select().single()
-  if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE })
+  if (error) {
+    // Rollback: drop the orphaned expense so totals don't get inflated.
+    await supabaseAdmin.from('expenses').delete().eq('id', expRow!.id)
+    return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE })
+  }
   return NextResponse.json({ ok: true, claim: data }, { headers: NO_STORE })
 }
 
