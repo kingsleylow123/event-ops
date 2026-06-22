@@ -57,7 +57,7 @@ body {
 .print-only { display: none; }
 
 @media print {
-  @page { size: A4; margin: 14mm 14mm 16mm; }
+  @page { size: A4; margin: 10mm 12mm 12mm; }
 
   html, body { background: #fff !important; color: #111 !important; }
   body * { color: #111 !important; background: transparent !important; border-color: #d4d4d8 !important; }
@@ -67,9 +67,21 @@ body {
 
   main { padding: 0 !important; margin: 0 !important; max-width: none !important; }
 
+  /* Strip dark card chrome so reports flow as plain blocks on the page */
+  .bg-\[\#0f0f0f\], .bg-\[\#111\], .bg-\[\#0a0a0a\] {
+    background: transparent !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+  }
+  .space-y-4 > * + * { margin-top: 0 !important; }
+
   table { page-break-inside: auto; }
   tr    { page-break-inside: avoid; page-break-after: auto; }
   thead { display: table-header-group; }
+
+  /* Keep the signature block glued to the table on page 1 */
+  .print-keep { page-break-inside: avoid; break-inside: avoid; }
 
   .print-amber { color: #b45309 !important; }
   .print-sky   { color: #0369a1 !important; }
