@@ -209,13 +209,25 @@ export default function AttendeesPage() {
     if (!event) { alert('No event selected — please pick one from the dropdown first.'); return }
     if (!form.name.trim()) { alert('Please enter a name.'); return }
     const isFreeTier = form.ticket_type === 'free_general' || form.ticket_type === 'free_vip'
-    const payload = {
-      ...form,
-      event_id: event.id,
-      payment_method: isFreeTier ? 'free' : form.payment_method,
-      payment_status: isFreeTier ? 'free' : form.payment_status,
-      payment_amount: isFreeTier ? 0 : form.payment_amount,
-    }
+    const payload = facilitatorMode
+      ? {
+          event_id: event.id,
+          name: form.name,
+          phone: form.phone,
+          notes: form.notes,
+          ticket_type: null,
+          payment_method: null,
+          payment_amount: null,
+          payment_status: null,
+          attendance_confirmed: true,
+        }
+      : {
+          ...form,
+          event_id: event.id,
+          payment_method: isFreeTier ? 'free' : form.payment_method,
+          payment_status: isFreeTier ? 'free' : form.payment_status,
+          payment_amount: isFreeTier ? 0 : form.payment_amount,
+        }
     try {
       const res = await fetch('/api/attendees', {
         method: 'POST',
@@ -300,7 +312,7 @@ export default function AttendeesPage() {
           {isAdmin && (
             <button onClick={() => setShowModal(true)} disabled={!event}
               className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-semibold text-sm px-4 py-2 rounded-lg">
-              + Add Attendee
+              {facilitatorMode ? '+ Add Facilitator' : '+ Add Attendee'}
             </button>
           )}
         </div>
@@ -602,31 +614,35 @@ export default function AttendeesPage() {
       {showModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-[#111] border border-zinc-800 rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-lg font-bold mb-4">Add Attendee</h2>
+            <h2 className="text-lg font-bold mb-4">{facilitatorMode ? 'Add Facilitator' : 'Add Attendee'}</h2>
             <form onSubmit={addAttendee} className="space-y-3">
               <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                 placeholder="Full Name *" className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm" />
               <input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
                 placeholder="Phone (e.g. 0123456789)" className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm" />
-              <input value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                placeholder="Email" type="email" className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm" />
-              <select value={form.ticket_type}
-                onChange={e => {
-                  const tt = e.target.value as TicketType
-                  const isF = tt === 'free_general' || tt === 'free_vip'
-                  const isCustom = (tt as string) === 'custom'
-                  setForm(f => ({
-                    ...f, ticket_type: tt,
-                    payment_amount: isCustom ? 0 : (TICKET_PRICES[tt] ?? 0),
-                    payment_method: isF ? 'free' : 'bank_transfer',
-                    payment_status: isF ? 'free' : 'pending',
-                  }))
-                }}
-                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm">
-                {Object.entries(TICKET_LABELS).map(([k, v]) => <option key={k} value={k}>{v} {TICKET_PRICES[k as TicketType] > 0 ? `(RM${TICKET_PRICES[k as TicketType]})` : '(Free)'}</option>)}
-                <option value="custom">Custom (enter amount below)</option>
-              </select>
-              {form.ticket_type !== 'free_general' && form.ticket_type !== 'free_vip' && (
+              {!facilitatorMode && (
+                <input value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                  placeholder="Email" type="email" className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm" />
+              )}
+              {!facilitatorMode && (
+                <select value={form.ticket_type}
+                  onChange={e => {
+                    const tt = e.target.value as TicketType
+                    const isF = tt === 'free_general' || tt === 'free_vip'
+                    const isCustom = (tt as string) === 'custom'
+                    setForm(f => ({
+                      ...f, ticket_type: tt,
+                      payment_amount: isCustom ? 0 : (TICKET_PRICES[tt] ?? 0),
+                      payment_method: isF ? 'free' : 'bank_transfer',
+                      payment_status: isF ? 'free' : 'pending',
+                    }))
+                  }}
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm">
+                  {Object.entries(TICKET_LABELS).map(([k, v]) => <option key={k} value={k}>{v} {TICKET_PRICES[k as TicketType] > 0 ? `(RM${TICKET_PRICES[k as TicketType]})` : '(Free)'}</option>)}
+                  <option value="custom">Custom (enter amount below)</option>
+                </select>
+              )}
+              {!facilitatorMode && form.ticket_type !== 'free_general' && form.ticket_type !== 'free_vip' && (
                 <>
                   <select value={form.payment_method}
                     onChange={e => setForm(f => ({ ...f, payment_method: e.target.value as PaymentMethod }))}
@@ -650,7 +666,7 @@ export default function AttendeesPage() {
               <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
                 placeholder="Notes (optional)" rows={2} className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm resize-none" />
               <div className="flex gap-2 pt-2">
-                <button type="submit" className="flex-1 bg-amber-500 hover:bg-amber-400 text-black font-semibold py-2 rounded-lg text-sm">Add Attendee</button>
+                <button type="submit" className="flex-1 bg-amber-500 hover:bg-amber-400 text-black font-semibold py-2 rounded-lg text-sm">{facilitatorMode ? 'Add Facilitator' : 'Add Attendee'}</button>
                 <button type="button" onClick={() => setShowModal(false)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-white py-2 rounded-lg text-sm">Cancel</button>
               </div>
             </form>
