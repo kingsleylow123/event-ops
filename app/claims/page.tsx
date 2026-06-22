@@ -44,6 +44,8 @@ export default function ClaimsPage() {
 
   const [form, setForm] = useState({ event_id: '' })
   const [uploadingId, setUploadingId] = useState<string | null>(null)
+  const [addOpen, setAddOpen] = useState(false)
+  const [addDraft, setAddDraft] = useState({ description: '', amount: '' })
 
   const load = useCallback(async (): Promise<Claim[]> => {
     try {
@@ -106,13 +108,20 @@ export default function ClaimsPage() {
     return () => { cancelled = true }
   }, [load])
 
-  async function addClaim(e: React.FormEvent) {
+  function openAddClaim(e: React.FormEvent) {
     e.preventDefault()
     setErr('')
     if (!form.event_id) { setErr('Pick an event.'); return }
-    const raw = window.prompt('Amount (RM)')
-    if (raw === null) return
-    const amt = Number(raw)
+    setAddDraft({ description: '', amount: '' })
+    setAddOpen(true)
+  }
+
+  async function submitAddClaim(e: React.FormEvent) {
+    e.preventDefault()
+    setErr('')
+    const desc = addDraft.description.trim()
+    if (!desc) { setErr('Enter what the claim is for.'); return }
+    const amt = Number(addDraft.amount)
     if (!Number.isFinite(amt) || amt <= 0) { setErr('Enter a valid amount.'); return }
     setSaving(true)
     try {
@@ -121,12 +130,13 @@ export default function ClaimsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           event_id: form.event_id,
-          description: 'Manual claim',
+          description: desc,
           amount: amt,
         }),
       })
       const j = await res.json()
       if (!res.ok) { setErr(j.error || 'Failed to add claim.'); return }
+      setAddOpen(false)
       await load()
     } finally {
       setSaving(false)
@@ -236,7 +246,7 @@ export default function ClaimsPage() {
       </div>
 
       {/* Add manual claim */}
-      <form onSubmit={addClaim} className="bg-[#111] border border-zinc-800 rounded-xl p-4 flex flex-wrap gap-2 items-start">
+      <form onSubmit={openAddClaim} className="bg-[#111] border border-zinc-800 rounded-xl p-4 flex flex-wrap gap-2 items-start">
         <select value={form.event_id} onChange={e => setForm(f => ({ ...f, event_id: e.target.value }))}
           className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm flex-1 min-w-[200px] cursor-pointer focus:border-amber-500 focus:outline-none">
           {pendingEvents.length === 0
@@ -341,6 +351,41 @@ export default function ClaimsPage() {
         Claims are pulled automatically from your event expenses. Set <span className="text-zinc-400">Paid by</span> to record who to
         reimburse, and mark <span className="text-green-400">paid</span> once they&apos;re reimbursed.
       </p>
+
+      {addOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={() => !saving && setAddOpen(false)}>
+          <form onSubmit={submitAddClaim} onClick={e => e.stopPropagation()}
+            className="bg-[#111] border border-zinc-800 rounded-xl p-5 w-full max-w-md space-y-3">
+            <div>
+              <h2 className="text-sm font-semibold text-zinc-100">Add Claim</h2>
+              <p className="text-xs text-zinc-500 mt-0.5">{events.find(e => e.id === form.event_id)?.name ?? ''}</p>
+            </div>
+            <div>
+              <label className="text-xs text-zinc-500 font-medium">Item to claim</label>
+              <input autoFocus value={addDraft.description}
+                onChange={e => setAddDraft(d => ({ ...d, description: e.target.value }))}
+                placeholder='e.g. "Lunch — Day 1"'
+                className="w-full mt-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:border-amber-500 focus:outline-none" />
+            </div>
+            <div>
+              <label className="text-xs text-zinc-500 font-medium">Amount (RM)</label>
+              <input value={addDraft.amount} inputMode="decimal"
+                onChange={e => setAddDraft(d => ({ ...d, amount: e.target.value }))}
+                placeholder="0.00"
+                className="w-full mt-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm focus:border-amber-500 focus:outline-none" />
+            </div>
+            {err && <p className="text-xs text-red-400">{err}</p>}
+            <div className="flex justify-end gap-2 pt-1">
+              <button type="button" disabled={saving} onClick={() => setAddOpen(false)}
+                className="text-xs px-3 py-2 rounded-lg text-zinc-400 hover:text-zinc-200 disabled:opacity-50">Cancel</button>
+              <button type="submit" disabled={saving}
+                className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-semibold text-sm px-4 py-2 rounded-lg">
+                {saving ? 'Adding…' : 'Add Claim'}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   )
 }
