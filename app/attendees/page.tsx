@@ -363,7 +363,7 @@ export default function AttendeesPage() {
                 <h3 className="text-sky-400 font-bold mb-3 flex items-center gap-2 text-sm tracking-wide">
                   <span>✅</span> COMPLETED 2-DAY WORKSHOP
                 </h3>
-                <div className="space-y-2">
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1 [scrollbar-width:thin] [scrollbar-color:#3f3f46_transparent]">
                   {completers.map((s, i) => (
                     <div key={s.name} className="flex items-center justify-between text-base">
                       <span className="text-white">
