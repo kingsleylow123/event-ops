@@ -97,7 +97,7 @@ export default function ProfitAndLossPage() {
         <p className="text-center text-zinc-500 text-sm py-8">Loading…</p>
       ) : (
         <table className="w-full text-sm">
-          <thead>
+          <thead className="no-print">
             <tr className="border-b border-zinc-800 text-zinc-400">
               <th className="text-left py-2 font-medium w-16"></th>
               <th className="text-left py-2 font-medium"></th>
