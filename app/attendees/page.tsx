@@ -345,7 +345,7 @@ export default function AttendeesPage() {
                 <h3 className="text-emerald-400 font-bold mb-4 flex items-center gap-2 text-sm tracking-wide">
                   <span>🏆</span> TOP 3 FACILITATOR
                 </h3>
-                <div className="space-y-3 h-72 overflow-y-auto pr-2 [scrollbar-width:thin] [scrollbar-color:rgb(52_211_153)_transparent]">
+                <div className="space-y-3 h-28 overflow-y-scroll pr-2 [scrollbar-width:thin] [scrollbar-color:rgb(52_211_153)_rgba(63,63,70,0.4)] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-zinc-800/40 [&::-webkit-scrollbar-track]:rounded [&::-webkit-scrollbar-thumb]:bg-emerald-500/70 [&::-webkit-scrollbar-thumb]:rounded">
                   {top.map((s, i) => (
                     <div key={s.name} className="flex items-center justify-between text-base">
                       <span className="text-white">
@@ -363,7 +363,7 @@ export default function AttendeesPage() {
                 <h3 className="text-sky-400 font-bold mb-4 flex items-center gap-2 text-sm tracking-wide">
                   <span>✅</span> COMPLETED 2-DAY WORKSHOP
                 </h3>
-                <div className="space-y-3 h-72 overflow-y-auto pr-2 [scrollbar-width:thin] [scrollbar-color:rgb(56_189_248)_transparent]">
+                <div className="space-y-3 h-28 overflow-y-scroll pr-2 [scrollbar-width:thin] [scrollbar-color:rgb(56_189_248)_rgba(63,63,70,0.4)] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-zinc-800/40 [&::-webkit-scrollbar-track]:rounded [&::-webkit-scrollbar-thumb]:bg-sky-500/70 [&::-webkit-scrollbar-thumb]:rounded">
                   {completers.map((s, i) => (
                     <div key={s.name} className="flex items-center justify-between text-base">
                       <span className="text-white">
