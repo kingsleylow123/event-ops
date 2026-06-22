@@ -320,13 +320,22 @@ export default function AttendeesPage() {
 
       {/* Totals bar */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {[
-          { label: facilitatorMode ? 'Total Facilitators' : 'Total Participants', value: roster.length, color: 'text-white', border: 'border-amber-500/50', adminOnly: false, hideForFacilitators: false },
-          { label: 'Paid', value: totalPaid, color: 'text-green-400', border: 'border-zinc-800', adminOnly: false, hideForFacilitators: true },
-          { label: 'Pending', value: totalPending, color: 'text-yellow-400', border: 'border-zinc-800', adminOnly: true, hideForFacilitators: true },
-          { label: 'Free', value: totalFree, color: 'text-blue-400', border: 'border-zinc-800', adminOnly: true, hideForFacilitators: true },
-          { label: 'Revenue', value: `RM ${totalRevenue.toLocaleString()}`, color: 'text-amber-400', border: 'border-zinc-800', adminOnly: true, hideForFacilitators: true },
-        ].filter(s => (!s.adminOnly || isAdmin) && !(facilitatorMode && s.hideForFacilitators)).map(s => {
+        {(() => {
+          const topStreak = (facilStatsData ?? []).reduce<FacilitatorStat | null>(
+            (best, s) => (!best || s.longest_streak > best.longest_streak) ? s : best, null,
+          )
+          const streakValue = topStreak && topStreak.longest_streak >= 2
+            ? `🔥 ${topStreak.longest_streak} · ${topStreak.name}`
+            : '—'
+          return [
+          { label: facilitatorMode ? 'Total Facilitators' : 'Total Participants', value: roster.length, color: 'text-white', border: 'border-amber-500/50', adminOnly: false, hideForFacilitators: false, showOnlyForFacilitators: false },
+          { label: 'Top Streak', value: streakValue, color: 'text-orange-300', border: 'border-orange-500/40', adminOnly: false, hideForFacilitators: false, showOnlyForFacilitators: true },
+          { label: 'Paid', value: totalPaid, color: 'text-green-400', border: 'border-zinc-800', adminOnly: false, hideForFacilitators: true, showOnlyForFacilitators: false },
+          { label: 'Pending', value: totalPending, color: 'text-yellow-400', border: 'border-zinc-800', adminOnly: true, hideForFacilitators: true, showOnlyForFacilitators: false },
+          { label: 'Free', value: totalFree, color: 'text-blue-400', border: 'border-zinc-800', adminOnly: true, hideForFacilitators: true, showOnlyForFacilitators: false },
+          { label: 'Revenue', value: `RM ${totalRevenue.toLocaleString()}`, color: 'text-amber-400', border: 'border-zinc-800', adminOnly: true, hideForFacilitators: true, showOnlyForFacilitators: false },
+        ]
+        })().filter(s => (!s.adminOnly || isAdmin) && !(facilitatorMode && s.hideForFacilitators) && !(!facilitatorMode && s.showOnlyForFacilitators)).map(s => {
           const isRevenue = s.label === 'Revenue'
           const displayValue = isRevenue && revenueHidden ? 'RM ••••••' : s.value
           return (
