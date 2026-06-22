@@ -1,6 +1,5 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
-import Image from 'next/image'
 import ReportLayout, { type ReportFilters } from '@/components/finance/ReportLayout'
 import type { PLPayload } from './types'
 
@@ -74,7 +73,8 @@ export default function ProfitAndLossPage() {
       <div className="print-only" style={{ marginBottom: '18px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: '14px', borderBottom: '0.5px solid #d4d4d8' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <Image src="/claude-logo.jpg" alt="Claude Malaysia" width={44} height={44} style={{ borderRadius: '10px' }} />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/claude-logo.jpg" alt="Claude Malaysia" width={44} height={44} style={{ borderRadius: '10px', display: 'block' }} />
             <div>
               <p style={{ margin: 0, fontSize: '15px', fontWeight: 500 }}>Claude Malaysia</p>
               <p className="print-amber" style={{ margin: '2px 0 0', fontSize: '10px', fontWeight: 500, letterSpacing: '0.08em' }}>EVENTOPS</p>

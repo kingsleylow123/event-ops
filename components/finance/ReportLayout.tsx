@@ -101,7 +101,7 @@ export default function ReportLayout({
   return (
     <div className="space-y-4">
       {/* Breadcrumb */}
-      <div className="flex items-center gap-2 text-xs text-zinc-500">
+      <div className="no-print flex items-center gap-2 text-xs text-zinc-500">
         <Link href="/finance/reports" className="hover:text-zinc-300 inline-flex items-center gap-1">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M19 12H5M12 19l-7-7 7-7" />
@@ -114,7 +114,7 @@ export default function ReportLayout({
 
       {/* Filter card */}
       {(showDateFilter || showEventFilter) && (
-        <div className="bg-[#111] border border-zinc-800 rounded-xl p-4">
+        <div className="no-print bg-[#111] border border-zinc-800 rounded-xl p-4">
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {showDateFilter && (
               <div>
@@ -177,7 +177,7 @@ export default function ReportLayout({
 
       {/* Report body */}
       <div className="bg-[#0f0f0f] border border-zinc-900 rounded-xl p-6 sm:p-8">
-        <div className="text-center mb-6">
+        <div className="no-print text-center mb-6">
           <h1 className="text-lg font-semibold text-zinc-100">{title}</h1>
           {subtitle && <p className="text-xs text-zinc-400 mt-0.5">{subtitle}</p>}
           {showDateFilter && (
