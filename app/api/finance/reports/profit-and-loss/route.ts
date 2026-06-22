@@ -61,19 +61,21 @@ export async function GET(req: Request) {
   const from = lifetime ? '1900-01-01' : (url.searchParams.get('from') || today.slice(0, 8) + '01')
   const to = lifetime ? '2999-12-31' : (url.searchParams.get('to') || today)
 
-  let attQ = supabaseAdmin.from('attendees').select('event_id, payment_amount, payment_status, paid_at, created_at')
+  let attQ = supabaseAdmin.from('attendees').select('id, event_id, payment_amount, payment_status, paid_at, created_at')
   let expQ = supabaseAdmin.from('expenses').select('amount, category, created_at')
-  let payQ = supabaseAdmin.from('affiliate_payouts').select('amount, paid_at')
+  let attribQ = supabaseAdmin.from('affiliate_attributions').select('event_id, attendee_id, affiliate_id')
   let finQ = supabaseAdmin.from('finance_entries').select('type, category, amount, entry_date')
   if (!isAll) {
     attQ = attQ.eq('event_id', event_id)
     expQ = expQ.eq('event_id', event_id)
-    payQ = payQ.eq('event_id', event_id)
+    attribQ = attribQ.eq('event_id', event_id)
     finQ = finQ.eq('event_id', event_id)
   }
 
-  const [{ data: att }, { data: exp }, { data: pay }, { data: fin }, { data: events }] = await Promise.all([
-    attQ, expQ, payQ, finQ,
+  const [{ data: att }, { data: exp }, { data: attribs }, { data: affs }, { data: fin }, { data: events }] = await Promise.all([
+    attQ, expQ, attribQ,
+    supabaseAdmin.from('affiliates').select('id, commission_rate'),
+    finQ,
     supabaseAdmin.from('events').select('id, name'),
   ])
 
@@ -94,8 +96,18 @@ export async function GET(req: Request) {
   for (const e of exp ?? []) {
     if (inRange(dayKey(e.created_at), from, to)) expenseRows.push({ name: e.category || 'Other Expense', amount: Number(e.amount ?? 0) })
   }
-  for (const p of pay ?? []) {
-    if (inRange(dayKey(p.paid_at), from, to)) expenseRows.push({ name: 'Affiliate Payouts', amount: Number(p.amount ?? 0) })
+  const rateByAffiliate = new Map<string, number>((affs ?? []).map(a => [a.id as string, Number(a.commission_rate ?? 0)]))
+  const attendeeById = new Map<string, { payment_status: string | null; payment_amount: number | null; paid_at: string | null; created_at: string | null }>(
+    (att ?? []).map(a => [a.id as string, a as any])
+  )
+  for (const ab of attribs ?? []) {
+    const a = attendeeById.get(ab.attendee_id as string)
+    if (!a || a.payment_status !== 'paid') continue
+    const key = dayKey(a.paid_at ?? a.created_at)
+    if (!inRange(key, from, to)) continue
+    const rate = rateByAffiliate.get(ab.affiliate_id as string) ?? 0
+    const commission = Number(a.payment_amount ?? 0) * rate
+    if (commission > 0) expenseRows.push({ name: 'Affiliate Commission', amount: commission })
   }
   for (const f of fin ?? []) {
     if (f.type !== 'expense') continue
