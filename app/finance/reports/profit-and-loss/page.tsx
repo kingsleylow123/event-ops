@@ -115,7 +115,7 @@ export default function ProfitAndLossPage() {
                 <td className="py-1 text-sky-400">{l.code}</td>
                 <td className="py-1 text-sky-400">{l.name}</td>
                 <td className="py-1 text-right text-zinc-200 font-mono whitespace-nowrap">{fmt(l.amount)}</td>
-                <td className="py-1 text-right text-zinc-500">{pct(l.amount, incomeTotal)}</td>
+                <td className="py-1 text-right text-zinc-500 no-print">{pct(l.amount, incomeTotal)}</td>
               </tr>
             ))}
             {data?.income.lines.length === 0 && (
@@ -124,14 +124,14 @@ export default function ProfitAndLossPage() {
             <tr className="border-t border-zinc-800">
               <td colSpan={2} className="py-2 font-semibold text-zinc-100">TOTAL</td>
               <td className="py-2 text-right font-semibold text-zinc-100 font-mono whitespace-nowrap">{fmt(incomeTotal)}</td>
-              <td className="py-2 text-right text-zinc-400">{incomeTotal ? '100.00' : '—'}</td>
+              <td className="py-2 text-right text-zinc-400 no-print">{incomeTotal ? '100.00' : '—'}</td>
             </tr>
 
             {/* GROSS PROFIT (same as Income since EventOps has no Cost of Sales) */}
             <tr>
               <td colSpan={2} className="pt-3 py-1.5 font-semibold text-zinc-100">GROSS PROFIT</td>
               <td className="pt-3 py-1.5 text-right font-semibold text-zinc-100 font-mono whitespace-nowrap">{fmt(incomeTotal)}</td>
-              <td className="pt-3 py-1.5 text-right text-zinc-400">{grossPct}</td>
+              <td className="pt-3 py-1.5 text-right text-zinc-400 no-print">{grossPct}</td>
             </tr>
 
             {/* EXPENSES */}
@@ -141,7 +141,7 @@ export default function ProfitAndLossPage() {
                 <td className="py-1 text-sky-400">{l.code}</td>
                 <td className="py-1 text-sky-400">{l.name}</td>
                 <td className="py-1 text-right text-zinc-200 font-mono whitespace-nowrap">{fmt(l.amount)}</td>
-                <td className="py-1 text-right text-zinc-500">{pct(l.amount, incomeTotal)}</td>
+                <td className="py-1 text-right text-zinc-500 no-print">{pct(l.amount, incomeTotal)}</td>
               </tr>
             ))}
             {data?.expense.lines.length === 0 && (
@@ -150,7 +150,7 @@ export default function ProfitAndLossPage() {
             <tr className="border-t border-zinc-800">
               <td colSpan={2} className="py-2 font-semibold text-zinc-100">TOTAL</td>
               <td className="py-2 text-right font-semibold text-zinc-100 font-mono whitespace-nowrap">{fmt(expenseTotal)}</td>
-              <td className="py-2 text-right text-zinc-400">{pct(expenseTotal, incomeTotal)}</td>
+              <td className="py-2 text-right text-zinc-400 no-print">{pct(expenseTotal, incomeTotal)}</td>
             </tr>
 
             {/* NET PROFIT */}
@@ -159,7 +159,7 @@ export default function ProfitAndLossPage() {
               <td className={`py-3 text-right font-semibold font-mono whitespace-nowrap ${(data?.net ?? 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                 {fmt(data?.net ?? 0)}
               </td>
-              <td className="py-3 text-right text-zinc-400">{pct(data?.net ?? 0, incomeTotal)}</td>
+              <td className="py-3 text-right text-zinc-400 no-print">{pct(data?.net ?? 0, incomeTotal)}</td>
             </tr>
           </tbody>
         </table>
