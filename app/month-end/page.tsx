@@ -163,6 +163,13 @@ export default function MonthEndPage() {
     const payoutsInMonth = payouts.filter(p => eventMonth.get(p.event_id) === yearMonth)
     const payoutTotal = payoutsInMonth.reduce((s, p) => s + Number(p.amount), 0)
 
+    // Facilitator payouts are mirrored into expenses (category 'Facilitator
+    // Payout'), so they already sit inside expenseTotal / Net P&L. Surface them
+    // as their own metric here WITHOUT subtracting again — display only.
+    const facilExp = expInMonth.filter(e => String(e.category || '') === 'Facilitator Payout')
+    const facilitatorTotal = facilExp.reduce((s, e) => s + Number(e.amount), 0)
+    const facilitatorCount = facilExp.length
+
     // Outstanding
     const outstandingReceivable = attendees
       .filter(a => a.payment_status === 'pending')
@@ -191,6 +198,7 @@ export default function MonthEndPage() {
       revenue, stripe, bank,
       expenseTotal, expByCat,
       payoutTotal, payoutCount: payoutsInMonth.length,
+      facilitatorTotal, facilitatorCount,
       outstandingReceivable,
       net,
       perEvent,
@@ -209,6 +217,7 @@ export default function MonthEndPage() {
     lines.push(`  Stripe,${monthSummary.stripe.toFixed(2)}`)
     lines.push(`  Bank Transfer,${monthSummary.bank.toFixed(2)}`)
     lines.push(`Expenses,${monthSummary.expenseTotal.toFixed(2)}`)
+    lines.push(`  of which Facilitator Payouts,${monthSummary.facilitatorTotal.toFixed(2)}`)
     lines.push(`Affiliate Payouts,${monthSummary.payoutTotal.toFixed(2)}`)
     lines.push(`NET P&L,${monthSummary.net.toFixed(2)}`)
     lines.push('')
@@ -297,10 +306,11 @@ export default function MonthEndPage() {
       ) : (
         <>
           {/* Summary tiles */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             <Tile label="Revenue" value={display(monthSummary.revenue)} sub={`${monthSummary.paidCount} paid attendees`} accent="amber" />
             <Tile label="Expenses" value={display(monthSummary.expenseTotal)} sub={`${Object.keys(monthSummary.expByCat).length} categories`} accent="red" />
             <Tile label="Affiliate Payouts" value={display(monthSummary.payoutTotal)} sub={`${monthSummary.payoutCount} payouts`} accent="purple" />
+            <Tile label="Facilitator Payouts" value={display(monthSummary.facilitatorTotal)} sub={`${monthSummary.facilitatorCount} paid · in expenses`} accent="sky" />
             <Tile label="Net P&L" value={display(monthSummary.net)} sub={monthSummary.net >= 0 ? 'Profit' : 'Loss'} accent={monthSummary.net >= 0 ? 'emerald' : 'red'} bold />
           </div>
 
@@ -408,13 +418,14 @@ export default function MonthEndPage() {
 // ── Small presentation components ──────────────────────────────────────
 function Tile({ label, value, sub, accent, bold }: {
   label: string; value: string; sub?: string
-  accent?: 'amber' | 'red' | 'purple' | 'emerald'
+  accent?: 'amber' | 'red' | 'purple' | 'emerald' | 'sky'
   bold?: boolean
 }) {
   const color =
     accent === 'amber' ? 'text-amber-400' :
     accent === 'red' ? 'text-red-400' :
     accent === 'purple' ? 'text-purple-400' :
+    accent === 'sky' ? 'text-sky-400' :
     accent === 'emerald' ? 'text-emerald-400' : 'text-white'
   const border =
     accent === 'amber' ? 'border-amber-500/40' :
