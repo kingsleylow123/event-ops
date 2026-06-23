@@ -255,7 +255,7 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
       </aside>
 
       {/* Mobile top bar */}
-      <div className="lg:hidden sticky top-0 z-40 flex items-center gap-3 px-4 h-14 theme-border border-b"
+      <div className="no-print lg:hidden sticky top-0 z-40 flex items-center gap-3 px-4 h-14 theme-border border-b"
         style={{ background: 'var(--sidebar-bg)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' }}>
         <button onClick={() => setMobileOpen(true)} aria-label="Open menu"
           className="theme-text flex flex-col gap-1.5 p-2 -ml-2 rounded-lg">
