@@ -104,18 +104,18 @@ export async function GET(req: NextRequest) {
 async function existingRow(event_id: string, name: string) {
   const { data } = await supabaseAdmin
     .from('facilitator_payouts')
-    .select('amount, expense_id')
+    .select('amount, paid_at, expense_id')
     .eq('event_id', event_id)
     .eq('name_key', name.trim().toLowerCase())
     .maybeSingle()
-  return (data ?? null) as { amount: number | null; expense_id: string | null } | null
+  return (data ?? null) as { amount: number | null; paid_at: string | null; expense_id: string | null } | null
 }
 
-// Mirror a facilitator payout into the `expenses` table so it auto-tracks into
-// P&L, Finance dashboard, and Month-End (the same hook Claims uses). Category
-// 'Facilitator Payout' is not in Cost of Sales, so it lands under Operating
-// Expenses next to Affiliate Commission. Returns the expense_id to store back on
-// the payout row — null when amount is 0 (no cost → no expense row).
+// Mirror a (paid) facilitator payout into the `expenses` table so it auto-tracks
+// into P&L, Finance dashboard, and Month-End (the same hook Claims uses).
+// Category 'Facilitator Payout' is classified as Cost of Sales in the P&L (direct
+// event-delivery cost). Returns the expense_id to store back on the payout row —
+// null when amount is 0 (no cost → no expense row).
 async function syncExpense(event_id: string, name: string, amount: number, existingExpenseId: string | null): Promise<string | null> {
   const description = `Facilitator payout — ${name}`
   if (!(amount > 0)) {
@@ -167,7 +167,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'valid amount required' }, { status: 400, headers: NO_STORE_HEADERS })
     }
     const prev = await existingRow(event_id, name)
-    const expense_id = await syncExpense(event_id, name, amount, prev?.expense_id ?? null)
+    // Costs track only what's actually PAID. If this payout is already paid,
+    // keep its expense in sync (amount corrected post-payment); otherwise just
+    // store the amount with no expense yet — it lands when you mark paid.
+    const expense_id = prev?.paid_at
+      ? await syncExpense(event_id, name, amount, prev.expense_id ?? null)
+      : (prev?.expense_id ?? null)
     const { data, error } = await upsert({ amount, expense_id })
     if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE_HEADERS })
     return NextResponse.json(data, { headers: NO_STORE_HEADERS })
@@ -194,9 +199,13 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === 'unmark_paid') {
+    // Unpaid again → drop the mirrored expense so the financials only ever
+    // reflect money actually paid out.
+    const prev = await existingRow(event_id, name)
+    if (prev?.expense_id) await supabaseAdmin.from('expenses').delete().eq('id', prev.expense_id)
     const { error } = await supabaseAdmin
       .from('facilitator_payouts')
-      .update({ paid_at: null, updated_at: new Date().toISOString() })
+      .update({ paid_at: null, expense_id: null, updated_at: new Date().toISOString() })
       .eq('event_id', event_id)
       .eq('name_key', name.trim().toLowerCase())
     if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE_HEADERS })
