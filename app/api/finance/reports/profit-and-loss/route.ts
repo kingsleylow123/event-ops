@@ -40,6 +40,7 @@ const ACCOUNT_CODES: Record<string, string> = {
   'Transport & Logistics': '6050',
 
   'Affiliate Commission': '7010',
+  'Facilitator Payout': '7015',
   'Hospitality': '7020',
   'Marketing': '7030',
   'Admin': '7040',

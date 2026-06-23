@@ -99,6 +99,45 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ facilitators, totals: { total_payout } }, { headers: NO_STORE_HEADERS })
 }
 
+// Current amount + linked expense for one (event, facilitator), so we can keep
+// the mirrored expense row in sync.
+async function existingRow(event_id: string, name: string) {
+  const { data } = await supabaseAdmin
+    .from('facilitator_payouts')
+    .select('amount, expense_id')
+    .eq('event_id', event_id)
+    .eq('name_key', name.trim().toLowerCase())
+    .maybeSingle()
+  return (data ?? null) as { amount: number | null; expense_id: string | null } | null
+}
+
+// Mirror a facilitator payout into the `expenses` table so it auto-tracks into
+// P&L, Finance dashboard, and Month-End (the same hook Claims uses). Category
+// 'Facilitator Payout' is not in Cost of Sales, so it lands under Operating
+// Expenses next to Affiliate Commission. Returns the expense_id to store back on
+// the payout row — null when amount is 0 (no cost → no expense row).
+async function syncExpense(event_id: string, name: string, amount: number, existingExpenseId: string | null): Promise<string | null> {
+  const description = `Facilitator payout — ${name}`
+  if (!(amount > 0)) {
+    if (existingExpenseId) await supabaseAdmin.from('expenses').delete().eq('id', existingExpenseId)
+    return null
+  }
+  if (existingExpenseId) {
+    const { error } = await supabaseAdmin
+      .from('expenses')
+      .update({ amount, description, category: 'Facilitator Payout' })
+      .eq('id', existingExpenseId)
+    if (!error) return existingExpenseId   // updated in place
+  }
+  const { data, error } = await supabaseAdmin
+    .from('expenses')
+    .insert({ event_id, description, category: 'Facilitator Payout', amount })
+    .select('id')
+    .single()
+  if (error) return existingExpenseId      // keep prior link if insert failed
+  return (data!.id as string)
+}
+
 // POST ?action=save_amount  { event_id, name, amount }            → set custom amount
 // POST ?action=save_bank    { event_id, name, bank_* }            → set bank details
 // POST ?action=mark_paid     { event_id, name, amount }           → mark paid (captures amount)
@@ -127,7 +166,9 @@ export async function POST(req: NextRequest) {
     if (!Number.isFinite(amount) || amount < 0) {
       return NextResponse.json({ error: 'valid amount required' }, { status: 400, headers: NO_STORE_HEADERS })
     }
-    const { data, error } = await upsert({ amount })
+    const prev = await existingRow(event_id, name)
+    const expense_id = await syncExpense(event_id, name, amount, prev?.expense_id ?? null)
+    const { data, error } = await upsert({ amount, expense_id })
     if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE_HEADERS })
     return NextResponse.json(data, { headers: NO_STORE_HEADERS })
   }
@@ -143,11 +184,11 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === 'mark_paid') {
-    const amount = Number(body.amount)
-    const { data, error } = await upsert({
-      ...(Number.isFinite(amount) && amount >= 0 ? { amount } : {}),
-      paid_at: new Date().toISOString(),
-    })
+    const amountIn = Number(body.amount)
+    const prev = await existingRow(event_id, name)
+    const amount = (Number.isFinite(amountIn) && amountIn >= 0) ? amountIn : Number(prev?.amount ?? 0)
+    const expense_id = await syncExpense(event_id, name, amount, prev?.expense_id ?? null)
+    const { data, error } = await upsert({ amount, expense_id, paid_at: new Date().toISOString() })
     if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE_HEADERS })
     return NextResponse.json(data, { headers: NO_STORE_HEADERS })
   }
