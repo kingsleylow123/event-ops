@@ -11,12 +11,6 @@ function pct(part: number, whole: number): string {
   return ((part / whole) * 100).toFixed(2)
 }
 
-function fmtRange(from: string, to: string, lifetime: boolean): string {
-  if (lifetime) return 'All time'
-  const d = (s: string) => `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}`
-  return `${d(from)} – ${d(to)}`
-}
-
 const todayDisplay = () => {
   const d = new Date()
   return `${String(d.getDate()).padStart(2, '0')} ${d.toLocaleString('en-MY', { month: 'short' })} ${d.getFullYear()}`
@@ -105,9 +99,6 @@ export default function ProfitAndLossPage() {
         <div style={{ textAlign: 'center', padding: '14px 0 2px' }}>
           <p style={{ margin: 0, fontSize: '16px', fontWeight: 500 }}>Profit &amp; Loss Statement</p>
           <p style={{ margin: '4px 0 0', fontSize: '12px' }}>{data?.scope_label ?? ''}</p>
-          <p className="print-muted" style={{ margin: '2px 0 0', fontSize: '10px' }}>
-            {data ? fmtRange(data.from, data.to, !!filters?.lifetime) : ''} · Accrual basis
-          </p>
         </div>
       </div>
 
