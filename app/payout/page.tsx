@@ -28,6 +28,7 @@ interface FacilRow {
 }
 interface FacilReport {
   facilitators: FacilRow[]
+  removed: { name: string }[]
   totals: { total_payout: number }
 }
 
@@ -201,7 +202,7 @@ export default function PayoutPage() {
       })
       .catch(() => {
         setMsg('⚠️ Failed to load facilitator payout')
-        setFacil({ facilitators: [], totals: { total_payout: 0 } })
+        setFacil({ facilitators: [], removed: [], totals: { total_payout: 0 } })
       })
       .finally(() => setLoadingFacil(false))
   }, [eventId])
@@ -283,6 +284,41 @@ export default function PayoutPage() {
     } finally {
       setSavingFacilBank(false)
     }
+  }
+
+  // Remove from / restore to the payout list
+  const [showRemoved, setShowRemoved] = useState(false)
+  async function hideFacil(f: FacilRow) {
+    if (f.paid_at && !confirm(`${f.name} is marked paid. Remove from the payout list anyway? Their tracked cost will be removed.`)) return
+    setMarkingFacil(f.name)
+    try {
+      const res = await fetch('/api/facilitator-payouts?action=hide', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event_id: eventId, name: f.name }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        setMsg(`⚠️ ${j.error || res.status}`)
+        return
+      }
+      loadFacil()
+    } finally {
+      setMarkingFacil(null)
+    }
+  }
+  async function restoreFacil(name: string) {
+    const res = await fetch('/api/facilitator-payouts?action=restore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event_id: eventId, name }),
+    })
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}))
+      setMsg(`⚠️ ${j.error || res.status}`)
+      return
+    }
+    loadFacil()
   }
 
   function toggleExpand(id: string) {
@@ -565,13 +601,23 @@ export default function PayoutPage() {
                               >
                                 {markingFacil === f.name ? 'Saving…' : isPaid ? '↩ Unmark' : '✓ Mark paid'}
                               </button>
-                              <button
-                                onClick={() => openFacilEdit(f)}
-                                title="Edit bank details"
-                                className="text-[10px] text-zinc-500 hover:text-amber-400"
-                              >
-                                ✎ edit bank
-                              </button>
+              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => openFacilEdit(f)}
+                                  title="Edit bank details"
+                                  className="text-[10px] text-zinc-500 hover:text-amber-400"
+                                >
+                                  ✎ edit bank
+                                </button>
+                                <button
+                                  onClick={() => hideFacil(f)}
+                                  disabled={markingFacil === f.name}
+                                  title="Remove from payout list"
+                                  className="text-[10px] text-zinc-600 hover:text-red-400 disabled:opacity-50"
+                                >
+                                  ✕ remove
+                                </button>
+                              </div>
                             </div>
                           </td>
                         </tr>
@@ -581,6 +627,28 @@ export default function PayoutPage() {
                 </table>
               </div>
             </div>
+
+            {/* Removed-from-payout list (reversible) */}
+            {facil.removed.length > 0 && (
+              <div className="mt-3 text-xs">
+                <button
+                  onClick={() => setShowRemoved(v => !v)}
+                  className="text-zinc-500 hover:text-amber-400"
+                >
+                  {showRemoved ? '▾' : '▸'} Removed from payout ({facil.removed.length})
+                </button>
+                {showRemoved && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {facil.removed.map(r => (
+                      <span key={r.name} className="inline-flex items-center gap-1.5 bg-[#111] border border-zinc-800 rounded-lg px-2.5 py-1 text-zinc-400">
+                        {r.name}
+                        <button onClick={() => restoreFacil(r.name)} title="Add back to payout list" className="text-zinc-600 hover:text-emerald-400">↩ restore</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>

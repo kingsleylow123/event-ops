@@ -20,6 +20,7 @@ interface FacilPayoutRow {
   bank_account: string | null
   bank_holder: string | null
   paid_at: string | null
+  hidden: boolean | null
   updated_at: string | null
 }
 
@@ -43,7 +44,7 @@ export async function GET(req: NextRequest) {
       .eq('is_facilitator', true),
     supabaseAdmin
       .from('facilitator_payouts')
-      .select('event_id, name, amount, bank_name, bank_account, bank_holder, paid_at, updated_at')
+      .select('event_id, name, amount, bank_name, bank_account, bank_holder, paid_at, hidden, updated_at')
       .order('updated_at', { ascending: false }),
   ])
 
@@ -79,24 +80,28 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const facilitators = Array.from(byName.entries()).map(([key, f]) => {
+  const facilitators: Array<Record<string, unknown>> = []
+  const removed: Array<{ name: string }> = []
+  for (const [key, f] of byName.entries()) {
     const p = thisEvent.get(key)
+    if (p?.hidden) { removed.push({ name: f.display }); continue }   // taken off the payout list
     const hasOwnBank = !!(p && (p.bank_name || p.bank_account || p.bank_holder))
     const bank = hasOwnBank ? p! : (bankCarry.get(key) ?? { bank_name: null, bank_account: null, bank_holder: null })
-    return {
+    facilitators.push({
       name: f.display,
       amount: p?.amount ?? 0,
       bank_name: bank.bank_name ?? null,
       bank_account: bank.bank_account ?? null,
       bank_holder: bank.bank_holder ?? null,
       paid_at: p?.paid_at ?? null,
-    }
-  })
+    })
+  }
 
-  facilitators.sort((a, b) => a.name.localeCompare(b.name))
+  facilitators.sort((a, b) => String(a.name).localeCompare(String(b.name)))
+  removed.sort((a, b) => a.name.localeCompare(b.name))
   const total_payout = facilitators.reduce((sum, f) => sum + (Number(f.amount) || 0), 0)
 
-  return NextResponse.json({ facilitators, totals: { total_payout } }, { headers: NO_STORE_HEADERS })
+  return NextResponse.json({ facilitators, removed, totals: { total_payout } }, { headers: NO_STORE_HEADERS })
 }
 
 // Current amount + linked expense for one (event, facilitator), so we can keep
@@ -142,6 +147,8 @@ async function syncExpense(event_id: string, name: string, amount: number, exist
 // POST ?action=save_bank    { event_id, name, bank_* }            → set bank details
 // POST ?action=mark_paid     { event_id, name, amount }           → mark paid (captures amount)
 // POST ?action=unmark_paid   { event_id, name }                   → clear paid status
+// POST ?action=hide          { event_id, name }                   → remove from payout list
+// POST ?action=restore       { event_id, name }                   → add back to payout list
 export async function POST(req: NextRequest) {
   const g = await requireAdmin('POST /api/facilitator-payouts'); if (g.response) return g.response
   const { searchParams } = new URL(req.url)
@@ -196,6 +203,26 @@ export async function POST(req: NextRequest) {
     const { data, error } = await upsert({ amount, expense_id, paid_at: new Date().toISOString() })
     if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE_HEADERS })
     return NextResponse.json(data, { headers: NO_STORE_HEADERS })
+  }
+
+  if (action === 'hide') {
+    // Take a facilitator off the payout list (reversible). Drop any mirrored
+    // expense so a removed person never counts as a cost.
+    const prev = await existingRow(event_id, name)
+    if (prev?.expense_id) await supabaseAdmin.from('expenses').delete().eq('id', prev.expense_id)
+    const { error } = await upsert({ hidden: true, expense_id: null })
+    if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE_HEADERS })
+    return NextResponse.json({ success: true }, { headers: NO_STORE_HEADERS })
+  }
+
+  if (action === 'restore') {
+    const { error } = await supabaseAdmin
+      .from('facilitator_payouts')
+      .update({ hidden: false, updated_at: new Date().toISOString() })
+      .eq('event_id', event_id)
+      .eq('name_key', name.trim().toLowerCase())
+    if (error) return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE_HEADERS })
+    return NextResponse.json({ success: true }, { headers: NO_STORE_HEADERS })
   }
 
   if (action === 'unmark_paid') {
