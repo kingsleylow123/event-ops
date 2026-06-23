@@ -20,6 +20,16 @@ interface Report {
   summary: SummaryRow[]
   totals: { attributed_revenue: number; total_commission: number; unattributed_revenue: number }
 }
+interface FacilRow {
+  name: string
+  amount: number
+  bank_name: string | null; bank_account: string | null; bank_holder: string | null
+  paid_at: string | null
+}
+interface FacilReport {
+  facilitators: FacilRow[]
+  totals: { total_payout: number }
+}
 
 const rm = (n: number) => `RM ${n.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 function fmtDateShort(iso: string | null) {
@@ -171,6 +181,109 @@ export default function PayoutPage() {
       .finally(() => setLoadingReport(false))
   }, [eventId])
   useEffect(() => { loadReport() }, [loadReport])
+
+  // ── Facilitator payout ──────────────────────────────────────────────
+  const [facil, setFacil] = useState<FacilReport | null>(null)
+  const [loadingFacil, setLoadingFacil] = useState(false)
+  const [amounts, setAmounts] = useState<Record<string, string>>({})   // name → editable amount string
+  const [markingFacil, setMarkingFacil] = useState<string | null>(null)
+
+  const loadFacil = useCallback(() => {
+    if (!eventId) return
+    setLoadingFacil(true)
+    fetch(`/api/facilitator-payouts?event_id=${eventId}`)
+      .then(r => r.json())
+      .then((d: FacilReport) => {
+        setFacil(d)
+        const next: Record<string, string> = {}
+        for (const f of d.facilitators ?? []) next[f.name] = f.amount ? String(f.amount) : ''
+        setAmounts(next)
+      })
+      .catch(() => {
+        setMsg('⚠️ Failed to load facilitator payout')
+        setFacil({ facilitators: [], totals: { total_payout: 0 } })
+      })
+      .finally(() => setLoadingFacil(false))
+  }, [eventId])
+  useEffect(() => { loadFacil() }, [loadFacil])
+
+  async function saveFacilAmount(f: FacilRow) {
+    const raw = amounts[f.name] ?? ''
+    const amount = Number(raw || 0)
+    if (!Number.isFinite(amount) || amount < 0) { setMsg('⚠️ Enter a valid amount'); return }
+    if (amount === f.amount) return   // unchanged — skip
+    const res = await fetch('/api/facilitator-payouts?action=save_amount', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event_id: eventId, name: f.name, amount }),
+    })
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}))
+      setMsg(`⚠️ ${j.error || res.status}`)
+      return
+    }
+    loadFacil()
+  }
+
+  async function togglePaidFacil(f: FacilRow) {
+    setMarkingFacil(f.name)
+    try {
+      const isPaid = !!f.paid_at
+      const action = isPaid ? 'unmark_paid' : 'mark_paid'
+      const res = await fetch(`/api/facilitator-payouts?action=${action}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event_id: eventId, name: f.name, amount: Number(amounts[f.name] || f.amount || 0) }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        setMsg(`⚠️ ${j.error || res.status}`)
+        return
+      }
+      loadFacil()
+    } finally {
+      setMarkingFacil(null)
+    }
+  }
+
+  // Facilitator bank-edit modal
+  const [editingFacil, setEditingFacil] = useState<FacilRow | null>(null)
+  const [savingFacilBank, setSavingFacilBank] = useState(false)
+  const [facilBankForm, setFacilBankForm] = useState({ bank_name: '', bank_account: '', bank_holder: '' })
+  function openFacilEdit(f: FacilRow) {
+    setEditingFacil(f)
+    setFacilBankForm({
+      bank_name: f.bank_name ?? '',
+      bank_account: f.bank_account ?? '',
+      bank_holder: f.bank_holder ?? '',
+    })
+  }
+  async function saveFacilBank() {
+    if (!editingFacil) return
+    setSavingFacilBank(true)
+    try {
+      const res = await fetch('/api/facilitator-payouts?action=save_bank', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event_id: eventId,
+          name: editingFacil.name,
+          bank_name: facilBankForm.bank_name || null,
+          bank_account: facilBankForm.bank_account || null,
+          bank_holder: facilBankForm.bank_holder || null,
+        }),
+      })
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}))
+        setMsg(`⚠️ Failed to save bank: ${j.error || res.status}`)
+        return
+      }
+      setEditingFacil(null)
+      loadFacil()
+    } finally {
+      setSavingFacilBank(false)
+    }
+  }
 
   function toggleExpand(id: string) {
     setExpanded(prev => {
@@ -358,6 +471,143 @@ export default function PayoutPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* ── Facilitator payout ────────────────────────────────────── */}
+      <div className="pt-2">
+        <div className="flex items-center gap-2 mb-1">
+          <h2 className="text-lg font-bold">🧑‍🏫 Facilitator Payout</h2>
+        </div>
+        <p className="text-xs text-zinc-500 mb-4">Type what to pay each facilitator for this event, then mark paid</p>
+
+        {loadingFacil || !facil ? (
+          <div className="text-zinc-500 text-center py-8">Loading facilitators…</div>
+        ) : facil.facilitators.length === 0 ? (
+          <div className="text-zinc-500 text-sm bg-[#111] border border-zinc-800 rounded-xl p-5">
+            No facilitators recorded for this event yet. Facilitators are pulled from the event&apos;s attendee list.
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+              <div className="bg-[#111] border border-amber-500/40 rounded-xl p-4">
+                <p className="text-xs text-zinc-500 uppercase tracking-wider mb-1">Total facilitator payout</p>
+                <p className="text-2xl font-bold text-amber-400">{display(facil.totals.total_payout)}</p>
+              </div>
+            </div>
+
+            <div className="bg-[#111] border border-zinc-800 rounded-xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs text-zinc-500 uppercase tracking-wider border-b border-zinc-800">
+                      <th className="px-4 py-3">Name</th>
+                      <th className="px-4 py-3 text-right">Amount</th>
+                      <th className="px-4 py-3">Bank Details</th>
+                      <th className="px-4 py-3 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {facil.facilitators.map(f => {
+                      const isPaid = !!f.paid_at
+                      return (
+                        <tr key={f.name} className={`border-b border-zinc-900 hover:bg-zinc-900/40 ${isPaid ? 'opacity-60' : ''}`}>
+                          <td className="px-4 py-3 align-top">
+                            <div className="font-semibold text-white flex items-center gap-2 flex-wrap">
+                              {f.name}
+                              {isPaid && (
+                                <span className="text-[10px] bg-emerald-900/50 text-emerald-300 px-1.5 py-0.5 rounded">
+                                  ✓ PAID {fmtDateShort(f.paid_at)}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 align-top text-right whitespace-nowrap">
+                            {isPaid ? (
+                              <div className="font-bold text-amber-400 text-lg">{display(f.amount)}</div>
+                            ) : (
+                              <div className="flex items-center justify-end gap-1">
+                                <span className="text-zinc-500 text-xs">RM</span>
+                                <input
+                                  type="number" min={0} step="0.01" inputMode="decimal"
+                                  value={amounts[f.name] ?? ''}
+                                  placeholder="0.00"
+                                  onChange={e => setAmounts(prev => ({ ...prev, [f.name]: e.target.value }))}
+                                  onBlur={() => saveFacilAmount(f)}
+                                  onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                                  className="w-24 bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1.5 text-amber-400 font-semibold text-right text-sm font-mono focus:border-amber-500 outline-none"
+                                />
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 align-top text-xs">
+                            {f.bank_name || f.bank_account || f.bank_holder ? (
+                              <div className="leading-tight">
+                                <div className="text-zinc-300 font-medium">{f.bank_name || '—'}</div>
+                                <div className="font-mono text-zinc-400">{f.bank_account || '—'}</div>
+                                <div className="text-zinc-500">{f.bank_holder || '—'}</div>
+                              </div>
+                            ) : (
+                              <button onClick={() => openFacilEdit(f)} className="text-zinc-600 hover:text-amber-400">
+                                + Add bank account
+                              </button>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 align-top text-right whitespace-nowrap">
+                            <div className="flex flex-col gap-1 items-end">
+                              <button
+                                onClick={() => togglePaidFacil(f)}
+                                disabled={markingFacil === f.name}
+                                className={`text-xs font-semibold px-3 py-1.5 rounded transition-colors ${
+                                  isPaid
+                                    ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+                                    : 'bg-emerald-600/80 hover:bg-emerald-500 text-white'
+                                } disabled:opacity-50`}
+                              >
+                                {markingFacil === f.name ? 'Saving…' : isPaid ? '↩ Unmark' : '✓ Mark paid'}
+                              </button>
+                              <button
+                                onClick={() => openFacilEdit(f)}
+                                title="Edit bank details"
+                                className="text-[10px] text-zinc-500 hover:text-amber-400"
+                              >
+                                ✎ edit bank
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── Facilitator bank-details edit modal ───────────────────── */}
+      {editingFacil && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4" onClick={() => setEditingFacil(null)}>
+          <div className="bg-[#111] border border-zinc-800 rounded-xl w-full max-w-md p-5 space-y-4" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-white">
+                Bank details · <span className="text-amber-400">{editingFacil.name}</span>
+              </h3>
+              <button onClick={() => setEditingFacil(null)} className="text-zinc-500 hover:text-white text-lg">×</button>
+            </div>
+            <div className="space-y-3">
+              <Field label="Bank name" value={facilBankForm.bank_name} onChange={v => setFacilBankForm({ ...facilBankForm, bank_name: v })} placeholder="Maybank, CIMB, Public Bank…" />
+              <Field label="Bank account" value={facilBankForm.bank_account} onChange={v => setFacilBankForm({ ...facilBankForm, bank_account: v })} placeholder="1234 5678 9012" mono />
+              <Field label="Account holder" value={facilBankForm.bank_holder} onChange={v => setFacilBankForm({ ...facilBankForm, bank_holder: v })} placeholder="Full name as registered with bank" />
+            </div>
+            <div className="flex gap-2 justify-end pt-1">
+              <button onClick={() => setEditingFacil(null)} className="text-sm text-zinc-400 hover:text-white px-4 py-2 rounded-lg border border-zinc-700">Cancel</button>
+              <button onClick={saveFacilBank} disabled={savingFacilBank} className="bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black text-sm font-semibold px-4 py-2 rounded-lg">
+                {savingFacilBank ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Bank-details edit modal ───────────────────────────────── */}
