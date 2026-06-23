@@ -87,6 +87,12 @@ export async function GET(req: Request) {
   const from = lifetime ? '1900-01-01' : (url.searchParams.get('from') || today.slice(0, 8) + '01')
   const to = lifetime ? '2999-12-31' : (url.searchParams.get('to') || today)
 
+  // A single event's P&L must cover the WHOLE event. Tickets routinely sell across
+  // months (early-bird in the prior month), so gating one event's revenue by calendar
+  // date drops real income and makes this report disagree with the month-end close.
+  // Only the cross-event ("All events") view is genuinely date-ranged.
+  const recognize = (key: string | null) => (isAll ? inRange(key, from, to) : true)
+
   let attQ = supabaseAdmin.from('attendees').select('id, event_id, payment_amount, payment_status, paid_at, created_at')
   let expQ = supabaseAdmin.from('expenses').select('amount, category, created_at')
   let attribQ = supabaseAdmin.from('affiliate_attributions').select('event_id, attendee_id, affiliate_id')
@@ -111,11 +117,11 @@ export async function GET(req: Request) {
   for (const a of att ?? []) {
     if (a.payment_status !== 'paid') continue
     const key = dayKey(a.paid_at ?? a.created_at)
-    if (inRange(key, from, to)) incomeRows.push({ name: 'Ticket Sales', amount: Number(a.payment_amount ?? 0) })
+    if (recognize(key)) incomeRows.push({ name: 'Ticket Sales', amount: Number(a.payment_amount ?? 0) })
   }
   for (const f of fin ?? []) {
     if (f.type !== 'income') continue
-    if (inRange(dayKey(f.entry_date), from, to)) incomeRows.push({ name: f.category || 'Other Income', amount: Number(f.amount ?? 0) })
+    if (recognize(dayKey(f.entry_date))) incomeRows.push({ name: f.category || 'Other Income', amount: Number(f.amount ?? 0) })
   }
 
   const cosRows: { name: string; amount: number }[] = []
@@ -126,7 +132,7 @@ export async function GET(req: Request) {
   }
 
   for (const e of exp ?? []) {
-    if (!inRange(dayKey(e.created_at), from, to)) continue
+    if (!recognize(dayKey(e.created_at))) continue
     pushExpense(e.category || 'Other Expense', Number(e.amount ?? 0))
   }
   const rateByAffiliate = new Map<string, number>((affs ?? []).map(a => [a.id as string, Number(a.commission_rate ?? 0)]))
@@ -137,13 +143,13 @@ export async function GET(req: Request) {
     const a = attendeeById.get(ab.attendee_id as string)
     if (!a || a.payment_status !== 'paid') continue
     const key = dayKey(a.paid_at ?? a.created_at)
-    if (!inRange(key, from, to)) continue
+    if (!recognize(key)) continue
     const rate = rateByAffiliate.get(ab.affiliate_id as string) ?? 0
     pushExpense('Affiliate Commission', Number(a.payment_amount ?? 0) * rate)
   }
   for (const f of fin ?? []) {
     if (f.type !== 'expense') continue
-    if (!inRange(dayKey(f.entry_date), from, to)) continue
+    if (!recognize(dayKey(f.entry_date))) continue
     pushExpense(f.category || 'Other Expense', Number(f.amount ?? 0))
   }
 
