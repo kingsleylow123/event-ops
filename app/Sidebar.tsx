@@ -86,7 +86,6 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
       id: 'during', title: 'During Event', items: [
         { href: '/attendees', label: 'Attendees', icon: icons.attendees },
         { href: '/attendees?type=facilitator', label: 'Facilitators', icon: icons.team },
-        { href: '/meetings', label: 'Activity', icon: icons.activity },
       ],
     },
     ...(isAdmin ? [{
