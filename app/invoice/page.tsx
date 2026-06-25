@@ -16,6 +16,7 @@ type AttendeeLite = {
 }
 
 type LineItem = { desc: string; qty: string; unit: string }
+type QuickItem = { desc: string; note: string; qty: string; price: string }
 type Payment = { label: string; amount: string }
 
 // ── Helpers ─────────────────────────────────────────────────────────────
@@ -65,11 +66,19 @@ function InvoiceContent() {
   const [bankAccount, setBankAccount] = useState('5142 8090 1848')
   const [bankHolder, setBankHolder] = useState('Kingsley Low Yean Wee')
 
-  // ── Quick mode
-  const [desc, setDesc] = useState(params.get('desc') || '[VIP] Claude Half Day Workshop')
-  const [note, setNote] = useState(params.get('note') || '[non refundable')
-  const [amount, setAmount] = useState(params.get('amount') || '0')
-  const amountNum = useMemo(() => num(amount), [amount])
+  // ── Quick mode — one row per ticket
+  const [quickItems, setQuickItems] = useState<QuickItem[]>([
+    {
+      desc: params.get('desc') || '[VIP] Claude Half Day Workshop',
+      note: params.get('note') || '[non refundable',
+      qty: '1',
+      price: params.get('amount') || '0',
+    },
+  ])
+  const quickTotal = useMemo(
+    () => quickItems.reduce((s, it) => s + num(it.qty) * num(it.price), 0),
+    [quickItems],
+  )
 
   // ── Balance mode
   const [lineItems, setLineItems] = useState<LineItem[]>([
@@ -104,7 +113,7 @@ function InvoiceContent() {
 
   async function pushToBukku() {
     const isBalance = mode === 'balance'
-    const total = isBalance ? subtotal : amountNum
+    const total = isBalance ? subtotal : quickTotal
     if (!name || name.trim().toUpperCase() === 'CLIENT NAME') {
       setPushMsg({ ok: false, text: 'Enter the client name first.' })
       return
@@ -116,7 +125,7 @@ function InvoiceContent() {
     const summary = isBalance
       ? `Create a Bukku invoice for ${name}: ${rm(subtotal)}` +
         (payments.length ? ` · ${payments.length} payment(s) · balance ${rm(Math.max(0, balanceDue))}` : '')
-      : `Create a Bukku invoice for ${name}: ${rm(amountNum)}`
+      : `Create a Bukku invoice for ${name}: ${rm(quickTotal)}`
     if (!window.confirm(`${summary}\n\nThis writes to your REAL Bukku books. Continue?`)) return
 
     setPushing(true)
@@ -130,7 +139,14 @@ function InvoiceContent() {
             lines: lineItems.map(li => ({ desc: li.desc, qty: num(li.qty), unit: num(li.unit) })),
             payments: payments.map(p => ({ label: p.label, amount: num(p.amount) })),
           }
-        : { client_name: name, date, mode: 'quick' as const, description: desc, amount: amountNum }
+        : {
+            client_name: name,
+            date,
+            mode: 'quick' as const,
+            lines: quickItems
+              .filter(it => it.desc.trim() || num(it.price) !== 0)
+              .map(it => ({ desc: it.desc, qty: num(it.qty) || 1, unit: num(it.price) })),
+          }
 
       const res = await fetch('/api/bukku/invoice', {
         method: 'POST',
@@ -271,7 +287,7 @@ function InvoiceContent() {
 
   async function emailInvoice() {
     const isBalance = mode === 'balance'
-    const total = isBalance ? subtotal : amountNum
+    const total = isBalance ? subtotal : quickTotal
     if (!name || name.trim().toUpperCase() === 'CLIENT NAME') {
       setEmailMsg({ ok: false, text: 'Enter the client name first.' })
       return
@@ -378,10 +394,17 @@ function InvoiceContent() {
     const finalDesc = stripeDesc || fallbackDesc
 
     if (mode === 'quick') {
-      setDesc(finalDesc)
+      // Add as a ticket row, dropping the empty placeholder row if present.
       // Stripe product name already contains "(non-refundable)" — skip the note line
-      setNote(stripeDesc ? '' : (a.notes || '[non refundable'))
-      setAmount(String(a.payment_amount ?? 0))
+      setQuickItems(items => [
+        ...items.filter(it => it.desc.trim() || num(it.price) !== 0),
+        {
+          desc: finalDesc,
+          note: stripeDesc ? '' : (a.notes || '[non refundable'),
+          qty: '1',
+          price: String(a.payment_amount ?? 0),
+        },
+      ])
     } else {
       // Add as a line item in balance mode
       setLineItems(items => [
@@ -389,6 +412,18 @@ function InvoiceContent() {
         { desc: finalDesc, qty: '1', unit: String(a.payment_amount ?? 0) },
       ])
     }
+  }
+
+  // ── Quick ticket helpers
+  function updateQuickItem(i: number, patch: Partial<QuickItem>) {
+    setQuickItems(items => items.map((it, idx) => (idx === i ? { ...it, ...patch } : it)))
+  }
+  function removeQuickItem(i: number) {
+    // Keep at least one row so the table never disappears
+    setQuickItems(items => (items.length === 1 ? items : items.filter((_, idx) => idx !== i)))
+  }
+  function addQuickItem() {
+    setQuickItems(items => [...items, { desc: '', note: '', qty: '1', price: '0' }])
   }
 
   // ── Line items + payments helpers
@@ -593,29 +628,55 @@ function InvoiceContent() {
                   <thead>
                     <tr>
                       <th className="col-desc">Description</th>
-                      <th className="col-price">Price</th>
+                      <th className="col-qty">Qty</th>
+                      <th className="col-unit">Unit</th>
+                      <th className="col-amount">Amount</th>
+                      <th className="col-x"></th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr>
-                      <td className="col-desc">
-                        <textarea
-                          className="inv-edit inv-desc-edit"
-                          value={`${desc}\n${note}`}
-                          onChange={e => {
-                            const lines = e.target.value.split('\n')
-                            setDesc(lines[0] || '')
-                            setNote(lines.slice(1).join('\n'))
-                          }}
-                        />
-                      </td>
-                      <td className="col-price">
-                        <input
-                          className="inv-edit"
-                          value={amount}
-                          onChange={e => setAmount(e.target.value)}
-                          style={{ textAlign: 'right', width: 100 }}
-                        />
+                    {quickItems.map((it, i) => (
+                      <tr key={i}>
+                        <td className="col-desc">
+                          <textarea
+                            className="inv-edit inv-desc-edit"
+                            value={`${it.desc}\n${it.note}`}
+                            onChange={e => {
+                              const lines = e.target.value.split('\n')
+                              updateQuickItem(i, {
+                                desc: lines[0] || '',
+                                note: lines.slice(1).join('\n'),
+                              })
+                            }}
+                          />
+                        </td>
+                        <td className="col-qty">
+                          <input
+                            className="inv-edit"
+                            value={it.qty}
+                            onChange={e => updateQuickItem(i, { qty: e.target.value })}
+                            style={{ textAlign: 'center', width: 40 }}
+                          />
+                        </td>
+                        <td className="col-unit">
+                          <input
+                            className="inv-edit"
+                            value={it.price}
+                            onChange={e => updateQuickItem(i, { price: e.target.value })}
+                            style={{ textAlign: 'right', width: 80 }}
+                          />
+                        </td>
+                        <td className="col-amount">{rm(num(it.qty) * num(it.price))}</td>
+                        <td className="col-x">
+                          {quickItems.length > 1 && (
+                            <button onClick={() => removeQuickItem(i)} className="x-btn">✕</button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="add-row">
+                      <td colSpan={5}>
+                        <button onClick={addQuickItem} className="add-btn">+ Add ticket</button>
                       </td>
                     </tr>
                   </tbody>
@@ -653,7 +714,7 @@ function InvoiceContent() {
                   </div>
                   <div className="inv-total">
                     <span className="inv-total-lbl">TOTAL</span>
-                    <span className="inv-total-amt">{rm(amountNum)}</span>
+                    <span className="inv-total-amt">{rm(quickTotal)}</span>
                   </div>
                 </div>
               </>
@@ -1033,19 +1094,27 @@ const INVOICE_CSS = `
   .inv-table thead th {
     color: #fff;
     font-weight: 700;
-    font-size: 15px;
+    font-size: 14px;
     letter-spacing: 0.5px;
-    padding: 14px 24px;
+    padding: 12px 14px;
   }
   .inv-table thead th.col-desc { text-align: left; }
-  .inv-table thead th.col-price { text-align: right; }
+  .inv-table thead th.col-qty { text-align: center; width: 50px; }
+  .inv-table thead th.col-unit { text-align: right; width: 90px; }
+  .inv-table thead th.col-amount { text-align: right; width: 110px; }
+  .inv-table thead th.col-x { width: 30px; }
   .inv-table tbody td {
     font-size: 14px;
     color: #222;
-    padding: 20px 24px;
+    padding: 4px 14px;
     vertical-align: top;
   }
-  .inv-table tbody td.col-price { text-align: right; }
+  .inv-table tbody td.col-qty { text-align: center; }
+  .inv-table tbody td.col-unit, .inv-table tbody td.col-amount { text-align: right; }
+  .inv-table tbody td.col-x { text-align: center; padding: 4px 8px; }
+  /* The "+ Add ticket" row is screen-only — never in the printed/exported PDF */
+  .is-exporting .add-row { display: none !important; }
+  @media print { .add-row { display: none !important; } }
 
   /* Balance mode table */
   .items-table { width: 100%; border-collapse: collapse; }
@@ -1189,7 +1258,7 @@ const INVOICE_CSS = `
   }
   .inv-edit:hover { border-color: #cfcfcf; }
   .inv-edit:focus { outline: none; border-color: #888; background: #fafafa; }
-  .inv-desc-edit { width: 100%; min-height: 60px; resize: vertical; }
+  .inv-desc-edit { width: 100%; min-height: 28px; resize: vertical; }
   .inv-line-desc {
     width: 100%;
     min-height: 60px;
@@ -1262,5 +1331,35 @@ const INVOICE_CSS = `
     white-space: pre-wrap !important;
     word-break: break-word !important;
     overflow: visible !important;
+  }
+
+  /* ── Mobile (iPhone / narrow viewport) ──
+     The invoice page is a fixed 794×1123 A4 canvas so PDF export captures it
+     pixel-perfect. On narrow screens we scale the whole sheet down with
+     transform so it fits the viewport, and use a negative margin to recover
+     the empty space below. :not(.is-exporting) keeps html2pdf's capture
+     (windowWidth: 794) running at the original 1× scale. */
+  @media (max-width: 820px) {
+    .invoice-shell { padding: 12px 8px 20px; overflow-x: hidden; }
+    .invoice-toolbar { width: 100%; gap: 8px; }
+    .invoice-toolbar > div:first-child { min-width: 0 !important; width: 100%; }
+    .invoice-toolbar .search-input { width: 100%; box-sizing: border-box; }
+    .mode-tabs { width: 100%; }
+    .mode-tab { flex: 1; padding: 10px 8px !important; font-size: 12px !important; }
+    .invoice-toolbar > button {
+      flex: 1 1 calc(50% - 8px);
+      padding: 10px 12px;
+      font-size: 12px;
+      min-width: 0;
+    }
+    .email-row { flex-direction: column; gap: 8px; }
+    .email-row .search-input { max-width: none !important; }
+    .email-row button { width: 100%; }
+    .invoice-page:not(.is-exporting) {
+      align-self: flex-start;
+      transform-origin: top left;
+      transform: scale(calc((100vw - 16px) / 794px));
+      margin-bottom: calc(1123px * (((100vw - 16px) / 794px) - 1));
+    }
   }
 `

@@ -53,9 +53,12 @@ export async function POST(req: Request) {
   const date = body.date && ISO.test(body.date) ? body.date : new Date().toISOString().slice(0, 10)
 
   // Build line items from whichever mode is active.
+  // Both modes may send an itemised `lines` array (balance mode always does;
+  // quick mode does once it has multiple tickets). Quick mode still accepts the
+  // legacy single `description` + `amount` shape as a fallback.
   const lines =
-    body.mode === 'balance'
-      ? (body.lines ?? [])
+    body.lines && body.lines.length
+      ? body.lines
           .map(l => ({ description: (l.desc || '').trim() || 'Workshop', quantity: num(l.qty) || 1, unit_price: num(l.unit) }))
           .filter(l => l.unit_price > 0)
       : [
