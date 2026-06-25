@@ -64,6 +64,39 @@ function esc(v: unknown): string {
 }
 const b = (v: unknown) => `<b>${esc(v)}</b>`
 
+// ── Markdown → Telegram-HTML safety net ───────────────────────────────────────
+// The natural-language answers (askClaude) are told to emit ONLY <b>/<i>, but the
+// model still occasionally reaches for Markdown — **bold**, # headers, or a
+// | pipe table | when the data is tabular. Telegram's HTML parser renders those
+// raw, so "**RM134.10**" or "|---|---|" leaks to the admin as literal junk. This
+// converts the Markdown the model emits into clean Telegram HTML / • bullets
+// BEFORE sending. Deterministic formatters already emit valid HTML (no ** or |),
+// so running it on their output is a harmless no-op.
+function mdToTelegramHtml(input: string): string {
+  let s = input
+  // Bold: **x** / __x__ → <b>x</b>  (non-greedy, never spans newlines)
+  s = s.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/__(.+?)__/g, '<b>$1</b>')
+  // Backticks / code fences render literally on Telegram — drop to plain text
+  s = s.replace(/```+/g, '').replace(/`([^`]+)`/g, '$1')
+  const out: string[] = []
+  for (const line of s.split('\n')) {
+    // Markdown heading "## Title" → bold line
+    const h = line.match(/^\s*#{1,6}\s+(.*\S)\s*$/)
+    if (h) { out.push(`<b>${h[1]}</b>`); continue }
+    // Table separator row "|---|:--:|" → drop entirely
+    if (/^\s*\|?[\s:|-]+\|?\s*$/.test(line) && line.includes('-') && line.includes('|')) continue
+    // Table data/header row "| a | b | c |" → "• a · b · c"
+    const t = line.match(/^\s*\|(.+)\|\s*$/)
+    if (t) {
+      const cells = t[1].split('|').map(c => c.trim()).filter(Boolean)
+      if (cells.length) { out.push(`• ${cells.join(' · ')}`); continue }
+    }
+    out.push(line)
+  }
+  // Collapse any 3+ blank-line gaps the conversion leaves behind
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim()
+}
+
 // ── Telegram helpers ──────────────────────────────────────────────────────────
 // One bounded retry with backoff on 429/5xx or network throw. Capped at a
 // single retry on purpose: sendMessage isn't idempotent on Telegram's side, so
@@ -1266,7 +1299,8 @@ Rules:
 - Be concise and direct. This is Telegram — short answers, no preamble.
 - Give ONLY the final answer — never think out loud or self-correct in the message. No "there are two… wait, actually one", no "let me check", no "hmm, that's 12th July". Work it out silently, then state the result once. If you catch a mistake mid-thought, fix it BEFORE you write — the admin sees only the clean, final answer.
 - When the admin asks about a specific date or event, reply ONLY about the event(s) that match that date/name. Do NOT list, mention, or "rule out" events that don't match (no "Workshop (12th July) — wait, that's not it"). If exactly one event matches, answer for it directly without enumerating others.
-- You may use these HTML tags ONLY: <b>, <i>. No markdown, no other tags, no headers.
+- You may use these HTML tags ONLY: <b>, <i>. NO Markdown at all — never output ** or __ (use <b>…</b> for bold), # headers, backtick code, or | pipe tables. Telegram renders raw Markdown as ugly literal symbols.
+- NEVER format data as a table. For multi-row data (several affiliates, ticket tiers, any breakdown) use ONE • bullet per row with the key fields in <b>…</b> — e.g. "• <b>vinesh186</b> — 2 buyers · RM1,341 · commission <b>RM134.10</b>". Put sub-details (buyer names) on indented lines beneath the bullet.
 - When listing people, use • bullets on separate lines.
 - Do the math when asked (counts, %, revenue gaps, who's missing from X). Cross-reference survey vs attendees by name/phone when relevant.
 - If data isn't present, say so plainly.
@@ -1388,9 +1422,10 @@ DATA>>>`
     return preview
   }
 
-  // Otherwise just return Claude's text reply
+  // Otherwise just return Claude's text reply — sanitised so any stray Markdown
+  // (**bold**, # headers, | tables) the model emits becomes clean Telegram HTML.
   const block = first.content.find(x => x.type === 'text')
-  return block && block.type === 'text' ? block.text : 'Sorry, I could not generate a reply.'
+  return block && block.type === 'text' ? mdToTelegramHtml(block.text) : 'Sorry, I could not generate a reply.'
 }
 
 // ── Command router ────────────────────────────────────────────────────────────
