@@ -209,7 +209,11 @@ function InvoiceContent() {
         const replacement = document.createElement(tag) as HTMLElement
         replacement.textContent = input.value || ''
         const textAlign = input.style.textAlign || cs.textAlign
-        const width = input.tagName === 'TEXTAREA' ? '100%' : 'auto'
+        // Billing name/address must stay in its column and wrap; other textareas
+        // (line descriptions) fill their cell at 100%.
+        const width = input.classList.contains('inv-name')
+          ? '400px'
+          : input.tagName === 'TEXTAREA' ? '100%' : 'auto'
         replacement.style.cssText =
           `display:${isBlock ? 'block' : 'inline-block'};` +
           `width:${width};` +
@@ -569,8 +573,8 @@ function InvoiceContent() {
                   className="inv-edit inv-name"
                   value={name}
                   onChange={e => setName(e.target.value)}
-                  rows={2}
-                  style={{ minWidth: 200, width: 240, resize: 'both', fontFamily: 'inherit', lineHeight: 1.3 }}
+                  rows={5}
+                  style={{ minWidth: 200, width: 380, resize: 'both', fontFamily: 'inherit', lineHeight: 1.5 }}
                 />
               </div>
               <div className="inv-company-right">
@@ -689,7 +693,7 @@ function InvoiceContent() {
                   </div>
                 </div>
 
-                <div className="inv-footer" style={{ marginTop: 24 }}>
+                <div className="inv-footer" style={{ marginTop: 80 }}>
                   <div className="inv-payment">
                     <div className="inv-pay-title">PAYMENT METHOD</div>
                     <div className="inv-pay-details">
@@ -1070,7 +1074,7 @@ const INVOICE_CSS = `
     margin-bottom: 6px;
     font-weight: 500;
   }
-  .inv-name { font-size: 22px; font-weight: 400; color: #111; }
+  .inv-name { font-size: 14px; font-weight: 400; color: #111; line-height: 1.5; }
   .inv-company-right { text-align: right; }
   .inv-company-name { font-size: 22px; font-weight: 400; color: #111; margin-bottom: 6px; }
   .inv-company-contact { font-size: 13px; color: #555; line-height: 1.7; }
@@ -1111,6 +1115,7 @@ const INVOICE_CSS = `
     color: #222;
     padding: 4px 14px;
     vertical-align: top;
+    line-height: 1.45;
   }
   .inv-table tbody td.col-qty { text-align: center; }
   .inv-table tbody td.col-unit, .inv-table tbody td.col-amount { text-align: right; }
@@ -1237,12 +1242,13 @@ const INVOICE_CSS = `
   .inv-pay-note {
     font-size: 12px; color: #555; max-width: 240px; line-height: 1.6;
   }
-  .inv-total-row { display: flex; justify-content: flex-end; margin-top: 18px; margin-right: -24px; }
+  .inv-total-row { display: flex; justify-content: flex-end; margin-top: 18px; }
   .inv-total {
     background: #efeeec;
-    padding: 16px 28px;
+    padding: 16px 14px;
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 28px;
     min-width: 280px;
   }
