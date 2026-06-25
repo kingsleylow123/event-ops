@@ -682,6 +682,13 @@ function InvoiceContent() {
                   </tbody>
                 </table>
 
+                <div className="inv-total-row">
+                  <div className="inv-total">
+                    <span className="inv-total-lbl">TOTAL</span>
+                    <span className="inv-total-amt">{rm(quickTotal)}</span>
+                  </div>
+                </div>
+
                 <div className="inv-footer">
                   <div className="inv-payment">
                     <div className="inv-pay-title">PAYMENT METHOD</div>
@@ -711,10 +718,6 @@ function InvoiceContent() {
                     <div className="inv-pay-note">
                       Full payment should be made a minimum of 7 days to avoid termination of my services
                     </div>
-                  </div>
-                  <div className="inv-total">
-                    <span className="inv-total-lbl">TOTAL</span>
-                    <span className="inv-total-amt">{rm(quickTotal)}</span>
                   </div>
                 </div>
               </>
@@ -1234,6 +1237,7 @@ const INVOICE_CSS = `
   .inv-pay-note {
     font-size: 12px; color: #555; max-width: 240px; line-height: 1.6;
   }
+  .inv-total-row { display: flex; justify-content: flex-end; margin-top: 18px; }
   .inv-total {
     background: #efeeec;
     padding: 16px 28px;
