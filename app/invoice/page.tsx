@@ -689,7 +689,7 @@ function InvoiceContent() {
                   </div>
                 </div>
 
-                <div className="inv-footer">
+                <div className="inv-footer" style={{ marginTop: 24 }}>
                   <div className="inv-payment">
                     <div className="inv-pay-title">PAYMENT METHOD</div>
                     <div className="inv-pay-details">
@@ -1237,7 +1237,7 @@ const INVOICE_CSS = `
   .inv-pay-note {
     font-size: 12px; color: #555; max-width: 240px; line-height: 1.6;
   }
-  .inv-total-row { display: flex; justify-content: flex-end; margin-top: 18px; }
+  .inv-total-row { display: flex; justify-content: flex-end; margin-top: 18px; margin-right: -24px; }
   .inv-total {
     background: #efeeec;
     padding: 16px 28px;
