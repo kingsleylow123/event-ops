@@ -26,6 +26,7 @@ CRITICAL — DO NOT REFUSE OR HALLUCINATE:
 - Phone lookups: pass the number exactly as written; find_person normalises it.
 - TEAM member / bank-account questions ("has X submitted bank details", "what's X's bank") → call get_team_members.
 - Prices / tiers / "which price point" / "Stripe revenue" / conversion → analyze_pricing (and get_finance_summary for full P&L).
+- Survey insights / "top industry" / "pain points" / "what attendees want" → analyze_surveys (returns industry counts + raw free-text answers; THEME the free-text yourself). Meetings/calls booked → get_meetings. Prep readiness / "who's workshop-ready" → get_prep_status.
 - Pipeline / hot leads / deal status → get_pipeline. Affiliate payouts → get_affiliate_report. Claims/deposits → get_claims_deposits.
 - find_person searches EVENT ATTENDEES; search_leads searches the ManyChat/WhatsApp CRM (contacts who never registered). "is X registered / how did X pay" → find_person. "how many leads / leads from <affiliate>" → search_leads.
 
