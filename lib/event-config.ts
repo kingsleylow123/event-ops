@@ -14,6 +14,9 @@ export interface EventConfig {
   venue_label: string // short venue name used in countdown + copy
   date_label?: string // overrides the auto-formatted date pill (e.g. "20–21 June")
   time_label?: string // overrides the default time pill (e.g. "9:30am–6pm")
+  // ── Half-day extra-step media (optional; defaults below) ──
+  mcp_loom_id?: string // Loom — "Connect your apps (MCP / Connectors)" walkthrough
+  chrome_video_id?: string // YouTube — "Download Claude for Chrome & log in" (autoplay)
   // ── GLCC (2-day) variant — all optional; unset ⇒ half-day behavior ──
   prep_variant?: 'halfday' | 'glcc' // 'glcc' switches /start to the 2-day pre-flight
   template_repo_url?: string // "Use this template" link for the org starter (→ <username>/glcc-ops)
@@ -59,6 +62,8 @@ export const DEFAULT_EVENT_CONFIG: EventConfig = {
   docs_url: 'https://docs.google.com/document/d/1-cKqYXB2loZFGbhEFpUDKdrMwTVt5VATFXFbFiSTqeU/edit',
   venue_video_id: 'NeTd4AAxTrY',
   venue_label: 'CO3 Puchong',
+  mcp_loom_id: '3bd77d10c1394dc7afc7b7839427acfa',
+  chrome_video_id: 'IypXvHej9eY',
 }
 
 export function resolveEventConfig(raw?: Partial<EventConfig> | null): EventConfig {

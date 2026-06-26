@@ -2,7 +2,9 @@
 // The /start page, prep API, Insights widget, and Jarvis /prep all read from
 // here — adding, removing, or renaming a step is a one-file change.
 
-export const PREP_STEP_KEYS = ['1', '2', '3', '4', '5', '6'] as const
+// Order = lock/display order. New steps use STABLE keys ('mcp','chrome') slotted
+// into position, so an attendee's already-saved 1–6 progress never shifts meaning.
+export const PREP_STEP_KEYS = ['1', '2', '3', 'mcp', 'chrome', '4', '5', '6'] as const
 export type PrepStepKey = (typeof PREP_STEP_KEYS)[number]
 
 export const PREP_STEP_COUNT = PREP_STEP_KEYS.length
@@ -12,6 +14,8 @@ export const PREP_STEP_LABELS: Record<string, string> = {
   '1': 'Install Claude Code',
   '2': 'Get Claude Pro',
   '3': 'Install dev tools',
+  'mcp': 'Connect apps (MCP)',
+  'chrome': 'Claude for Chrome',
   '4': 'Fill survey',
   '5': 'Prepare data',
   '6': 'Show up 9:30am',
@@ -22,6 +26,8 @@ export const PREP_STEP_SHORT: Record<string, string> = {
   '1': 'Install',
   '2': 'Pro',
   '3': 'Dev tools',
+  'mcp': 'MCP',
+  'chrome': 'Chrome',
   '4': 'Survey',
   '5': 'Data',
   '6': '9:30am',

@@ -5,6 +5,7 @@ import { isValidPhone } from '@/lib/validate'
 import { PREP_STEP_KEYS, GLCC_PREP_STEP_KEYS, PREP_TRACKS, PREP_TRACK_TOOLS, emptySteps, type PrepTrackKey } from '@/lib/prep-steps'
 import { GLCC_SETUP_SKILL } from '@/lib/glcc-skill'
 import { resolveEventConfig, type EventConfig } from '@/lib/event-config'
+import { HALFDAY_PREP_QUIZ, type PrepQuiz } from '@/lib/prep-quiz'
 
 // Countdown deadline = midnight (00:00) at the START of the event's calendar
 // day, in Malaysia time (UTC+8). Take the event's date as seen in Asia/
@@ -48,6 +49,8 @@ function StartContent() {
   const [verified, setVerified] = useState(false)
   const [copiedSkill, setCopiedSkill] = useState(false)
   const [factsError, setFactsError] = useState(false)
+  // Half-day quiz gating: which step's "quick check" panel is currently open.
+  const [quizOpen, setQuizOpen] = useState<string | null>(null)
 
   const PHONE_KEY = `prep_phone_${eventId}`
   const STEPS_KEY = `prep_steps_${eventId}`
@@ -91,10 +94,11 @@ function StartContent() {
   const doneCount = stepKeys.filter(k => steps[k]).length
   const pct = Math.round((doneCount / stepCount) * 100)
   const allDone = doneCount === stepCount
-  // Hard-lock gating (GLCC only): only the first unfinished step is open; every
-  // step after it stays locked until the step above is ticked.
+  // Hard-lock gating (both variants): only the first unfinished step is open; every
+  // step after it stays locked until the step above is completed. A done step is
+  // never shown as locked — guards mid-progress users when a new step is inserted.
   const firstOpenIdx = (() => { const i = stepKeys.findIndex(k => !steps[k]); return i === -1 ? stepKeys.length : i })()
-  const isLocked = (n: string) => isGlcc && !previewUnlock && stepKeys.indexOf(n) > firstOpenIdx
+  const isLocked = (n: string) => !previewUnlock && stepKeys.indexOf(n) > firstOpenIdx && !steps[n]
 
   // Cloud sync with visible failure: progress always lands in localStorage,
   // but if the POST fails (flaky wifi) the attendee sees a retry toast instead
@@ -123,6 +127,18 @@ function StartContent() {
     if (!phone && !previewUnlock) { setPendingStep(id); setPhoneAsked(true); return }
     const next = { ...steps, [id]: !steps[id] }
     setSteps(next); persistSteps(next, phone)
+  }
+  // Half-day steps are quiz-gated: ticking opens the quiz instead of marking done.
+  // (Already-done steps untick directly.) The step is only marked done once the
+  // quiz is passed — see passQuiz.
+  function tickHalfdayStep(id: string) {
+    if (steps[id]) { const next = { ...steps, [id]: false }; setSteps(next); persistSteps(next, phone); return }
+    setQuizOpen(id)
+  }
+  function passQuiz(id: string) {
+    if (!phone && !previewUnlock) { setPendingStep(id); setPhoneAsked(true); return }
+    const next = { ...steps, [id]: true }
+    setSteps(next); persistSteps(next, phone); setQuizOpen(null)
   }
   function setAck(v: boolean) {
     setIpadAck(v); persistMisc({ ipadAck: v })
@@ -168,7 +184,7 @@ function StartContent() {
     setSteps(next)
     try { localStorage.setItem(STEPS_KEY, JSON.stringify(next)); localStorage.setItem(PHONE_KEY, ph) } catch { /* ignore */ }
     syncToCloud(next, ipadAck, ph)
-    setPendingStep(null); setPhoneInput('')
+    setPendingStep(null); setPhoneInput(''); setQuizOpen(null)
   }
 
   const cfg = resolveEventConfig(facts?.config)
@@ -292,7 +308,7 @@ function StartContent() {
         {!isGlcc && (
         <div className="mt-4 space-y-3">
           {/* Step 1 */}
-          <StepCard n="1" done={steps['1']} onToggle={() => toggleStep('1')}
+          <StepCard n="1" done={steps['1']} onToggle={() => tickHalfdayStep('1')} locked={isLocked('1')} active={quizOpen === '1'}
             title="Install Claude Code" subtitle="On your Mac or Windows laptop">
             <a href="https://claude.com/download" target="_blank" rel="noopener noreferrer" className="cta">⬇️ Download Claude Code</a>
             <button onClick={() => setAck(!ipadAck)}
@@ -304,17 +320,19 @@ function StartContent() {
               </span>
               <span className="text-[13px] text-zinc-300 leading-snug">I understand I will <b className="text-white">not bring an iPad or tablet</b> — Claude Code needs a real laptop.</span>
             </button>
+            {quizOpen === '1' && <StepQuiz quiz={HALFDAY_PREP_QUIZ['1']} onPass={() => passQuiz('1')} />}
           </StepCard>
 
           {/* Step 2 */}
-          <StepCard n="2" done={steps['2']} onToggle={() => toggleStep('2')}
+          <StepCard n="2" done={steps['2']} onToggle={() => tickHalfdayStep('2')} locked={isLocked('2')} active={quizOpen === '2'}
             title="Get Claude Pro" subtitle="$17 USD/month minimum">
             <p className="text-[13px] text-zinc-400 mb-3 leading-relaxed">The <b className="text-zinc-200">Free plan can&apos;t run Claude Code</b> and runs out of tokens too fast in the workshop. Pro is essential.</p>
             <a href="https://claude.com/pricing" target="_blank" rel="noopener noreferrer" className="cta">⭐ Get Claude Pro</a>
+            {quizOpen === '2' && <StepQuiz quiz={HALFDAY_PREP_QUIZ['2']} onPass={() => passQuiz('2')} />}
           </StepCard>
 
           {/* Step 3 — CRITICAL, OS-aware */}
-          <StepCard n="3" done={steps['3']} onToggle={() => toggleStep('3')} critical
+          <StepCard n="3" done={steps['3']} onToggle={() => tickHalfdayStep('3')} locked={isLocked('3')} active={quizOpen === '3'} critical
             title="Install your dev tools" subtitle="Homebrew (Mac) or Git (Windows)">
             <div className="rounded-xl px-3 py-2 mb-3 text-[12px] font-semibold text-red-300 inline-flex items-center gap-1.5"
               style={{ background: 'rgba(239,68,68,0.10)', border: '1px solid rgba(239,68,68,0.25)' }}>
@@ -340,16 +358,44 @@ function StartContent() {
               </span>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-indigo-300"><path d="M9 18l6-6-6-6" /></svg>
             </a>
+            {quizOpen === '3' && <StepQuiz quiz={HALFDAY_PREP_QUIZ['3']} onPass={() => passQuiz('3')} />}
           </StepCard>
 
-          {/* Step 4 */}
-          <StepCard n="4" done={steps['4']} onToggle={() => toggleStep('4')}
+          {/* Step 4 — NEW: connect apps via MCP / Connectors */}
+          <StepCard n="4" done={steps['mcp']} onToggle={() => tickHalfdayStep('mcp')} locked={isLocked('mcp')} active={quizOpen === 'mcp'}
+            title="Connect your apps to Claude" subtitle="5-min setup — MCP / Connectors">
+            <Loom id={cfg.mcp_loom_id || '3bd77d10c1394dc7afc7b7839427acfa'} label="🎬 Connect your apps to Claude (MCP / Connectors)" />
+            <p className="text-[13px] text-zinc-400 my-3 leading-relaxed">
+              <b className="text-zinc-200">MCP / Connectors</b> are a secure bridge between Claude and your tools — Gmail, Google Drive, Notion, your CRM. Connect one and you can ask Claude about <b className="text-amber-300">your real work</b> and have it take action for you.
+            </p>
+            <div className="rounded-xl px-3.5 py-3 text-[12px] text-zinc-300 leading-relaxed"
+              style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.22)' }}>
+              💡 Example: connect Google Drive → &ldquo;summarise our latest sales report&rdquo;. Connect Gmail → &ldquo;draft replies to my unread leads&rdquo;.
+            </div>
+            {quizOpen === 'mcp' && <StepQuiz quiz={HALFDAY_PREP_QUIZ['mcp']} onPass={() => passQuiz('mcp')} />}
+          </StepCard>
+
+          {/* Step 5 — NEW: Claude for Chrome + login (autoplay video) */}
+          <StepCard n="5" done={steps['chrome']} onToggle={() => tickHalfdayStep('chrome')} locked={isLocked('chrome')} active={quizOpen === 'chrome'}
+            title="Download Claude for Chrome & log in" subtitle="The browser extension — so Claude works in your browser">
+            <Video id={cfg.chrome_video_id || 'IypXvHej9eY'} label="🎬 Add Claude to Chrome & log in" full autoplay />
+            <p className="text-[13px] text-zinc-400 my-3 leading-relaxed">
+              Add the <b className="text-zinc-200">Claude for Chrome</b> extension, then <b className="text-amber-300">log in with your Claude account</b>. It lets Claude see and click inside your browser tabs during the workshop.
+            </p>
+            <a href="https://chromewebstore.google.com/detail/claude/fcoeoabgfenejglbffodgkkbkcdhcgfn?pli=1" target="_blank" rel="noopener noreferrer" className="cta">🧩 Add Claude to Chrome</a>
+            <p className="text-[12px] text-zinc-500 mt-2">After adding it, <b className="text-zinc-300">pin it</b> and <b className="text-zinc-300">log in</b> when asked.</p>
+            {quizOpen === 'chrome' && <StepQuiz quiz={HALFDAY_PREP_QUIZ['chrome']} onPass={() => passQuiz('chrome')} />}
+          </StepCard>
+
+          {/* Step 6 — pre-event survey (stable key '4') */}
+          <StepCard n="6" done={steps['4']} onToggle={() => tickHalfdayStep('4')} locked={isLocked('4')} active={quizOpen === '4'}
             title="Fill the pre-event survey" subtitle="2 mins — so we tailor the class to you">
             <a href={surveyUrl} target="_blank" rel="noopener noreferrer" className="cta">📝 Open the survey</a>
+            {quizOpen === '4' && <StepQuiz quiz={HALFDAY_PREP_QUIZ['4']} onPass={() => passQuiz('4')} />}
           </StepCard>
 
-          {/* Step 5 — bring your data */}
-          <StepCard n="5" done={steps['5']} onToggle={() => toggleStep('5')}
+          {/* Step 7 — bring your data (stable key '5') */}
+          <StepCard n="7" done={steps['5']} onToggle={() => tickHalfdayStep('5')} locked={isLocked('5')} active={quizOpen === '5'}
             title="Prepare your business data" subtitle="Excel or Google Sheets — so we can plug it in">
             <p className="text-[13px] text-zinc-400 mb-3 leading-relaxed">
               Bring real numbers from <b className="text-zinc-200">your own business</b> in an <b className="text-zinc-200">Excel or Google Sheets</b> file — sales, leads, expenses, inventory, anything. We&apos;ll plug it straight into <b className="text-amber-300">your first live dashboard</b> in class.
@@ -358,13 +404,15 @@ function StartContent() {
               style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.22)' }}>
               💡 No data ready? A simple month-by-month sheet (e.g. revenue per month) is enough to see it come alive.
             </div>
+            {quizOpen === '5' && <StepQuiz quiz={HALFDAY_PREP_QUIZ['5']} onPass={() => passQuiz('5')} />}
           </StepCard>
 
-          {/* Step 6 — show up early + venue */}
-          <StepCard n="6" done={steps['6']} onToggle={() => toggleStep('6')}
+          {/* Step 8 — show up early + venue (stable key '6') */}
+          <StepCard n="8" done={steps['6']} onToggle={() => tickHalfdayStep('6')} locked={isLocked('6')} active={quizOpen === '6'}
             title="Show up EARLY — 9:30am" subtitle="Watch this so you know how to find us">
             <p className="text-[13px] text-zinc-400 mb-3 leading-relaxed">Here&apos;s exactly how to get up to the venue 👇 (and a peek inside!)</p>
             <Video id={cfg.venue_video_id} label={`🎬 How to get to ${cfg.venue_label} — Venue Guide`} full />
+            {quizOpen === '6' && <StepQuiz quiz={HALFDAY_PREP_QUIZ['6']} onPass={() => passQuiz('6')} />}
           </StepCard>
         </div>
         )}
@@ -926,11 +974,11 @@ function Ring({ pct }: { pct: number }) {
   )
 }
 
-function StepCard({ n, title, subtitle, done, onToggle, critical, locked, children }: {
-  n: string; title: string; subtitle: string; done: boolean; onToggle: () => void; critical?: boolean; locked?: boolean; children: React.ReactNode
+function StepCard({ n, title, subtitle, done, onToggle, critical, locked, active, children }: {
+  n: string; title: string; subtitle: string; done: boolean; onToggle: () => void; critical?: boolean; locked?: boolean; active?: boolean; children: React.ReactNode
 }) {
   return (
-    <Glass className={`p-4 transition-all ${locked ? 'opacity-50' : ''} ${done && !locked ? 'border-amber-500/30' : critical && !locked ? 'border-red-500/25' : ''}`}
+    <Glass className={`p-4 transition-all ${locked ? 'opacity-50' : ''} ${done && !locked ? 'border-amber-500/30' : active && !locked ? 'border-amber-500/40' : critical && !locked ? 'border-red-500/25' : ''}`}
       style={done && !locked ? { background: 'rgba(245,158,11,0.05)' } : undefined}>
       <div className="flex items-start gap-3.5">
         <button onClick={locked ? undefined : onToggle} disabled={locked} aria-label={locked ? 'Locked' : done ? 'Mark incomplete' : 'Mark complete'}
@@ -972,17 +1020,89 @@ function Loom({ id, label }: { id: string; label: string }) {
   )
 }
 
-function Video({ id, label, full }: { id: string; label: string; full?: boolean }) {
+function Video({ id, label, full, autoplay }: { id: string; label: string; full?: boolean; autoplay?: boolean }) {
+  // Muted autoplay so browsers (incl. iOS Safari) actually start playback inline;
+  // the viewer can unmute. Only used where a step is already unlocked/in view.
+  const src = `https://www.youtube-nocookie.com/embed/${id}${autoplay ? '?autoplay=1&mute=1&playsinline=1&rel=0' : ''}`
   return (
     <div className={full ? 'w-full' : 'w-[260px] shrink-0'}>
       <div className="relative w-full rounded-2xl overflow-hidden border border-white/10" style={{ aspectRatio: '16/9' }}>
         <iframe
-          src={`https://www.youtube-nocookie.com/embed/${id}`}
+          src={src}
           title={label} loading="lazy" allowFullScreen
-          allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           className="absolute inset-0 w-full h-full" />
       </div>
       <div className="text-xs text-zinc-400 mt-2 font-medium">{label}</div>
+    </div>
+  )
+}
+
+// ── Per-step quiz ("quick check") — half-day flow gate ──────────────────────────
+// Tick a step → answer correctly → step is marked done (via onPass) → next unlocks.
+// Hint nudges; "Reveal answer" highlights the correct option + shows the why, but
+// the participant still taps the correct option to continue.
+function StepQuiz({ quiz, onPass }: { quiz: PrepQuiz; onPass: () => void }) {
+  const [picked, setPicked] = useState<number | null>(null)
+  const [showHint, setShowHint] = useState(false)
+  const [revealed, setRevealed] = useState(false)
+  const correctPicked = picked !== null && quiz.options[picked].correct
+  const wrongPicked = picked !== null && !quiz.options[picked].correct
+  const showWhy = correctPicked || revealed
+  return (
+    <div className="mt-3 rounded-2xl p-4 border border-amber-500/25" style={{ background: 'rgba(245,158,11,0.05)' }}>
+      <div className="flex items-center gap-2 mb-1.5">
+        <span className="text-[10px] font-bold tracking-wider uppercase text-amber-400/90">Quick check</span>
+        <span className="text-[10px] text-zinc-500">{quiz.type === 'tf' ? 'True or false' : 'Pick one'}</span>
+      </div>
+      <p className="text-[14px] font-semibold text-zinc-100 leading-snug mb-3">{quiz.question}</p>
+      <div className="space-y-2">
+        {quiz.options.map((opt, i) => {
+          const isPicked = picked === i
+          const showAsCorrect = (isPicked && opt.correct) || (revealed && opt.correct)
+          const showAsWrong = isPicked && !opt.correct
+          return (
+            <button key={i} onClick={() => setPicked(i)}
+              className={`w-full text-left rounded-xl px-3.5 py-2.5 text-[13px] border transition-all flex items-center gap-2.5
+                ${showAsCorrect ? 'border-emerald-500/50 bg-emerald-500/[0.10] text-white'
+                  : showAsWrong ? 'border-red-500/50 bg-red-500/[0.08] text-white'
+                  : 'border-white/10 bg-white/[0.02] text-zinc-300 hover:bg-white/[0.05]'}`}>
+              <span className={`w-5 h-5 shrink-0 rounded-full border flex items-center justify-center text-[11px] font-bold
+                ${showAsCorrect ? 'border-emerald-400 text-emerald-300' : showAsWrong ? 'border-red-400 text-red-300' : 'border-zinc-600 text-zinc-500'}`}>
+                {showAsCorrect ? '✓' : showAsWrong ? '✕' : String.fromCharCode(65 + i)}
+              </span>
+              <span className="flex-1">{opt.label}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      {wrongPicked && !revealed && <p className="text-[12px] text-red-300 mt-2.5">Not quite — try again, or tap a hint. 💪</p>}
+
+      {showHint && (
+        <div className="mt-2.5 rounded-xl px-3 py-2 text-[12px] text-amber-100/90 leading-relaxed"
+          style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.20)' }}>
+          💡 {quiz.hint}
+        </div>
+      )}
+
+      {showWhy && (
+        <div className="mt-2.5 rounded-xl px-3 py-2.5 text-[12px] text-emerald-100/90 leading-relaxed"
+          style={{ background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.22)' }}>
+          <b className="text-emerald-300">Why:</b> {quiz.why}
+        </div>
+      )}
+
+      <div className="flex items-center gap-4 mt-3">
+        <button onClick={() => setShowHint(h => !h)} className="text-[12px] font-semibold text-amber-300/90">💡 {showHint ? 'Hide hint' : 'Hint'}</button>
+        {!correctPicked && !revealed && <button onClick={() => setRevealed(true)} className="text-[12px] text-zinc-500 hover:text-zinc-300">Reveal answer</button>}
+        {correctPicked && (
+          <button onClick={onPass} className="ml-auto text-black font-semibold rounded-xl px-4 py-2 text-[13px]"
+            style={{ background: 'linear-gradient(135deg, #f59e0b, #D4684A)' }}>
+            Correct — continue →
+          </button>
+        )}
+      </div>
     </div>
   )
 }
