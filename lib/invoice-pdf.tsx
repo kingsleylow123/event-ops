@@ -1,5 +1,5 @@
 // Server-side PDF invoice generator using @react-pdf/renderer.
-// Renders the Oppa-Media branded invoice as a Buffer for Telegram delivery.
+// Renders the CMOAI Consulting branded invoice as a Buffer for Telegram delivery.
 
 import React from 'react'
 import { Document, Page, View, Text, StyleSheet, pdf } from '@react-pdf/renderer'
@@ -321,8 +321,8 @@ function InvoiceDocument({ data }: { data: InvoiceData }) {
   // "Quick" look = exactly 1 line item, no payments → render single big TOTAL box
   const isQuick = items.length === 1 && (!data.payments || data.payments.length === 0)
 
-  const companyName = data.companyName || 'Oppa-Media'
-  const companyEmail = data.companyEmail || 'kingsley@oppa-media.com'
+  const companyName = data.companyName || 'CMOAI Consulting'
+  const companyEmail = data.companyEmail || 'finance@cmoaiconsulting.com'
   const companyPhone = data.companyPhone || '6012 285 0125'
   const bankName = data.bankName || 'Maybank SME Biz'
   const bankAccount = data.bankAccount || '5142 8090 1848'
@@ -339,8 +339,8 @@ function InvoiceDocument({ data }: { data: InvoiceData }) {
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.logo}>
-              <Text style={styles.logoOppa}>OPPA-</Text>
-              <Text style={styles.logoMedia}>MEDIA</Text>
+              <Text style={styles.logoOppa}>CMOAI</Text>
+              <Text style={styles.logoMedia}>CONSULTING</Text>
             </View>
             <Text style={styles.invoiceTitle}>INVOICE</Text>
           </View>
