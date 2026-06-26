@@ -9,6 +9,9 @@ import { SEARCH_LEADS_TOOL } from './leads'
 import { GET_CLAIMS_DEPOSITS_TOOL } from './claims'
 import { LIST_EVENTS_TOOL, COMPARE_EVENTS_TOOL } from './events'
 import { MARK_PAID_TOOL, executeMarkPaid } from './payments'
+import { ANALYZE_SURVEYS_TOOL } from './survey'
+import { GET_MEETINGS_TOOL } from './meetings'
+import { GET_PREP_STATUS_TOOL } from './prep'
 
 // Write-tool executors run from the route's YES handler (after confirmation).
 export { executeMarkPaid, executeUpdatePipeline }
@@ -27,6 +30,9 @@ const TOOLS: ToolDef[] = [
   GET_CLAIMS_DEPOSITS_TOOL,
   LIST_EVENTS_TOOL,
   COMPARE_EVENTS_TOOL,
+  ANALYZE_SURVEYS_TOOL,
+  GET_MEETINGS_TOOL,
+  GET_PREP_STATUS_TOOL,
   MARK_PAID_TOOL,
 ]
 
