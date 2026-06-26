@@ -12,6 +12,7 @@ import { MARK_PAID_TOOL, executeMarkPaid } from './payments'
 import { ANALYZE_SURVEYS_TOOL } from './survey'
 import { GET_MEETINGS_TOOL } from './meetings'
 import { GET_PREP_STATUS_TOOL } from './prep'
+import { ANALYZE_COMMUNITY_SURVEY_TOOL } from './community'
 
 // Write-tool executors run from the route's YES handler (after confirmation).
 export { executeMarkPaid, executeUpdatePipeline }
@@ -33,6 +34,7 @@ const TOOLS: ToolDef[] = [
   ANALYZE_SURVEYS_TOOL,
   GET_MEETINGS_TOOL,
   GET_PREP_STATUS_TOOL,
+  ANALYZE_COMMUNITY_SURVEY_TOOL,
   MARK_PAID_TOOL,
 ]
 
