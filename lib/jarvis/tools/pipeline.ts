@@ -102,13 +102,19 @@ async function updatePipelineStatus(args: Record<string, unknown>, ctx: AgentCon
 export async function executeUpdatePipeline(pending: Record<string, unknown>): Promise<string> {
   const id = String(pending.deal_lead_id ?? '')
   const status = String(pending.status ?? '')
+  const fromStatus = String(pending.from_status ?? '')
   const name = String(pending.client_name ?? 'lead')
   if (!id || !VALID_STATUSES.includes(status)) return '⚠️ Pipeline update had invalid data — nothing changed.'
-  const { error } = await supabase
+  // Guard on the stage we staged FROM: if someone moved the lead in the dashboard
+  // during the 10-min confirm window, don't silently clobber their change.
+  let q = supabase
     .from('deal_leads')
     .update({ status, updated_at: new Date().toISOString() })
     .eq('id', id)
+  if (fromStatus) q = q.eq('status', fromStatus)
+  const { data, error } = await q.select('id')
   if (error) return `🛑 Couldn't update ${name}: ${error.message}`
+  if (!data || !data.length) return `ℹ️ ${name} was already moved (no longer "${fromStatus}") — nothing changed.`
   return `✅ ${name} moved to <b>${status}</b>.`
 }
 

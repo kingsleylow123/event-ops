@@ -24,9 +24,12 @@ async function searchLeads(args: Record<string, unknown>, _ctx: AgentContext) {
   if (mode === 'search') {
     if (!query) return { matches: [], total: 0 }
     const qp = normPhone(query)
+    // Strip PostgREST .or() metacharacters so a name with a comma/parens can't
+    // break the filter into bogus predicates.
+    const safe = query.replace(/[(),]/g, ' ').trim()
     let sb = supabase.from('leads').select('name,phone,owner,affiliate_handle,last_message_at').limit(25)
-    if (qp.length >= 4) sb = sb.or(`name.ilike.%${query}%,phone_norm.ilike.%${qp}%`)
-    else sb = sb.ilike('name', `%${query}%`)
+    if (qp.length >= 4) sb = sb.or(`name.ilike.%${safe}%,phone_norm.ilike.%${qp}%`)
+    else sb = sb.ilike('name', `%${safe}%`)
     const { data, error } = await sb
     if (error) return { error: error.message }
     let rows = data ?? []

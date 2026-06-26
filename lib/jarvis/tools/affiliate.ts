@@ -2,6 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk'
 import { buildReport } from '@/lib/affiliates'
 import type { ToolDef, AgentContext } from '../types'
 import { resolveEventId, eventLabel, round2 } from '../util'
+import { logSensitiveRead } from '../observability'
 
 const GET_AFFILIATE_REPORT_SCHEMA: Anthropic.Tool = {
   name: 'get_affiliate_report',
@@ -30,6 +31,9 @@ async function getAffiliateReport(args: Record<string, unknown>, ctx: AgentConte
     summary = summary.filter(s => s.handle.toLowerCase().includes(handle))
     if (!summary.length) return { event: eventLabel(ctx, eid), found: false, message: `No affiliate matching "${handle}" with buyers on this event.` }
   }
+
+  // Affiliate rows carry full bank details — audit the read like team/facilitator.
+  await logSensitiveRead(ctx.chatId, 'bank_read:affiliate', handle || '(all)', summary.length)
 
   return {
     event: eventLabel(ctx, eid),

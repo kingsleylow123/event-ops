@@ -1,5 +1,5 @@
 import type Anthropic from '@anthropic-ai/sdk'
-import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
+import { supabaseAdmin as supabase, fetchAllRows } from '@/lib/supabase-admin'
 import { normPhone, normEmail } from '@/lib/format'
 import { TICKET_LABELS, type TicketType } from '@/lib/supabase'
 import type { ToolDef, AgentContext } from '../types'
@@ -26,13 +26,19 @@ async function findPerson(args: Record<string, unknown>, ctx: AgentContext) {
   const q = String(args.query ?? '').trim()
   if (!q) return { total: 0, matches: [] }
 
-  let sb = supabase
-    .from('attendees')
-    .select('id,name,phone,email,ticket_type,payment_method,payment_amount,payment_status,paid_at,attendance_confirmed,event_id')
-  if (args.event_id) sb = sb.eq('event_id', String(args.event_id))
-
-  const { data, error } = await sb
-  if (error) return { error: error.message }
+  const eventId = args.event_id ? String(args.event_id) : null
+  // Page past PostgREST's 1000-row cap so an attendee on a later event is never
+  // invisibly dropped (.limit() does NOT override the cap).
+  const { rows: data, error } = await fetchAllRows<Record<string, unknown>>((from, to) => {
+    let qb = supabase
+      .from('attendees')
+      .select('id,name,phone,email,ticket_type,payment_method,payment_amount,payment_status,paid_at,attendance_confirmed,event_id')
+      .order('created_at', { ascending: false })
+      .range(from, to)
+    if (eventId) qb = qb.eq('event_id', eventId)
+    return qb
+  })
+  if (error) return { error }
 
   const names = eventNameMap(ctx)
   const ql = q.toLowerCase()

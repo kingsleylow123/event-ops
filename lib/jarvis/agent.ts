@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { randomUUID } from 'node:crypto'
 import type { AgentContext, JarvisRunResult, StagedWrite } from './types'
 import { isStagedWrite } from './types'
 import { TOOL_REGISTRY, ALL_TOOL_SCHEMAS } from './tools'
@@ -12,17 +13,20 @@ const HAIKU = 'claude-haiku-4-5'
 const SONNET = 'claude-sonnet-4-6'
 const MAX_ITERATIONS = 5
 
-// Analytical / multi-event / money questions get Sonnet; simple lookups Haiku.
-const ANALYTICAL_RE =
-  /\b(compare|comparison|vs|trend|across|each event|all events|breakdown|why|most|least|average|conversion|which|better|worse|price|pricing|stripe|revenue|profit|net|margin)\b/i
+// Escalate to Sonnet for analytical, money, or person-lookup questions — the
+// multi-hop / disambiguation cases where Haiku is least reliable. Trivial counts
+// and status checks stay on cheaper Haiku.
+const SONNET_RE =
+  /\b(compare|comparison|vs|trend|across|each event|all events|breakdown|why|most|least|average|conversion|which|better|worse|price|pricing|stripe|revenue|profit|net|margin|contact|phone|email|whatsapp|number|find|who|bank|account|submitted|paid|pay|owe|payout|reconcile)\b/i
 
-function pickModel(question: string, eventCount: number): { model: string; maxTokens: number } {
-  const escalate = ANALYTICAL_RE.test(question) || eventCount >= 2
-  return escalate ? { model: SONNET, maxTokens: 2048 } : { model: HAIKU, maxTokens: 1024 }
+function pickModel(question: string): { model: string; maxTokens: number } {
+  return SONNET_RE.test(question)
+    ? { model: SONNET, maxTokens: 2048 }
+    : { model: HAIKU, maxTokens: 1024 }
 }
 
 function newRunId(): string {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+  return randomUUID()
 }
 
 function textOf(content: Anthropic.ContentBlock[]): string {
@@ -38,7 +42,7 @@ function textOf(content: Anthropic.ContentBlock[]): string {
 export async function runAgent(question: string, ctx: AgentContext): Promise<JarvisRunResult> {
   const recent = await recentTurnsForPrompt(ctx.chatId)
   const system = buildSystemPrompt(ctx, recent)
-  const { model, maxTokens } = pickModel(question, ctx.allEvents.length)
+  const { model, maxTokens } = pickModel(question)
   const runId = newRunId()
 
   const messages: Anthropic.MessageParam[] = [{ role: 'user', content: question }]
@@ -51,7 +55,10 @@ export async function runAgent(question: string, ctx: AgentContext): Promise<Jar
         max_tokens: maxTokens,
         system,
         tools: ALL_TOOL_SCHEMAS,
-        tool_choice: { type: 'auto' },
+        // One tool per turn: stops the model batching a read + a staged write in
+        // one response (which the staged-write short-circuit would drop) and keeps
+        // the loop's tool_result accounting exact.
+        tool_choice: { type: 'auto', disable_parallel_tool_use: true },
         messages,
       })
     } catch (e) {
@@ -101,14 +108,17 @@ export async function runAgent(question: string, ctx: AgentContext): Promise<Jar
     messages.push({ role: 'user', content: toolResults })
   }
 
-  // Iteration cap reached — force a final answer. Omitting `tools` means the
-  // model cannot call another tool and must answer in text. The conversation
-  // already ends on a tool_result (user) turn, so no extra user message is added.
+  // Iteration cap reached — force a final answer. `tools` must stay present
+  // (the messages contain tool_result blocks, which the API requires tools for);
+  // tool_choice 'none' forbids any further tool call so the model answers in text.
+  // The conversation already ends on a tool_result (user) turn — no extra message.
   try {
     const final = await anthropic.messages.create({
       model,
       max_tokens: maxTokens,
       system,
+      tools: ALL_TOOL_SCHEMAS,
+      tool_choice: { type: 'none' },
       messages,
     })
     return { reply: textOf(final.content) || 'I gathered some data but ran out of steps — try a more specific question.' }
