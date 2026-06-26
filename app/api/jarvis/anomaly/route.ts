@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
 import { notifyAdmins, esc, b } from '@/lib/telegram'
-import { pickActiveEvent } from '@/lib/event'
+import { pickActiveEvent, isPingableEvent, EVENT_GRACE_MS } from '@/lib/event'
 import { normPhone, normEmail } from '@/lib/format'
 import type { Event } from '@/lib/supabase'
 
@@ -28,9 +28,22 @@ export async function GET(req: NextRequest) {
     .order('date', { ascending: false })
   if (evErr) return NextResponse.json({ ok: false, error: evErr.message }, { status: 500 })
 
+  // Self-heal: clear expired manual pins so the DB never carries a stale active
+  // flag. pickActiveEvent already ignores expired pins, but this keeps the
+  // events table (and the sidebar badge) honest going forward.
+  await supabase
+    .from('events')
+    .update({ is_active: false })
+    .eq('is_active', true)
+    .lt('date', new Date(Date.now() - EVENT_GRACE_MS).toISOString())
+
   const ev = pickActiveEvent((events ?? []) as Event[])
   if (!ev) {
     return NextResponse.json({ ok: true, skipped: 'no active event' })
+  }
+  // Stop pinging once the active event is >3 days past (nothing upcoming).
+  if (!isPingableEvent(ev)) {
+    return NextResponse.json({ ok: true, skipped: 'active event >3d past' })
   }
 
   const eventId = ev.id as string

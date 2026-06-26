@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
 import { notifyAdmins, esc, b } from '@/lib/telegram'
-import { pickActiveEvent } from '@/lib/event'
+import { pickActiveEvent, isPingableEvent } from '@/lib/event'
 import { rm, fmtDate, normPhone } from '@/lib/format'
 import type { Event } from '@/lib/supabase'
 
@@ -29,6 +29,11 @@ export async function GET(req: NextRequest) {
   const ev = pickActiveEvent((events ?? []) as Event[])
   if (!ev) {
     return NextResponse.json({ ok: true, skipped: 'no active event' })
+  }
+  // Stop nagging once the active event is >3 days past (e.g. nothing upcoming
+  // is scheduled yet) — resumes automatically when a future event is added.
+  if (!isPingableEvent(ev)) {
+    return NextResponse.json({ ok: true, skipped: 'active event >3d past' })
   }
 
   const eventId = ev.id as string

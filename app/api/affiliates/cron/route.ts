@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
 import { autoMatch, loadBuyers, syncLeadTags } from '@/lib/affiliates'
 import { notifyAdmins, esc, b } from '@/lib/telegram'
+import { isPingableEvent } from '@/lib/event'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest) {
   const cutoff = new Date(Date.now() - 30 * 86400000).toISOString()
   const { data: events, error } = await supabase
     .from('events')
-    .select('id, name')
+    .select('id, name, date')
     .gte('date', cutoff)
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 
@@ -54,6 +55,9 @@ export async function GET(req: NextRequest) {
   for (const ev of events ?? []) {
     const eventId = ev.id as string
     const eventName = ev.name as string
+    // Ping only for the active/upcoming window; events >3 days past still get
+    // matched silently (payout data stays correct) but no longer ping admins.
+    const pingable = isPingableEvent(ev)
 
     // (1) sheet auto-match first
     try {
@@ -115,7 +119,7 @@ export async function GET(req: NextRequest) {
         if (!String(insErr.message).includes('duplicate')) console.error('[affiliates/cron] insert notif', insErr)
         continue
       }
-      newBuyers.push({ event: eventName, name: buyer.name, amount: buyer.total, handle })
+      if (pingable) newBuyers.push({ event: eventName, name: buyer.name, amount: buyer.total, handle })
     }
   }
 
