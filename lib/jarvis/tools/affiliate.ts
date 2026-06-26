@@ -1,7 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import { buildReport } from '@/lib/affiliates'
 import type { ToolDef, AgentContext } from '../types'
-import { resolveEventId, eventLabel, round2 } from '../util'
+import { resolveEventId, eventLabel, round2, maskAccountNo } from '../util'
 import { logSensitiveRead } from '../observability'
 
 const GET_AFFILIATE_REPORT_SCHEMA: Anthropic.Tool = {
@@ -46,7 +46,7 @@ async function getAffiliateReport(args: Record<string, unknown>, ctx: AgentConte
       paid: !!s.paid_at,
       paid_at: s.paid_at,
       bank_name: s.bank_name,
-      bank_account: s.bank_account,
+      bank_account: maskAccountNo(s.bank_account), // masked: last 4 only (security)
       bank_holder: s.bank_holder,
       buyer_list: s.buyer_list.map(x => ({ name: x.name, amount: round2(x.amount) })),
     })),
