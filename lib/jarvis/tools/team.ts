@@ -1,7 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
 import type { ToolDef, AgentContext } from '../types'
-import { resolveEventId, eventLabel, num } from '../util'
+import { resolveEventId, eventLabel, num, maskAccountNo } from '../util'
 import { logSensitiveRead } from '../observability'
 
 // ── get_team_members ──────────────────────────────────────────────────────────
@@ -47,7 +47,7 @@ async function getTeamMembers(args: Record<string, unknown>, ctx: AgentContext) 
       bank_submitted: !!(r.bank_account_name && r.bank_name && r.bank_account_number),
       bank_name: r.bank_name ?? null,
       bank_account_name: r.bank_account_name ?? null,
-      bank_account_number: r.bank_account_number ?? null, // FULL number, per admin choice
+      bank_account_number: maskAccountNo(r.bank_account_number), // masked: last 4 only (security)
       submitted_at: r.created_at,
     })),
   }
@@ -85,7 +85,7 @@ async function getFacilitatorPayouts(args: Record<string, unknown>, ctx: AgentCo
       name: r.name,
       amount,
       bank_name: r.bank_name ?? null,
-      bank_account: r.bank_account ?? null, // FULL, per admin choice
+      bank_account: maskAccountNo(r.bank_account), // masked: last 4 only (security)
       bank_holder: r.bank_holder ?? null,
       is_paid: isPaid,
       paid_at: r.paid_at ?? null,
