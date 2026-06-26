@@ -246,49 +246,77 @@ function _preferActive(candidates: Event[]): Event {
 
 // ---------------------------------------------------------------------------
 // Single source of truth for "which event is current".
-// Rule: explicit is_active wins → else soonest UPCOMING by date → else most
-// recent past event → else null. This unifies the 6 inconsistent call sites
-// (some defaulted to null, some to list[0], affiliates used date logic) so
-// every page agrees on the same event.
+// ---------------------------------------------------------------------------
+// 3-day post-event grace: an event stays "active" for 3 days after its date
+// (so affiliate payouts / reconciliation default to it), then the app auto-
+// advances to the next one. A manual is_active pin OUTRANKS date order, but
+// also expires 3 days past the pinned event — so a pin can never get stuck on
+// a dead event (the old bug where a flagged past event pinned the whole app).
+export const EVENT_GRACE_MS = 3 * 86400000
+
+// Date-only resolver over a candidate pool: a just-finished event still inside
+// the grace window wins, else the soonest upcoming, else the most recent past.
+function _pickByDate(pool: Event[], now: number): Event | null {
+  const t = (e: Event) => new Date(e.date as string).getTime()
+  const graceHeld = pool
+    .filter(e => t(e) < now && now - t(e) <= EVENT_GRACE_MS)
+    .sort((a, b) => t(b) - t(a))
+  if (graceHeld.length) return graceHeld[0]
+  const upcoming = pool
+    .filter(e => t(e) >= now)
+    .sort((a, b) => t(a) - t(b))
+  if (upcoming.length) return upcoming[0]
+  const past = pool
+    .filter(e => t(e) < now)
+    .sort((a, b) => t(b) - t(a))
+  return past[0] ?? null
+}
+
+// Returns the active event. Unifies every call site (dashboard, sub-pages,
+// Jarvis crons, Telegram) so they all agree on the same event.
 export function pickActiveEvent(events: Event[]): Event | null {
   if (!events || events.length === 0) return null
-
-  const flagged = events.find(e => e.is_active)
-  if (flagged) return flagged
 
   const now = Date.now()
   const dated = events.filter(e => e.date)
 
-  // soonest upcoming
-  const upcoming = dated
-    .filter(e => new Date(e.date as string).getTime() >= now)
-    .sort((a, b) => new Date(a.date as string).getTime() - new Date(b.date as string).getTime())
-  if (upcoming.length) return upcoming[0]
+  // Valid manual pins = flagged AND not yet expired (≤ 3 days past). The data
+  // can carry more than one is_active row (legacy / double-set), so disambiguate
+  // deterministically with the same date rule instead of array order.
+  const validPins = dated.filter(
+    e => e.is_active && now - new Date(e.date as string).getTime() <= EVENT_GRACE_MS
+  )
+  if (validPins.length) return _pickByDate(validPins, now) ?? validPins[0]
 
-  // else most recent past
-  const past = dated
-    .filter(e => new Date(e.date as string).getTime() < now)
-    .sort((a, b) => new Date(b.date as string).getTime() - new Date(a.date as string).getTime())
-  if (past.length) return past[0]
+  return _pickByDate(dated, now) ?? events[0]
+}
 
-  return events[0]
+// True while an event is "current" for pings: upcoming or ≤ 3 days past. Ping
+// crons use this to go silent once an event is more than 3 days behind us.
+export function isPingableEvent(event: { date?: string | null } | null | undefined, now: number = Date.now()): boolean {
+  return !!event?.date && now - new Date(event.date).getTime() <= EVENT_GRACE_MS
 }
 
 const LS_KEY = 'eventops_selected_event'
 
-// Read the user's persisted event choice (client-only).
+// Stored in sessionStorage (NOT localStorage): a dropdown pick holds while you
+// work — across the reload the switcher triggers and across in-session page
+// navigation — but a fresh visit (new tab/window) always starts on the date-
+// driven active event. This is what stops a once-clicked event pinning a
+// browser to a stale event forever.
 export function getStoredEventId(): string | null {
   if (typeof window === 'undefined') return null
-  try { return localStorage.getItem(LS_KEY) } catch { return null }
+  try { return sessionStorage.getItem(LS_KEY) } catch { return null }
 }
 
 export function storeEventId(id: string): void {
   if (typeof window === 'undefined') return
-  try { localStorage.setItem(LS_KEY, id) } catch { /* ignore */ }
+  try { sessionStorage.setItem(LS_KEY, id) } catch { /* ignore */ }
 }
 
-// Resolve the initial event to show: a valid stored choice wins, else the
-// computed active event. Keeps multi-event days unambiguous across pages.
+// Resolve the initial event to show: a valid stored (in-session) choice wins,
+// else the computed active event. Keeps multi-event days unambiguous across
+// pages while always defaulting a fresh session to the date-driven event.
 export function resolveInitialEvent(events: Event[]): Event | null {
   const storedId = getStoredEventId()
   if (storedId) {

@@ -352,3 +352,97 @@ export async function syncLeadTags(): Promise<number> {
   }
   return flipped
 }
+
+// ── Import NEW leads from the WhatsApp-joined sheet ───────────────────────────
+// The `leads` table was a one-time seed (all rows created on the import day) with
+// NO ongoing insert path — so new joiners never landed in it. This adds them,
+// deduped by phone_norm. Owner is set from the sheet's affiliate handle (active
+// affiliate → owner='affiliate', else 'kingsley'). Idempotent: existing phones are
+// skipped, and the insert upserts with ignoreDuplicates on phone_norm as a race
+// guard. Distinct from syncLeadTags, which only RE-TAGS rows that already exist.
+interface SheetRow { name: string; phoneRaw: string; phoneNorm: string; handle: string }
+
+async function fetchSheetRows(): Promise<SheetRow[]> {
+  const res = await fetch(LEAD_SHEET_CSV, { cache: 'no-store' })
+  if (!res.ok) throw new Error(`lead sheet fetch failed: ${res.status}`)
+  const rows = parseCsv(await res.text())
+  if (!rows.length) return []
+  const header = rows[0].map(h => h.trim().toLowerCase())
+  const iName = header.findIndex(h => h === 'name')
+  const iPhone = header.findIndex(h => h.includes('phone'))
+  const iAff = header.findIndex(h => h.includes('affiliate'))
+  const out: SheetRow[] = []
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r]
+    const phoneRaw = (row[iPhone] ?? '').trim()
+    const phoneNorm = normPhone(phoneRaw)
+    if (!phoneNorm) continue // need a phone to dedup on
+    out.push({
+      name: (row[iName] ?? '').trim(),
+      phoneRaw,
+      phoneNorm,
+      handle: (row[iAff] ?? '').trim().replace(/^\[/, ''),
+    })
+  }
+  return out
+}
+
+export async function importNewLeads(): Promise<{ sheetRows: number; alreadyPresent: number; inserted: number }> {
+  const [sheet, affRes] = await Promise.all([
+    fetchSheetRows(),
+    supabase.from('affiliates').select('id, handle, active'),
+  ])
+  if (affRes.error) throw new Error(affRes.error.message)
+  if (!sheet.length) throw new Error('lead sheet returned 0 rows (CSV fetch likely blocked server-side)')
+
+  const activeHandle = new Map<string, string>()
+  for (const a of affRes.data ?? []) if (a.active) activeHandle.set(String(a.handle).toLowerCase(), a.id as string)
+
+  // Which sheet phones already exist? Query leads BY the sheet phones (chunked
+  // in() — sidesteps PostgREST's hard 1000-row response cap).
+  const phones = [...new Set(sheet.map(r => r.phoneNorm))]
+  const present = new Set<string>()
+  for (let i = 0; i < phones.length; i += 200) {
+    const chunk = phones.slice(i, i + 200)
+    const { data, error } = await supabase.from('leads').select('phone_norm').in('phone_norm', chunk)
+    if (error) throw new Error(error.message)
+    for (const r of data ?? []) present.add(r.phone_norm as string)
+  }
+
+  // Build inserts for phones not already present (dedup within the sheet too).
+  const seen = new Set<string>()
+  const toInsert = sheet
+    .filter(r => {
+      if (present.has(r.phoneNorm) || seen.has(r.phoneNorm)) return false
+      seen.add(r.phoneNorm)
+      return true
+    })
+    .map(r => {
+      const affId = r.handle ? activeHandle.get(r.handle.toLowerCase()) : undefined
+      const digits = r.phoneRaw.replace(/\D/g, '')
+      return {
+        name: r.name || null,
+        phone: r.phoneRaw || null,
+        phone_norm: r.phoneNorm,
+        country_code: digits.startsWith('60') ? '60' : null,
+        owner: affId ? 'affiliate' : 'kingsley',
+        affiliate_handle: affId ? r.handle : null,
+        affiliate_id: affId ?? null,
+        sources: ['whatsapp_group'],
+      }
+    })
+
+  if (!toInsert.length) return { sheetRows: sheet.length, alreadyPresent: present.size, inserted: 0 }
+
+  let inserted = 0
+  for (let i = 0; i < toInsert.length; i += 500) {
+    const chunk = toInsert.slice(i, i + 500)
+    const { data, error } = await supabase
+      .from('leads')
+      .upsert(chunk, { onConflict: 'phone_norm', ignoreDuplicates: true })
+      .select('id')
+    if (error) throw new Error(error.message)
+    inserted += (data ?? []).length
+  }
+  return { sheetRows: sheet.length, alreadyPresent: present.size, inserted }
+}

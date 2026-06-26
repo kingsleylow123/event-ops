@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import SignOutButton from './SignOutButton'
 import { useRevenueHidden } from '@/lib/useRevenueHidden'
 import { useTheme } from '@/lib/useTheme'
-import { resolveInitialEvent, storeEventId, getStoredEventId } from '@/lib/event'
+import { resolveInitialEvent, storeEventId, pickActiveEvent } from '@/lib/event'
 import { useCachedFetch } from '@/lib/useCachedFetch'
 import type { Event } from '@/lib/supabase'
 
@@ -62,10 +62,13 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
   const [eventId, setEventId] = useState('')
   useEffect(() => {
     if (!events.length) return
-    const stored = getStoredEventId()
-    const pick = (stored && events.find(e => e.id === stored)) || resolveInitialEvent(events)
+    const pick = resolveInitialEvent(events)
     if (pick && !eventId) setEventId(pick.id)
   }, [events, eventId])
+
+  // Badge the *computed* active event (date-driven), not the raw is_active flag,
+  // so "• active" always reflects the event the app actually defaults to.
+  const activeId = events.length ? pickActiveEvent(events)?.id : undefined
 
   const dashboard: Item = { href: '/', label: 'Dashboard', icon: icons.dashboard }
   const groups: { id: string; title: string; items: Item[] }[] = [
@@ -163,7 +166,7 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
               onChange={e => { setEventId(e.target.value); storeEventId(e.target.value); window.location.reload() }}
               className="theme-surface-2 theme-text theme-border w-full appearance-none border rounded-lg pl-3 pr-8 py-2 text-xs focus:outline-none focus:border-amber-500/50 cursor-pointer">
               {events.map(e => (
-                <option key={e.id} value={e.id} className="bg-zinc-900">{e.name}{e.is_active ? ' • active' : ''}</option>
+                <option key={e.id} value={e.id} className="bg-zinc-900">{e.name}{e.id === activeId ? ' • active' : ''}</option>
               ))}
             </select>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
