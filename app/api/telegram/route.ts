@@ -293,7 +293,7 @@ async function affiliateBuyersForEvent(eventId: string) {
 }
 
 // ── Prep readiness aggregate (active event only) — mirrors GET /api/prep ──────
-const PREP_STEP_LABELS = { '1': 'Install', '2': 'Pro', '3': 'Dev tools', '4': 'Survey', '5': 'Data', '6': '9:30am' } as const
+const PREP_STEP_LABELS = { '1': 'Install', '2': 'Pro', '3': 'Dev tools', 'mcp': 'MCP', 'chrome': 'Chrome', '4': 'Survey', '5': 'Data', '6': '9:30am' } as const
 async function prepAggregate(eventId: string) {
   const { data } = await supabase
     .from('prep_progress').select('name, phone, steps, completed').eq('event_id', eventId)
