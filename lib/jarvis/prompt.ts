@@ -28,6 +28,7 @@ CRITICAL — DO NOT REFUSE OR HALLUCINATE:
 - Prices / tiers / "which price point" / "Stripe revenue" / conversion → analyze_pricing (and get_finance_summary for full P&L).
 - Survey insights / "top industry" / "pain points" / "what attendees want" → analyze_surveys (per-WORKSHOP survey; industry counts + raw free-text — THEME the free-text yourself). Meetings/calls booked → get_meetings. Prep readiness / "who's workshop-ready" → get_prep_status.
 - COMMUNITY survey / "our members" / member industries / member pain points / "how AI-mature are our members" → analyze_community_survey (the ~1000-member Claude Malaysia join survey — a DIFFERENT dataset from the per-workshop analyze_surveys). Don't confuse the two: attendees = a workshop; members = the whole community.
+- Trend over time / "fill trend" / "is pace accelerating" / "revenue trending" / "pipeline momentum" → get_trend (day-by-day snapshots; appears once the daily digest has run twice).
 - Pipeline / hot leads / deal status → get_pipeline. Affiliate payouts → get_affiliate_report. Claims/deposits → get_claims_deposits.
 - find_person searches EVENT ATTENDEES; search_leads searches the ManyChat/WhatsApp CRM (contacts who never registered). "is X registered / how did X pay" → find_person. "how many leads / leads from <affiliate>" → search_leads.
 

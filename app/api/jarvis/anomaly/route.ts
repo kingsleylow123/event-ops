@@ -8,11 +8,29 @@ import type { Event } from '@/lib/supabase'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
+type Severity = 'CRITICAL' | 'WARN' | 'INFO'
+const SEV_ORDER: Record<Severity, number> = { CRITICAL: 0, WARN: 1, INFO: 2 }
+const DAY = 86400000
+
+// Per-kind snooze window: how long an alert stays quiet after it fires, before it
+// is allowed to re-surface. This replaces the old fire-once dedup (which silenced
+// a still-open issue forever).
+function snoozeMs(kind: string, ref: string): number {
+  switch (kind) {
+    case 'duplicate': return 7 * DAY
+    case 'overdue': return 3 * DAY
+    case 'stalled_survey': return 1 * DAY
+    case 'unpaid_claim': return 3 * DAY
+    case 'capacity': return ref === 'over' ? 999 * DAY : 7 * DAY
+    default: return 3 * DAY
+  }
+}
+
 // Anomaly sweep (08:30 MYT = 00:30 UTC).
-// Detects: duplicate attendees (same normalized phone/email), overdue checklist
-// items, fill% at/over capacity or > 95%, stalled survey (0 responses with < 3
-// days to go). Dedupes alerts via jarvis_alerts (event_id, kind, ref UNIQUE) so
-// the same anomaly is only pinged once per event lifecycle.
+// Detects duplicates, overdue checklist, capacity, stalled survey, unpaid claims.
+// TTL-snooze via jarvis_alerts (event_id, kind, ref UNIQUE): an open issue re-pings
+// after its snooze window instead of being silenced once. Severity orders the ping.
+// A weekly "all clear" heartbeat confirms the cron is alive during quiet stretches.
 export async function GET(req: NextRequest) {
   // Fail CLOSED: require CRON_SECRET to be set AND match.
   const secret = process.env.CRON_SECRET
@@ -28,9 +46,7 @@ export async function GET(req: NextRequest) {
     .order('date', { ascending: false })
   if (evErr) return NextResponse.json({ ok: false, error: evErr.message }, { status: 500 })
 
-  // Self-heal: clear expired manual pins so the DB never carries a stale active
-  // flag. pickActiveEvent already ignores expired pins, but this keeps the
-  // events table (and the sidebar badge) honest going forward.
+  // Self-heal: clear expired manual pins so the DB never carries a stale active flag.
   await supabase
     .from('events')
     .update({ is_active: false })
@@ -74,14 +90,12 @@ export async function GET(req: NextRequest) {
   const registered = attendees.length
 
   // ── Detect anomalies ───────────────────────────────────────────────────────
-  // Each anomaly: { kind: string, ref: string, label: string }
-  // kind = 'duplicate' | 'overdue' | 'capacity' | 'stalled_survey'
-  // ref  = stable string so (event_id, kind, ref) uniquely identifies the alert
-  const detected: Array<{ kind: string; ref: string; label: string }> = []
+  // ref is stable so (event_id, kind, ref) uniquely identifies the alert.
+  const detected: Array<{ kind: string; ref: string; label: string; severity: Severity }> = []
 
   // 1) Duplicate attendees (same normalized phone OR normalized email)
-  const phoneGroups = new Map<string, string[]>() // normPhone → [name, ...]
-  const emailGroups = new Map<string, string[]>() // normEmail → [name, ...]
+  const phoneGroups = new Map<string, string[]>()
+  const emailGroups = new Map<string, string[]>()
   for (const a of attendees) {
     const ph = normPhone(a.phone as string | undefined)
     const em = normEmail(a.email as string | undefined)
@@ -102,6 +116,7 @@ export async function GET(req: NextRequest) {
         kind: 'duplicate',
         ref: `phone:${ph}`,
         label: `Duplicate phone ${esc(ph)}: ${names.slice(0, 3).map(esc).join(', ')}${names.length > 3 ? ` +${names.length - 3}` : ''}`,
+        severity: 'CRITICAL',
       })
     }
   }
@@ -111,6 +126,7 @@ export async function GET(req: NextRequest) {
         kind: 'duplicate',
         ref: `email:${em}`,
         label: `Duplicate email ${esc(em)}: ${names.slice(0, 3).map(esc).join(', ')}${names.length > 3 ? ` +${names.length - 3}` : ''}`,
+        severity: 'CRITICAL',
       })
     }
   }
@@ -124,23 +140,27 @@ export async function GET(req: NextRequest) {
       kind: 'overdue',
       ref: `item:${c.id as string}`,
       label: `Overdue task: "${esc(c.item)}"${c.category ? ` [${esc(c.category)}]` : ''} (due ${esc(String(c.due_date))})`,
+      severity: 'WARN',
     })
   }
 
-  // 3) Fill% at or over capacity, or > 95%
+  // 3) Fill% at or over capacity, or > 95%. ref is normalized (no count) so the
+  //    snooze survives headcount changes.
   if (capacity > 0) {
     const fillPct = Math.round((registered / capacity) * 100)
     if (registered >= capacity) {
       detected.push({
         kind: 'capacity',
-        ref: `over:${registered}`,
+        ref: 'over',
         label: `At/over capacity: ${esc(registered)} registered vs ${esc(capacity)} cap (${fillPct}%)`,
+        severity: 'CRITICAL',
       })
     } else if (fillPct >= 95) {
       detected.push({
         kind: 'capacity',
-        ref: `near95:${registered}`,
+        ref: 'near95',
         label: `Near capacity: ${esc(registered)} / ${esc(capacity)} (${fillPct}%) — only ${esc(capacity - registered)} spots left`,
+        severity: 'INFO',
       })
     }
   }
@@ -151,6 +171,7 @@ export async function GET(req: NextRequest) {
       kind: 'stalled_survey',
       ref: `zero:d${daysUntil}`,
       label: `0 survey responses with ${daysUntil === 0 ? 'event today' : `${daysUntil}d to go`} (${esc(registered)} registered)`,
+      severity: 'WARN',
     })
   }
 
@@ -163,40 +184,75 @@ export async function GET(req: NextRequest) {
         kind: 'unpaid_claim',
         ref: `claim:${c.id as string}`,
         label: `Unpaid claim (${ageDays}d): ${esc(c.claimant_name as string)} — RM ${Number(c.amount ?? 0).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        severity: 'WARN',
       })
     }
   }
 
+  const nowIso = new Date().toISOString()
+
+  // ── Nothing detected → weekly all-clear heartbeat ──────────────────────────
   if (!detected.length) {
+    const { data: lastFired } = await supabase
+      .from('jarvis_alerts').select('fired_at')
+      .eq('event_id', eventId).not('fired_at', 'is', null)
+      .order('fired_at', { ascending: false }).limit(1).maybeSingle()
+    const daysQuiet = lastFired?.fired_at
+      ? Math.floor((Date.now() - new Date(lastFired.fired_at as string).getTime()) / DAY)
+      : 999
+    const { data: hb } = await supabase.from('jarvis_alerts').select('snooze_until')
+      .eq('event_id', eventId).eq('kind', 'heartbeat').eq('ref', 'weekly').maybeSingle()
+    const hbSnoozed = !!hb?.snooze_until && new Date(hb.snooze_until as string).getTime() > Date.now()
+    if (daysQuiet >= 7 && !hbSnoozed) {
+      await notifyAdmins(`✅ ${b('Anomaly check')} — all clear on ${esc(eventName)}. ${daysQuiet >= 999 ? 'No issues yet.' : `Quiet ${daysQuiet}d.`} Cron healthy.`)
+      await supabase.from('jarvis_alerts').upsert(
+        { event_id: eventId, kind: 'heartbeat', ref: 'weekly', fired_at: nowIso, snooze_until: new Date(Date.now() + 6 * DAY).toISOString(), severity: 'INFO' },
+        { onConflict: 'event_id,kind,ref' },
+      )
+      return NextResponse.json({ ok: true, new: 0, heartbeat: true })
+    }
     return NextResponse.json({ ok: true, new: 0 })
   }
 
-  // ── Dedupe: only act on anomalies not yet recorded in jarvis_alerts ────────
+  // ── TTL-snooze dedup: act only on anomalies not currently snoozed ──────────
   const { data: existingAlerts } = await supabase
     .from('jarvis_alerts')
-    .select('kind, ref')
+    .select('kind, ref, snooze_until')
     .eq('event_id', eventId)
-
-  const seen = new Set((existingAlerts ?? []).map(r => `${r.kind as string}|${r.ref as string}`))
-  const newAnomalies = detected.filter(d => !seen.has(`${d.kind}|${d.ref}`))
+  // A row suppresses its anomaly only while snooze_until is in the future. Rows
+  // with no snooze_until (pre-migration) or an expired one are allowed to re-fire.
+  const snoozed = new Set(
+    (existingAlerts ?? [])
+      .filter(r => r.snooze_until && String(r.snooze_until) > nowIso)
+      .map(r => `${r.kind as string}|${r.ref as string}`)
+  )
+  const newAnomalies = detected.filter(d => !snoozed.has(`${d.kind}|${d.ref}`))
 
   if (!newAnomalies.length) {
     return NextResponse.json({ ok: true, new: 0 })
   }
 
-  // ── Insert new alert rows (UNIQUE constraint guards against race/double-run) ─
-  const rows = newAnomalies.map(d => ({ event_id: eventId, kind: d.kind, ref: d.ref }))
-  const { error: insErr } = await supabase.from('jarvis_alerts').insert(rows)
-  if (insErr && !String(insErr.message).includes('duplicate') && !String(insErr.message).includes('unique')) {
-    console.error('[jarvis/anomaly] insert alerts failed', insErr)
-    // Non-duplicate insert error — still send the notification so admins aren't silenced
+  // ── Upsert alert rows with fresh fired_at + snooze window ──────────────────
+  const rows = newAnomalies.map(d => ({
+    event_id: eventId,
+    kind: d.kind,
+    ref: d.ref,
+    fired_at: nowIso,
+    snooze_until: new Date(Date.now() + snoozeMs(d.kind, d.ref)).toISOString(),
+    severity: d.severity,
+  }))
+  const { error: upErr } = await supabase.from('jarvis_alerts').upsert(rows, { onConflict: 'event_id,kind,ref' })
+  if (upErr) {
+    console.error('[jarvis/anomaly] upsert alerts failed', upErr)
+    // Still send the notification so admins aren't silenced by a bookkeeping error.
   }
 
-  // ── Send one consolidated notification ────────────────────────────────────
+  // ── Send one consolidated notification, CRITICAL first ─────────────────────
+  newAnomalies.sort((a, b) => SEV_ORDER[a.severity] - SEV_ORDER[b.severity])
   let msg = `🚨 ${b('Anomaly Alert')} — ${esc(eventName)} (${newAnomalies.length} new)\n`
   for (const a of newAnomalies) {
     const icon =
-      a.kind === 'duplicate' ? '👥' :
+      a.severity === 'CRITICAL' ? '🚨' :
       a.kind === 'overdue' ? '⚠️' :
       a.kind === 'capacity' ? '🔴' :
       a.kind === 'stalled_survey' ? '📋' :
@@ -206,5 +262,5 @@ export async function GET(req: NextRequest) {
 
   await notifyAdmins(msg)
 
-  return NextResponse.json({ ok: true, new: newAnomalies.length, anomalies: newAnomalies.map(a => ({ kind: a.kind, ref: a.ref })) })
+  return NextResponse.json({ ok: true, new: newAnomalies.length, anomalies: newAnomalies.map(a => ({ kind: a.kind, ref: a.ref, severity: a.severity })) })
 }
