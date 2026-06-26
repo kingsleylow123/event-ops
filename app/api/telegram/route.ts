@@ -934,6 +934,9 @@ async function executeInvoiceTool(
       subject: `Invoice — ${a.name} (RM ${amount.toLocaleString('en-MY')})`,
       html: invoiceEmailHtml({ clientName: a.name, amount: amount as number, description: desc }),
       attachments: [{ filename: `Invoice-${safeName}.pdf`, content: pdfBuffer }],
+      // Same attendee + same amount = same key → re-issuing within 24h won't
+      // double-email the client (or double-BCC the finance archive).
+      idempotencyKey: `inv-${a.id}-${amount}`,
     })
     return res.ok
       ? `📧 Invoice emailed to ${toEmail} (BCC finance) and the PDF is in the chat.`
@@ -1589,6 +1592,10 @@ async function executeReconcile(matches: ReconcileMatch[], chatId: number): Prom
             eventName,
             paidAt: new Date(),
           }),
+          // One receipt per attendee per event, ever. Backstops the
+          // receipt_sent_at guard: if that stamp-write fails or two YES
+          // confirmations overlap, Resend still won't double-send (24h window).
+          idempotencyKey: `rcpt-${r.id}-${r.event_id}`,
         })
         if (res.ok) {
           receipted++
