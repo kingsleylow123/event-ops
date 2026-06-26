@@ -16,6 +16,7 @@ import { runAgent } from '@/lib/jarvis/agent'
 import type { AgentContext } from '@/lib/jarvis/types'
 import { isDuplicateUpdate } from '@/lib/jarvis/observability'
 import { executeMarkPaid, executeUpdatePipeline } from '@/lib/jarvis/tools'
+import { bukkuEnabled, findOrCreateContact, createBill, EXPENSE_ACCOUNT_BY_CATEGORY } from '@/lib/bukku'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -978,6 +979,283 @@ async function downloadTelegramFile(fileId: string): Promise<Buffer> {
   return Buffer.from(await res.arrayBuffer())
 }
 
+// ── Receipt classification + extraction ───────────────────────────────────────
+
+const RECEIPT_CATEGORIES = ['Venue', 'F&B', 'Speaker fees', 'Marketing', 'Equipment / AV', 'Content', 'Logistics', 'Other'] as const
+type ReceiptCategory = typeof RECEIPT_CATEGORIES[number]
+
+interface ReceiptExtraction {
+  kind: 'receipt' | 'statement' | 'other'
+  vendor: string | null
+  date: string | null         // YYYY-MM-DD
+  amount: number | null       // MYR gross total
+  category: ReceiptCategory
+  confidence: number          // 0..1
+}
+
+// One Claude vision call — forced tool use so the JSON shape is guaranteed.
+async function classifyAndExtractReceipt(
+  imageBase64: string,
+  mime: string,
+): Promise<ReceiptExtraction> {
+  const mediaType = (
+    mime === 'image/png' ? 'image/png'
+    : mime === 'image/webp' ? 'image/webp'
+    : 'image/jpeg'
+  ) as 'image/jpeg' | 'image/png' | 'image/webp'
+
+  const CLASSIFY_TOOL: Anthropic.Tool = {
+    name: 'classify_image',
+    description: 'Classify and extract data from an image sent to the Jarvis bot.',
+    input_schema: {
+      type: 'object' as const,
+      properties: {
+        kind: {
+          type: 'string',
+          enum: ['receipt', 'statement', 'other'],
+          description: '"receipt" = expense receipt/bill/invoice; "statement" = bank/transaction statement; "other" = anything else',
+        },
+        vendor: { type: 'string', description: 'Merchant / supplier name as printed on the receipt. Null if not a receipt.' },
+        date: { type: 'string', description: 'Date on the receipt as YYYY-MM-DD. Null if not a receipt or not visible.' },
+        amount: { type: 'number', description: 'Grand total amount in MYR (the final amount after any tax/service charge). Null if not a receipt.' },
+        category: {
+          type: 'string',
+          enum: RECEIPT_CATEGORIES as unknown as string[],
+          description: 'Best-fit expense category for this receipt.',
+        },
+        confidence: { type: 'number', description: 'Your confidence in the extracted data, 0.0 to 1.0.' },
+      },
+      required: ['kind', 'category', 'confidence'],
+    },
+  }
+
+  const resp = await anthropic.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 1024,
+    tools: [CLASSIFY_TOOL],
+    tool_choice: { type: 'tool', name: 'classify_image' },
+    messages: [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'image',
+            source: { type: 'base64', media_type: mediaType, data: imageBase64 },
+          },
+          {
+            type: 'text',
+            text: 'Classify this image. If it is an expense receipt or bill, extract vendor, date, and total amount paid in MYR. If it is a bank/transaction statement, set kind to "statement". Otherwise set kind to "other".',
+          },
+        ],
+      },
+    ],
+  })
+
+  const tu = resp.content.find(x => x.type === 'tool_use')
+  if (!tu || tu.type !== 'tool_use') {
+    // Fallback: could not extract — treat as 'other' with zero confidence.
+    return { kind: 'other', vendor: null, date: null, amount: null, category: 'Other', confidence: 0 }
+  }
+
+  const raw = tu.input as {
+    kind?: string
+    vendor?: string | null
+    date?: string | null
+    amount?: number | null
+    category?: string
+    confidence?: number
+  }
+
+  const kind = raw.kind === 'receipt' ? 'receipt' : raw.kind === 'statement' ? 'statement' : 'other'
+  const category = (RECEIPT_CATEGORIES as readonly string[]).includes(raw.category ?? '')
+    ? (raw.category as ReceiptCategory)
+    : 'Other'
+
+  return {
+    kind,
+    vendor: raw.vendor ?? null,
+    date: raw.date ?? null,
+    amount: raw.amount != null && Number.isFinite(raw.amount) ? Math.round(raw.amount * 100) / 100 : null,
+    category,
+    confidence: Math.min(1, Math.max(0, Number(raw.confidence ?? 0))),
+  }
+}
+
+// ── Shared Bukku booking helper (used by auto-book + YES gate) ─────────────────
+// Mirrors app/api/bukku/expense/route.ts but uses the REAL vendor name.
+// Returns the Bukku bill id+number on success. Throws on Bukku failure so the
+// caller can surface an honest error — never claims "Booked" if it wasn't.
+interface ExpenseRow {
+  id: string
+  event_id: string | null
+  vendor: string | null
+  description: string
+  amount: number
+  category: string
+  created_at: string
+  bukku_bill_id: string | null
+}
+
+async function bookExpenseToBukku(exp: ExpenseRow): Promise<{ id: string; number: string | null }> {
+  // Idempotency guard — never double-book.
+  if (exp.bukku_bill_id) return { id: exp.bukku_bill_id, number: null }
+
+  const amount = Math.round(Number(exp.amount) * 100) / 100
+  if (amount <= 0) throw new Error('Expense amount must be greater than zero')
+
+  const category = exp.category || 'Other'
+  const account_id = EXPENSE_ACCOUNT_BY_CATEGORY[category] ?? 33 // 6508 General Expense fallback
+  // Use real vendor name; fall back to "Event Costs — <category>" if blank.
+  const supplierName = (exp.vendor || '').trim() || `Event Costs — ${category}`
+
+  const contact_id = await findOrCreateContact({ name: supplierName, types: ['supplier'] })
+  const dateStr = String(exp.created_at ?? new Date().toISOString()).slice(0, 10)
+  const { id, number } = await createBill({
+    contact_id,
+    date: dateStr,
+    description: `[${category}] ${exp.description || supplierName}`,
+    amount,
+    account_id,
+  })
+
+  // Persist the Bukku bill id for idempotency on retries.
+  const { error: upErr } = await supabase.from('expenses').update({ bukku_bill_id: id }).eq('id', exp.id)
+  if (upErr) {
+    // Bill is in Bukku but we couldn't persist the id — log it, then throw a
+    // partial-failure so the caller can surface a warning rather than silence.
+    console.error('[jarvis-receipt] failed to persist bukku_bill_id', upErr)
+    throw new Error(`Bill created in Bukku (id ${id}) but failed to persist the ID: ${upErr.message}`)
+  }
+
+  return { id, number }
+}
+
+// ── Receipt upload handler ─────────────────────────────────────────────────────
+async function handleReceiptUpload(fileId: string, mime: string, chatId: number): Promise<void> {
+  await sendTyping(chatId)
+
+  let buf: Buffer
+  try {
+    buf = await downloadTelegramFile(fileId)
+  } catch (e) {
+    console.error('[telegram] receipt download failed', e)
+    await sendMessage(chatId, '⚠️ Could not download that image from Telegram. Try sending it again.')
+    return
+  }
+
+  let extraction: ReceiptExtraction
+  try {
+    extraction = await classifyAndExtractReceipt(buf.toString('base64'), mime)
+  } catch (e) {
+    console.error('[telegram] receipt classification failed', e)
+    await sendMessage(chatId, '⚠️ Could not read that image. Try a clearer photo and resend.')
+    return
+  }
+
+  // Route by kind
+  if (extraction.kind === 'statement') {
+    // Hand off to the existing reconciliation flow — pass a synthetic filename.
+    const fileName = 'statement.jpg'
+    await handleStatementUpload(fileId, mime, fileName, buf.length, chatId)
+    return
+  }
+
+  if (extraction.kind === 'other') {
+    await sendMessage(chatId, "🤔 I'm not sure what that image is. Is it an expense receipt/bill, or a bank statement? Let me know and resend.")
+    return
+  }
+
+  // === kind === 'receipt' ===
+
+  const { vendor, date, amount, category, confidence } = extraction
+
+  if (!amount || amount <= 0) {
+    await sendMessage(chatId, `🧾 I can see a receipt from <b>${esc(vendor ?? 'unknown vendor')}</b> but could not read the total amount. Please type it: e.g. <i>"receipt RM 150 vendor McDonald's category F&B"</i>`)
+    return
+  }
+
+  // Resolve event_id — grab the active event (nullable if none found).
+  const activeEv = await getActiveEvent()
+  const event_id = (activeEv?.id as string | null) ?? null
+
+  // INSERT the expense row (unbooked — bukku_bill_id stays null until confirmed or auto-booked).
+  const description = vendor || category
+  const createdAt = date ? `${date}T00:00:00+00:00` : new Date().toISOString()
+  const { data: inserted, error: insErr } = await supabase
+    .from('expenses')
+    .insert({
+      event_id,
+      vendor: vendor ?? null,
+      description,
+      amount,
+      category,
+      source: 'jarvis_receipt',
+      tg_file_id: fileId,
+      ai_confidence: confidence,
+      created_at: createdAt,
+    })
+    .select('id, event_id, vendor, description, amount, category, created_at, bukku_bill_id')
+    .single()
+
+  if (insErr || !inserted) {
+    console.error('[telegram] expense insert failed', insErr)
+    await sendMessage(chatId, `⚠️ Could not save the expense. (${esc(insErr?.message ?? 'unknown error')})`)
+    return
+  }
+
+  const expRow: ExpenseRow = {
+    id: inserted.id as string,
+    event_id: inserted.event_id as string | null,
+    vendor: inserted.vendor as string | null,
+    description: inserted.description as string,
+    amount: Number(inserted.amount),
+    category: inserted.category as string,
+    created_at: inserted.created_at as string,
+    bukku_bill_id: inserted.bukku_bill_id as string | null,
+  }
+
+  const amtFmt = amount.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const pct = Math.round(confidence * 100)
+
+  // AUTO-BOOK: high confidence + small amount — no confirmation needed.
+  if (confidence >= 0.75 && amount < 200 && bukkuEnabled()) {
+    try {
+      const { number } = await bookExpenseToBukku(expRow)
+      const billRef = number ? ` · Bill ${esc(number)}` : ''
+      await sendMessage(chatId, `🧾 Booked ✅ RM${amtFmt} · ${esc(vendor ?? category)} → ${esc(category)}${billRef}`)
+    } catch (e) {
+      console.error('[telegram] auto-book failed', e)
+      await sendMessage(
+        chatId,
+        `🧾 Receipt saved (RM${amtFmt} · ${esc(vendor ?? category)} → ${esc(category)}) but Bukku booking failed — will need manual booking.\n⚠️ ${esc((e as Error).message)}`,
+      )
+    }
+    return
+  }
+
+  // STAGE FOR CONFIRMATION: low confidence OR large amount OR Bukku disabled.
+  const reason = !bukkuEnabled()
+    ? ' (Bukku not configured)'
+    : amount >= 200
+      ? ' (≥RM200 needs your OK)'
+      : ` (conf ${pct}% — double-check)`
+
+  await setPending(chatId, {
+    kind: 'book_receipt',
+    created_at: new Date().toISOString(),
+    expense_id: expRow.id,
+    vendor: vendor ?? null,
+    amount,
+    category,
+    expense_created_at: expRow.created_at,
+  })
+
+  await sendMessage(
+    chatId,
+    `🧾 RM${amtFmt} · ${esc(vendor ?? category)} → ${esc(category)} (conf ${pct}%)${reason}\nBook it? Reply <b>YES</b> — or tell me the fix (e.g. <i>"category Venue"</i>, <i>"amount 250"</i>). Say <i>"skip"</i> to discard.`,
+  )
+}
+
 async function handleStatementUpload(
   fileId: string, mime: string, fileName: string, sizeBytes: number, chatId: number,
 ): Promise<void> {
@@ -1456,48 +1734,134 @@ async function handle(
   // invoice), and otherwise PRESERVED — so the admin can ask a clarifying
   // question ("wait, how much did she pay?") without silently losing the invoice.
   const mem = await loadMemory(chatId)
-  const CONFIRMABLE = new Set(['invoice', 'reconcile', 'mark_paid', 'update_pipeline'])
+  const CONFIRMABLE = new Set(['invoice', 'reconcile', 'mark_paid', 'update_pipeline', 'book_receipt'])
   if (mem.pending && CONFIRMABLE.has(mem.pending.kind)) {
     const kind = mem.pending.kind
     const what =
       kind === 'reconcile' ? 'reconciliation'
         : kind === 'mark_paid' ? 'mark-paid'
           : kind === 'update_pipeline' ? 'pipeline update'
-            : 'invoice'
+            : kind === 'book_receipt' ? 'receipt booking'
+              : 'invoice'
     const ageMs = Date.now() - Date.parse(String(mem.pending.created_at))
     const expired = !Number.isFinite(ageMs) || ageMs > 10 * 60 * 1000
     const norm = trimmed.toLowerCase().replace(/[.!?\s]+$/g, '')
     const isYes = /^(yes|yes please|y|yeah|yep|yup|ya|ok|okay|sure|confirm|confirmed|go|go ahead|send|send it|do it)$/.test(norm)
-    const isNo = /^(no|n|nope|cancel|stop|abort|nvm|never ?mind|don'?t|dont)$/.test(norm)
+    const isNo = /^(no|n|nope|cancel|stop|abort|nvm|never ?mind|don'?t|dont|skip)$/.test(norm)
+
     if (isYes && expired) {
       await clearPending(chatId)
       return `⌛ That ${what} confirmation expired (over 10 min old) — I did NOT act on it. Send it again to retry.`
     }
-    if (isYes) {
-      await clearPending(chatId)
-      if (kind === 'reconcile') {
-        const staged = (mem.pending.matches as ReconcileMatch[]) ?? []
-        if (!staged.length) return '⚠️ That reconciliation had no matches staged — nothing changed.'
-        return await executeReconcile(staged, chatId)
+
+    // ── book_receipt: handle YES, corrections, and skip ──────────────────────
+    if (kind === 'book_receipt') {
+      const pending = mem.pending
+
+      if (isNo) {
+        await clearPending(chatId)
+        return `❎ Receipt booking discarded — the expense row is saved but will not be booked to Bukku.`
       }
-      if (kind === 'mark_paid') return await executeMarkPaid(mem.pending)
-      if (kind === 'update_pipeline') return await executeUpdatePipeline(mem.pending)
-      const ti = (mem.pending.tool_input as InvoiceToolInput) ?? {
-        attendee_name: mem.pending.attendee_name as string,
-        override_amount: mem.pending.amount as number,
-        mode: (mem.pending.mode as 'quick' | 'balance') || 'quick',
+
+      // Simple field corrections: "category Venue" / "amount 250"
+      const catMatch = trimmed.match(/^category\s+(.+)$/i)
+      const amtMatch = trimmed.match(/^amount\s+([\d.]+)/i)
+      if (catMatch || amtMatch) {
+        if (expired) {
+          await clearPending(chatId)
+          return `⌛ That ${what} confirmation expired — I did NOT act on it. Send the receipt again to retry.`
+        }
+        let newCategory = (pending.category as string) || 'Other'
+        let newAmount = Number(pending.amount ?? 0)
+
+        if (catMatch) {
+          const rawCat = catMatch[1].trim()
+          // Match case-insensitively against the allowed list
+          const matched = RECEIPT_CATEGORIES.find(c => c.toLowerCase() === rawCat.toLowerCase())
+          newCategory = matched ?? 'Other'
+        }
+        if (amtMatch) {
+          const parsed = parseFloat(amtMatch[1])
+          if (Number.isFinite(parsed) && parsed > 0) newAmount = Math.round(parsed * 100) / 100
+        }
+
+        // Update the expense row in DB and refresh the pending blob
+        const expId = pending.expense_id as string
+        await supabase.from('expenses').update({ category: newCategory, amount: newAmount }).eq('id', expId)
+        const updatedPending = { ...pending, category: newCategory, amount: newAmount }
+        await setPending(chatId, updatedPending as Parameters<typeof setPending>[1])
+
+        const amtFmt = newAmount.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        return `✏️ Updated: RM${amtFmt} · ${esc(pending.vendor as string ?? newCategory)} → ${esc(newCategory)}\nReply <b>YES</b> to book, or <i>"skip"</i> to discard.`
       }
-      const status = await executeInvoiceTool(ti, chatId, ev)
-      // PDF already sent inside executeInvoiceTool — swallow the success string.
-      return status.startsWith('Invoice PDF sent') ? '' : status
+
+      if (isYes) {
+        await clearPending(chatId)
+        if (!bukkuEnabled()) {
+          return `⚠️ Bukku is not configured — expense is saved but cannot be booked. Configure BUKKU_API_TOKEN to enable booking.`
+        }
+        const expId = pending.expense_id as string
+        // Re-fetch the expense row (may have been updated by corrections above).
+        const { data: expRow, error: fetchErr } = await supabase
+          .from('expenses')
+          .select('id, event_id, vendor, description, amount, category, created_at, bukku_bill_id')
+          .eq('id', expId)
+          .single()
+        if (fetchErr || !expRow) {
+          return `⚠️ Could not load the expense to book. (${esc(fetchErr?.message ?? 'not found')})`
+        }
+        const row: ExpenseRow = {
+          id: expRow.id as string,
+          event_id: expRow.event_id as string | null,
+          vendor: expRow.vendor as string | null,
+          description: expRow.description as string,
+          amount: Number(expRow.amount),
+          category: expRow.category as string,
+          created_at: expRow.created_at as string,
+          bukku_bill_id: expRow.bukku_bill_id as string | null,
+        }
+        try {
+          const { number } = await bookExpenseToBukku(row)
+          const amtFmt = row.amount.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+          const billRef = number ? ` · Bill ${esc(number)}` : ''
+          return `🧾 Booked ✅ RM${amtFmt} · ${esc(row.vendor ?? row.category)} → ${esc(row.category)}${billRef}`
+        } catch (e) {
+          console.error('[telegram] book_receipt YES booking failed', e)
+          return `⚠️ Bukku booking failed — expense is saved but not booked. Try again with YES.\n${esc((e as Error).message)}`
+        }
+      }
+
+      // Neither yes/no/correction: if expired clear silently; else keep pending and fall through.
+      if (expired) await clearPending(chatId)
+      // Don't return — let the text fall through to normal handling.
+    } else {
+      // Non-book_receipt confirmable kinds
+      if (isYes) {
+        await clearPending(chatId)
+        if (kind === 'reconcile') {
+          const staged = (mem.pending.matches as ReconcileMatch[]) ?? []
+          if (!staged.length) return '⚠️ That reconciliation had no matches staged — nothing changed.'
+          return await executeReconcile(staged, chatId)
+        }
+        if (kind === 'mark_paid') return await executeMarkPaid(mem.pending)
+        if (kind === 'update_pipeline') return await executeUpdatePipeline(mem.pending)
+        const ti = (mem.pending.tool_input as InvoiceToolInput) ?? {
+          attendee_name: mem.pending.attendee_name as string,
+          override_amount: mem.pending.amount as number,
+          mode: (mem.pending.mode as 'quick' | 'balance') || 'quick',
+        }
+        const status = await executeInvoiceTool(ti, chatId, ev)
+        // PDF already sent inside executeInvoiceTool — swallow the success string.
+        return status.startsWith('Invoice PDF sent') ? '' : status
+      }
+      if (isNo) {
+        await clearPending(chatId)
+        return `❎ ${what.charAt(0).toUpperCase() + what.slice(1)} cancelled — nothing was changed.`
+      }
+      // Neither yes nor no: drop a stale pending silently, else KEEP it and fall
+      // through so this message is answered normally (non-destructive).
+      if (expired) await clearPending(chatId)
     }
-    if (isNo) {
-      await clearPending(chatId)
-      return `❎ ${what.charAt(0).toUpperCase() + what.slice(1)} cancelled — nothing was changed.`
-    }
-    // Neither yes nor no: drop a stale pending silently, else KEEP it and fall
-    // through so this message is answered normally (non-destructive).
-    if (expired) await clearPending(chatId)
   }
 
   // No invoice is staged: a bare "yes/ok/confirm" has nothing to act on. Answer
@@ -1656,13 +2020,22 @@ async function processMessage(message: Record<string, unknown>): Promise<void> {
       return
     }
 
-    // Forwarded statement file/photo → reconciliation flow (no text to handle).
+    // Forwarded file or photo → classify first for images, else straight to statement flow.
     if (doc || photo) {
       const fileId = (doc ? doc.file_id : photo!.file_id) as string
       const mime = doc ? ((doc.mime_type as string) || '') : 'image/jpeg'
       const fileName = doc ? ((doc.file_name as string) || '') : 'photo.jpg'
       const size = Number((doc ? doc.file_size : photo!.file_size) ?? 0)
-      await handleStatementUpload(fileId, mime, fileName, size, chatId)
+
+      // A Telegram photo (photo array) is always an image — run receipt classification.
+      // An image-mime document (JPEG/PNG/WEBP) also gets classified.
+      // Non-image documents (PDF, CSV, etc.) go straight to the statement flow unchanged.
+      const isImageMime = /^image\/(jpe?g|png|webp)$/.test(mime)
+      if (photo || isImageMime) {
+        await handleReceiptUpload(fileId, mime, chatId)
+      } else {
+        await handleStatementUpload(fileId, mime, fileName, size, chatId)
+      }
       return
     }
 
