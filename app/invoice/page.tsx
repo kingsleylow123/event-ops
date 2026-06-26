@@ -48,6 +48,15 @@ function num(v: string) {
 function rm(n: number) {
   return `RM ${n.toLocaleString('en-MY', { maximumFractionDigits: 2 })}`
 }
+// Strip internal payment markers (e.g. "upgrade_payment") that can live in
+// attendee notes or Stripe product names — they must never appear on a client invoice.
+function cleanInvoiceText(s: string | null | undefined): string {
+  return (s || '')
+    .replace(/\bupgrade[_ ]payment\b/gi, '')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\s*[·•,\-—]\s*$/, '')
+    .trim()
+}
 
 // ── Main page ───────────────────────────────────────────────────────────
 function InvoiceContent() {
@@ -69,8 +78,8 @@ function InvoiceContent() {
   // ── Quick mode — one row per ticket
   const [quickItems, setQuickItems] = useState<QuickItem[]>([
     {
-      desc: params.get('desc') || '[VIP] Claude Half Day Workshop',
-      note: params.get('note') || '[non refundable',
+      desc: cleanInvoiceText(params.get('desc')) || '[VIP] Claude Half Day Workshop',
+      note: cleanInvoiceText(params.get('note')) || '[non refundable',
       qty: '1',
       price: params.get('amount') || '0',
     },
@@ -395,7 +404,7 @@ function InvoiceContent() {
       } catch { /* fall through to template */ }
     }
     const fallbackDesc = `[${ticketLabel}] Claude Workshop`
-    const finalDesc = stripeDesc || fallbackDesc
+    const finalDesc = cleanInvoiceText(stripeDesc) || fallbackDesc
 
     if (mode === 'quick') {
       // Add as a ticket row, dropping the empty placeholder row if present.
@@ -404,7 +413,9 @@ function InvoiceContent() {
         ...items.filter(it => it.desc.trim() || num(it.price) !== 0),
         {
           desc: finalDesc,
-          note: stripeDesc ? '' : (a.notes || '[non refundable'),
+          // Never pull the attendee's notes onto the invoice — they hold internal
+          // markers (e.g. upgrade_payment). Use the standard non-refundable line.
+          note: stripeDesc ? '' : '[non refundable',
           qty: '1',
           price: String(a.payment_amount ?? 0),
         },
