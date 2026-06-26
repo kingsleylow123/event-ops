@@ -32,6 +32,8 @@ IG content → ManyChat DM → WhatsApp → [ event-ops: survey → workshop →
 | **Growth** | `affiliates` | Creator Circle (ToFu) — affiliate tracking + daily payout cron |
 | **Admin** | `admin`, `auth`, `login`, `profile` | Access control, password reset |
 
+> **Full A–Z lifecycle + every-tab reference:** [`docs/EVENT-LIFECYCLE.md`](docs/EVENT-LIFECYCLE.md). Jarvis (the Telegram bot) carries a condensed copy in `lib/jarvis/prompt.ts` and has a tool for every tab that holds queryable data — `get_event_lifecycle` answers "where is event X in its flow / what's left", and `get_checklist` / `get_event_team` / `get_facilitator_stats` / `get_bukku_status` cover the tabs it previously couldn't.
+
 ## Key context
 
 - **Surveys are event-parameterized via URL** — one survey page serves all events, switched by URL param. When updating "the survey for the 7th June event," you're changing which event the live link targets, not editing a per-event file.
