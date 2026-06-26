@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- launchd timer for the monthly accountant bundle.
+     Install:  cp scripts/com.cmo.monthly-bundle.plist ~/Library/LaunchAgents/
+               launchctl load ~/Library/LaunchAgents/com.cmo.monthly-bundle.plist
+     Uninstall: launchctl unload ~/Library/LaunchAgents/com.cmo.monthly-bundle.plist
+     Runs on the 2nd of each month at 09:00 (bundles the PREVIOUS month) and emails.
+     Edit the two ABSOLUTE paths below if your username/node path differ
+     (find node with: which node). -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.cmo.monthly-bundle</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/node</string>
+    <string>/Users/kingsleylow/Documents/Projects/event-ops/scripts/cmo-monthly-bundle.mjs</string>
+    <string>--send</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/kingsleylow/Documents/Projects/event-ops</string>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Day</key><integer>2</integer>
+    <key>Hour</key><integer>9</integer>
+    <key>Minute</key><integer>0</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/tmp/cmo-monthly-bundle.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/cmo-monthly-bundle.err</string>
+</dict>
+</plist>
