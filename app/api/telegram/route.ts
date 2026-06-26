@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse, after } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import OpenAI from 'openai'
 import { supabaseAdmin as supabase, fetchAllRows } from '@/lib/supabase-admin'
@@ -12,6 +12,10 @@ import { loadMemory, appendTurn, setPending, clearPending, recentTurnsForPrompt 
 import { matchTransactions, type ReconcileMatch, type PendingAttendee, type StatementTxn } from '@/lib/reconcile'
 import { sendEmail, emailEnabled, invoiceEmailHtml, receiptEmailHtml } from '@/lib/email'
 import type { Event } from '@/lib/supabase'
+import { runAgent } from '@/lib/jarvis/agent'
+import type { AgentContext } from '@/lib/jarvis/types'
+import { isDuplicateUpdate } from '@/lib/jarvis/observability'
+import { executeMarkPaid, executeUpdatePipeline } from '@/lib/jarvis/tools'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -19,6 +23,10 @@ export const maxDuration = 60
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
 const WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET!
 const ALLOWED_IDS = (process.env.TELEGRAM_ALLOWED_USER_IDS || '').split(',').map(s => s.trim()).filter(Boolean)
+// Feature flag: when 'true', natural-language questions go to the tool-using
+// agent (lib/jarvis). Off → the legacy single-shot askClaude path. Invoice
+// commands always use the legacy staging path regardless of the flag.
+const AGENT_MODE = process.env.JARVIS_AGENT_MODE === 'true'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -1448,9 +1456,14 @@ async function handle(
   // invoice), and otherwise PRESERVED — so the admin can ask a clarifying
   // question ("wait, how much did she pay?") without silently losing the invoice.
   const mem = await loadMemory(chatId)
-  if (mem.pending && (mem.pending.kind === 'invoice' || mem.pending.kind === 'reconcile')) {
+  const CONFIRMABLE = new Set(['invoice', 'reconcile', 'mark_paid', 'update_pipeline'])
+  if (mem.pending && CONFIRMABLE.has(mem.pending.kind)) {
     const kind = mem.pending.kind
-    const what = kind === 'reconcile' ? 'reconciliation' : 'invoice'
+    const what =
+      kind === 'reconcile' ? 'reconciliation'
+        : kind === 'mark_paid' ? 'mark-paid'
+          : kind === 'update_pipeline' ? 'pipeline update'
+            : 'invoice'
     const ageMs = Date.now() - Date.parse(String(mem.pending.created_at))
     const expired = !Number.isFinite(ageMs) || ageMs > 10 * 60 * 1000
     const norm = trimmed.toLowerCase().replace(/[.!?\s]+$/g, '')
@@ -1467,6 +1480,8 @@ async function handle(
         if (!staged.length) return '⚠️ That reconciliation had no matches staged — nothing changed.'
         return await executeReconcile(staged, chatId)
       }
+      if (kind === 'mark_paid') return await executeMarkPaid(mem.pending)
+      if (kind === 'update_pipeline') return await executeUpdatePipeline(mem.pending)
       const ti = (mem.pending.tool_input as InvoiceToolInput) ?? {
         attendee_name: mem.pending.attendee_name as string,
         override_amount: mem.pending.amount as number,
@@ -1478,7 +1493,7 @@ async function handle(
     }
     if (isNo) {
       await clearPending(chatId)
-      return kind === 'reconcile' ? '❎ Reconciliation cancelled — nothing was changed.' : '❎ Invoice cancelled.'
+      return `❎ ${what.charAt(0).toUpperCase() + what.slice(1)} cancelled — nothing was changed.`
     }
     // Neither yes nor no: drop a stale pending silently, else KEEP it and fall
     // through so this message is answered normally (non-destructive).
@@ -1559,56 +1574,99 @@ async function handle(
   return '' // signal: natural language
 }
 
+// ── Invoice-intent detection ──────────────────────────────────────────────────
+// Invoice commands stay on the legacy staging path even in agent mode — that
+// flow (attendee lookup → disambiguation → balance mode → email → PDF) is
+// battle-tested and the agent doesn't reimplement it.
+function isInvoiceIntent(question: string): boolean {
+  const t = question.trim()
+  return (
+    /^(?:can you\s+|could you\s+|please\s+|pls\s+|hey\s+|jarvis[,\s]+)*(invoice|bill|send|make|create|generate|issue|draft|raise)\b/i.test(t)
+    && /\b(invoice|bill)\b/i.test(t)
+  )
+}
+
+// Lean context for the tool-using agent (no per-person data — tools fetch it).
+function buildAgentContext(chatId: number, ev: Row, allEvents: Row[]): AgentContext {
+  const toEv = (e: Row) => ({ id: e.id as string, name: (e.name as string) || '—', date: (e.date as string | null) ?? null })
+  return {
+    chatId,
+    activeEvent: toEv(ev),
+    allEvents: allEvents.map(toEv),
+    today: new Date().toISOString().slice(0, 10),
+  }
+}
+
 // ── Main webhook ──────────────────────────────────────────────────────────────
+// Acks Telegram in <1s, then processes in the background via after(). Telegram
+// resends an update if it doesn't get a fast 200, so we dedupe on update_id —
+// otherwise a retry would double-run the (now async, multi-step) agent.
 export async function POST(req: NextRequest) {
-  // Hoisted so the catch block can notify the admin even if we throw after the
-  // request body has already been consumed (T3.4).
-  let chatId: number | null = null
-  // Always ack with 200 so Telegram never retries (prevents duplicate-reply storms)
+  // Fail CLOSED: require the webhook secret to be configured AND match.
+  if (!WEBHOOK_SECRET || req.headers.get('x-telegram-bot-api-secret-token') !== WEBHOOK_SECRET) {
+    return NextResponse.json({ ok: false }, { status: 401 })
+  }
+
+  let update: { update_id?: number; message?: Record<string, unknown> }
   try {
-    // Fail CLOSED: require the webhook secret to be configured AND match. A
-    // missing secret is a misconfiguration, not a reason to accept anonymous posts.
-    if (!WEBHOOK_SECRET || req.headers.get('x-telegram-bot-api-secret-token') !== WEBHOOK_SECRET) {
-      return NextResponse.json({ ok: false }, { status: 401 })
+    update = await req.json()
+  } catch {
+    return NextResponse.json({ ok: true })
+  }
+  const message = update.message // ignore edited_message to avoid duplicate replies
+  if (!message) return NextResponse.json({ ok: true })
+
+  // Dedupe BEFORE scheduling work so a Telegram retry is dropped, not re-run.
+  if (typeof update.update_id === 'number') {
+    const chat = message.chat as { id?: number } | undefined
+    if (await isDuplicateUpdate(update.update_id, chat?.id ?? null)) {
+      return NextResponse.json({ ok: true, deduped: true })
     }
+  }
 
-    const update = await req.json()
-    const message = update.message // ignore edited_message to avoid duplicate replies
-    const voice = message?.voice || message?.audio
-    // Bank-statement reconciliation intake: a forwarded document (PDF/CSV) or
-    // photo (statement screenshot). Routed after auth, below.
-    const doc = message?.document
-    const photoSizes = message?.photo
+  // Ack now; do the real work after the response flushes (Vercel still honours
+  // maxDuration for the after() callback).
+  after(() => processMessage(message))
+  return NextResponse.json({ ok: true })
+}
+
+// All the heavy lifting: auth, transcription, command routing, and the agent.
+async function processMessage(message: Record<string, unknown>): Promise<void> {
+  let chatId: number | null = null
+  try {
+    const voice = (message.voice || message.audio) as Row | undefined
+    const doc = message.document as Row | undefined
+    const photoSizes = message.photo as Row[] | undefined
     const photo = Array.isArray(photoSizes) && photoSizes.length ? photoSizes[photoSizes.length - 1] : null
-    if (!message?.text && !voice && !doc && !photo) return NextResponse.json({ ok: true })
+    if (!message.text && !voice && !doc && !photo) return
 
-    const userId = String(message.from?.id ?? '')
-    chatId = message.chat.id as number // hoisted (declared before try) so catch can notify (T3.4)
+    const from = message.from as { id?: number } | undefined
+    const userId = String(from?.id ?? '')
+    chatId = (message.chat as { id: number }).id
 
     // Auth BEFORE transcription so Whisper credits are never spent on strangers.
-    // Fail CLOSED: an empty allow-list is a misconfiguration → refuse everyone,
-    // never "allow anyone who finds the bot" (it can read all PII/revenue/invoices).
+    // Fail CLOSED: an empty allow-list refuses everyone.
     if (!ALLOWED_IDS.length) {
       console.error('[telegram] TELEGRAM_ALLOWED_USER_IDS is empty — refusing all messages (fail-closed)')
       await sendMessage(chatId, '🚫 Bot access is not configured (TELEGRAM_ALLOWED_USER_IDS missing).')
-      return NextResponse.json({ ok: true })
+      return
     }
     if (!ALLOWED_IDS.includes(userId)) {
       await sendMessage(chatId, `🚫 Not authorised.\n\nYour Telegram ID: <code>${esc(userId)}</code>`)
-      return NextResponse.json({ ok: true })
+      return
     }
 
     // Forwarded statement file/photo → reconciliation flow (no text to handle).
     if (doc || photo) {
-      const fileId = (doc ? doc.file_id : photo.file_id) as string
+      const fileId = (doc ? doc.file_id : photo!.file_id) as string
       const mime = doc ? ((doc.mime_type as string) || '') : 'image/jpeg'
       const fileName = doc ? ((doc.file_name as string) || '') : 'photo.jpg'
-      const size = Number((doc ? doc.file_size : photo.file_size) ?? 0)
+      const size = Number((doc ? doc.file_size : photo!.file_size) ?? 0)
       await handleStatementUpload(fileId, mime, fileName, size, chatId)
-      return NextResponse.json({ ok: true })
+      return
     }
 
-    // Resolve the text — typed, or transcribed from a voice note
+    // Resolve the text — typed, or transcribed from a voice note.
     let text: string
     if (voice) {
       await sendTyping(chatId)
@@ -1617,11 +1675,11 @@ export async function POST(req: NextRequest) {
       } catch (e) {
         console.error('[telegram] transcribe failed', e)
         await sendMessage(chatId, '⚠️ Could not transcribe that voice note. Try again or type it.')
-        return NextResponse.json({ ok: true })
+        return
       }
       if (!text) {
         await sendMessage(chatId, '🤔 I could not hear anything in that voice note.')
-        return NextResponse.json({ ok: true })
+        return
       }
       await sendMessage(chatId, `🎙 <i>Heard:</i> "${esc(text)}"`)
     } else {
@@ -1631,45 +1689,47 @@ export async function POST(req: NextRequest) {
     const ev = await getActiveEvent()
     if (!ev) {
       await sendMessage(chatId, '⚠️ No upcoming events found in EventOps.')
-      return NextResponse.json({ ok: true })
+      return
     }
 
     const data = await loadAll(ev.id as string)
-    // Load all events once here so handle() can resolve "/cmd <event>" tokens
-    // and askClaude can reuse the cached bundle (no double active-event load).
     const allEvents = await getAllEvents()
 
     let reply = await handle(text, ev, data, allEvents, chatId)
     if (!reply) {
-      // "On it…" ack before potentially-long Claude work (T3.4). typing alone
-      // disappears after a few seconds; a one-liner reassures the admin.
       await sendTyping(chatId)
-      // Resolve which event the question is about and focus it — otherwise focus
-      // is ALWAYS the active event and a question naming a past event answers
-      // from the wrong one's per-person/survey data. Loose matching handles
-      // partial names ("claude for ops webinar" vs "Claude for Ops — Webinar")
-      // and temporal phrasing ("today's webinar", "tonight's event").
-      const focus = matchEventLoose(text, allEvents as unknown as Event[])
-      reply = await askClaude(text, ev, data, chatId, focus ? (focus as unknown as Row) : undefined)
+      // Agent mode: tool-using agent for everything EXCEPT invoice commands.
+      // Flag off → legacy single-shot askClaude path.
+      if (AGENT_MODE && !isInvoiceIntent(text)) {
+        const ctx = buildAgentContext(chatId, ev, allEvents as Row[])
+        const res = await runAgent(text, ctx)
+        if (res.staged) {
+          // Stage the write for the YES gate — never mutate inline.
+          await setPending(chatId, {
+            kind: res.staged.kind,
+            created_at: new Date().toISOString(),
+            ...res.staged.pending,
+          })
+          reply = res.staged.preview
+        } else {
+          reply = res.reply
+        }
+      } else {
+        const focus = matchEventLoose(text, allEvents as unknown as Event[])
+        reply = await askClaude(text, ev, data, chatId, focus ? (focus as unknown as Row) : undefined)
+      }
     }
 
     // Empty reply = the handler already sent something (e.g. an invoice PDF).
     if (reply) {
       await sendMessage(chatId, reply)
-      // Persist the exchange for short-term memory (T3.3). Only store plain
-      // text turns — invoice PDFs / staged confirmations carry their own state.
       await appendTurn(chatId, text, reply)
     }
-    return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('[telegram] unhandled', err)
-    // Best-effort error reply to the admin, but still 200 to stop retries.
-    // chatId was hoisted before the body was consumed, so this actually works
-    // now (the old code re-read an already-consumed req.json() → always null).
     if (chatId !== null) {
       await sendMessage(chatId, '⚠️ Something went wrong handling that. Try again or use /help.')
     }
-    return NextResponse.json({ ok: true })
   }
 }
 
