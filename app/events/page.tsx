@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import type { Event } from '@/lib/supabase'
 import { useCachedFetch, mutateCache } from '@/lib/useCachedFetch'
+import { PRICING_TIERS, PRICING_TIER_LABELS } from '@/lib/registration'
 
 const EMPTY_FORM = {
   name: '',
@@ -9,6 +10,7 @@ const EMPTY_FORM = {
   venue: '',
   capacity: '',
   format: 'workshop',
+  pricing_tier: 'standard',
   config: {} as Record<string, string>,
 }
 
@@ -38,6 +40,7 @@ export default function EventsPage() {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+  const [copiedRegId, setCopiedRegId] = useState<string | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
 
   // Mirror cached/fetched data into local state for optimistic edits.
@@ -64,6 +67,7 @@ export default function EventsPage() {
       venue: ev.venue ?? '',
       capacity: ev.capacity != null ? String(ev.capacity) : '',
       format: ev.format ?? 'workshop',
+      pricing_tier: ev.pricing_tier ?? 'standard',
       config: ev.config ?? {},
     })
     setShowForm(true)
@@ -83,6 +87,7 @@ export default function EventsPage() {
       venue: form.venue || null,
       capacity: form.capacity ? Number(form.capacity) : null,
       format: form.format || 'workshop',
+      pricing_tier: form.pricing_tier || 'standard',
       // Drop blank values so they inherit defaults instead of overriding with ''.
       config: Object.fromEntries(Object.entries(form.config).filter(([, v]) => v.trim() !== '')),
     }
@@ -157,6 +162,15 @@ export default function EventsPage() {
             </div>
             <p className="text-xs text-zinc-500">Format sets which pre-event survey questions show. Manage Host / Facilitator / Content Creator from the <span className="text-amber-400">Team</span> tab.</p>
 
+            <div>
+              <label className="block text-[11px] text-zinc-500 mb-1">Live ticket tier (what the Register link sells)</label>
+              <select value={form.pricing_tier} onChange={e => setForm(f => ({ ...f, pricing_tier: e.target.value }))}
+                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-sm">
+                {PRICING_TIERS.map(t => <option key={t} value={t}>{PRICING_TIER_LABELS[t]}</option>)}
+              </select>
+              <p className="mt-1 text-xs text-zinc-500">Flip this as sales progress — <span className="text-amber-400">🎟 Register Link</span> charges General/VIP at this tier.</p>
+            </div>
+
             {/* Per-event links & content (blank = inherit Claude Malaysia defaults) */}
             <details className="rounded-lg border border-zinc-800 bg-zinc-900/40">
               <summary className="cursor-pointer select-none px-3 py-2 text-sm text-zinc-300">
@@ -214,6 +228,16 @@ export default function EventsPage() {
                 }}
                 className="text-xs border border-zinc-700 text-zinc-300 hover:border-amber-500/50 hover:text-amber-400 px-3 py-1.5 rounded-lg whitespace-nowrap">
                 {copiedId === ev.id ? '✓ Copied' : '🔗 Start Link'}
+              </button>
+              <button
+                onClick={() => {
+                  const base = typeof window !== 'undefined' ? window.location.origin : ''
+                  navigator.clipboard.writeText(`${base}/register?event=${ev.id}`)
+                  setCopiedRegId(ev.id)
+                  setTimeout(() => setCopiedRegId(null), 1500)
+                }}
+                className="text-xs border border-zinc-700 text-zinc-300 hover:border-amber-500/50 hover:text-amber-400 px-3 py-1.5 rounded-lg whitespace-nowrap">
+                {copiedRegId === ev.id ? '✓ Copied' : '🎟 Register Link'}
               </button>
               <button onClick={() => openEdit(ev)}
                 className="text-xs border border-zinc-700 text-zinc-300 hover:border-amber-500/50 hover:text-amber-400 px-3 py-1.5 rounded-lg">

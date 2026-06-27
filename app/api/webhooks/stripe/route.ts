@@ -3,6 +3,8 @@ import { stripe } from '@/lib/stripe'
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
 import { notifyAdmins, esc, b } from '@/lib/telegram'
 import { normPhone, normEmail } from '@/lib/format'
+import { TICKET_LABELS } from '@/lib/supabase'
+import { resolveWebhookTarget, resolvePaidTicketType } from '@/lib/registration'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -52,16 +54,16 @@ export async function POST(req: NextRequest) {
   const phone = session.customer_details?.phone ?? null
   const amountRm = (session.amount_total ?? 0) / 100
 
-  // Assign to the soonest upcoming event (12h grace for day-of purchases).
-  // The Telegram ping always names the event, so a wrong guess is caught fast.
-  const graceCutoff = new Date(Date.now() - 12 * 3600_000).toISOString()
-  const { data: upcoming } = await supabase
-    .from('events')
-    .select('id, name, date')
-    .gte('date', graceCutoff)
-    .order('date', { ascending: true })
-
-  const target = upcoming?.[0] ?? null
+  // Which event? The EventOps /register checkout stamps event_id into the session
+  // metadata → deterministic. Legacy Payment Links carry none, so fall back to the
+  // soonest event in a 12h grace and flag the guess so a wrong attach is caught
+  // fast. (This is the cure for the multi-date mis-routing.)
+  const metaEventId = session.metadata?.event_id ?? null
+  const metaTicketType = session.metadata?.ticket_type ?? null
+  const { data: allEvents } = await supabase
+    .from('events').select('id, name, date').order('date', { ascending: true })
+  const resolved = resolveWebhookTarget(metaEventId, allEvents ?? [], Date.now())
+  const target = resolved.event
   if (!target) {
     await notifyAdmins(
       `💳 ${b('Stripe payment received')} — ${esc(name)} · RM ${esc(amountRm.toLocaleString('en-MY'))}\n` +
@@ -69,6 +71,9 @@ export async function POST(req: NextRequest) {
     )
     return NextResponse.json({ ok: true, unassigned: true })
   }
+
+  // Actual tier: metadata wins; legacy links infer from the amount (VIP band ≥ 450).
+  const ticketType = resolvePaidTicketType(metaTicketType, amountRm, amountRm >= 450)
 
   // Dedupe within the event by phone/email (e.g. manually pre-registered, or
   // paid a second time): update the existing record instead of duplicating.
@@ -86,7 +91,7 @@ export async function POST(req: NextRequest) {
     name,
     email,
     phone,
-    ticket_type: 'standard_general' as const,
+    ticket_type: ticketType,
     payment_method: 'stripe' as const,
     payment_amount: amountRm,
     payment_status: 'paid' as const,
@@ -109,14 +114,17 @@ export async function POST(req: NextRequest) {
   // Ping admins: the alert + a forwardable welcome with the /start link.
   const base = process.env.NEXT_PUBLIC_APP_URL || 'https://event-ops-six.vercel.app'
   const startLink = `${base}/start?event=${target.id}`
-  const multiNote = (upcoming?.length ?? 0) > 1
-    ? `\n<i>⚠️ ${upcoming!.length} upcoming events — assigned to the soonest. Move in Attendees if wrong.</i>` : ''
+  const routeNote = resolved.resolved === 'metadata'
+    ? '' // deterministic via /register — no warning needed
+    : resolved.ambiguous > 1
+      ? `\n<i>⚠️ Legacy link (no event tag) · ${resolved.ambiguous} upcoming events — guessed the soonest. Move in Attendees if wrong.</i>`
+      : `\n<i>ℹ️ Legacy link — attached by date guess.</i>`
   try {
     await notifyAdmins(
       `💳 ${b('New payment')} — ${esc(name)} · ${b('RM ' + amountRm.toLocaleString('en-MY'))}\n` +
-      `🎟 ${esc(target.name)}${existing ? ' <i>(updated existing attendee)</i>' : ' <i>(new attendee created)</i>'}\n` +
+      `🎟 ${esc(target.name)} · ${esc(TICKET_LABELS[ticketType])}${existing ? ' <i>(updated existing attendee)</i>' : ' <i>(new attendee created)</i>'}\n` +
       `${phone ? `📱 ${esc(phone)}\n` : ''}${email ? `✉️ ${esc(email)}\n` : ''}` +
-      (dbError ? `\n🛑 DB error: ${esc(dbError)} — run Stripe sync.` : '') + multiNote,
+      (dbError ? `\n🛑 DB error: ${esc(dbError)} — run Stripe sync.` : '') + routeNote,
     )
     // Second message: clean copy-forward for WhatsApp.
     await notifyAdmins(
