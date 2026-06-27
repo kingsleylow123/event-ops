@@ -33,12 +33,12 @@ export const TICKET_LABELS: Record<TicketType, string> = {
 export const TICKET_PRICES: Record<TicketType, number> = {
   free_general: 0,
   free_vip: 0,
-  super_early_bird_general: 249,
-  super_early_bird_vip: 497,
-  early_bird_general: 297,
+  super_early_bird_general: 297,
+  super_early_bird_vip: 547,
+  early_bird_general: 347,
   early_bird_vip: 597,
-  standard_general: 347,
-  standard_vip: 697,
+  standard_general: 397,
+  standard_vip: 647,
 }
 
 export const CHECKLIST_CATEGORIES = ['Pre-Event Comms', 'Facilitator', 'Media / UGC Creator', 'AV/Video', 'Sales/Upsell', 'Venue', 'Logistics', 'Post-Event']
