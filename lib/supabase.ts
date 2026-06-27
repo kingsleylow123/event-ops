@@ -157,6 +157,7 @@ export interface Event {
   is_active: boolean
   format?: string // 'workshop' (default) | 'webinar' — drives the survey variant
   config?: Record<string, string> // per-event links/videos/venue copy (see lib/event-config.ts)
+  pricing_tier?: string // active sales tier for /register: super_early_bird | early_bird | standard
   team: TeamMember[]
   floor_plan?: FloorPlan
   // Legacy single-member columns — kept for back-compat, no longer used by UI
