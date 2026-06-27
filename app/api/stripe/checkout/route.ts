@@ -60,7 +60,8 @@ export async function POST(req: NextRequest) {
     })
     return NextResponse.json({ url: session.url })
   } catch (e) {
-    console.error('[stripe-checkout] session create failed', e)
-    return NextResponse.json({ error: 'could not start checkout' }, { status: 502 })
+    const detail = e instanceof Error ? e.message : String(e)
+    console.error('[stripe-checkout] session create failed', detail)
+    return NextResponse.json({ error: 'could not start checkout', detail }, { status: 502 })
   }
 }
