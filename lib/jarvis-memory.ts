@@ -14,12 +14,19 @@ export interface Turn {
 
 /** Small JSON blob describing an action that needs user confirmation. */
 export interface PendingAction {
-  kind: 'invoice' | 'payout' | 'confirm' | 'reconcile' | 'mark_paid' | 'update_pipeline' | 'book_receipt'
+  kind: 'invoice' | 'payout' | 'confirm' | 'reconcile' | 'mark_paid' | 'update_pipeline' | 'book_receipt' | 'receipt_event'
   attendee_name?: string
   amount?: number
   mode?: string // e.g. 'cash' | 'transfer'
   created_at: string // ISO timestamp — so stale confirms can be expired
   [key: string]: unknown // allow extra fields per action kind
+}
+
+/** One candidate entry for the receipt_event picker. */
+export interface EventCandidate {
+  n: number
+  event_id: string | null // null = Overhead / none
+  label: string
 }
 
 interface Row {
