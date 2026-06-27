@@ -48,9 +48,10 @@ export async function POST(req: NextRequest) {
           product_data: { name: `${ev.name} — ${TICKET_LABELS[purchase.ticket_type]}` },
         },
       }],
-      // Read back by app/api/webhooks/stripe → deterministic event + tier.
+      // Read back by app/api/webhooks/stripe → deterministic event + tier. Kept
+      // on the SESSION only (the webhook reads session.metadata), so the API key
+      // needs just "Checkout Sessions: write", not PaymentIntents.
       metadata: { event_id: ev.id as string, ticket_type: purchase.ticket_type },
-      payment_intent_data: { metadata: { event_id: ev.id as string, ticket_type: purchase.ticket_type } },
       // Name comes with the billing address; phone + email collected too — the
       // webhook reads all three from customer_details.
       billing_address_collection: 'required',
@@ -60,8 +61,8 @@ export async function POST(req: NextRequest) {
     })
     return NextResponse.json({ url: session.url })
   } catch (e) {
-    const detail = e instanceof Error ? e.message : String(e)
-    console.error('[stripe-checkout] session create failed', detail)
-    return NextResponse.json({ error: 'could not start checkout', detail }, { status: 502 })
+    // Logged server-side only — never leak Stripe account/key details to a public caller.
+    console.error('[stripe-checkout] session create failed', e instanceof Error ? e.message : String(e))
+    return NextResponse.json({ error: 'could not start checkout' }, { status: 502 })
   }
 }
