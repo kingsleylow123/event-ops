@@ -1698,7 +1698,10 @@ async function askClaude(question: string, ev: Row, d: Awaited<ReturnType<typeof
     // Heavy per-attendee + expense + meeting detail ONLY for the focus event —
     // other events stay at totals (+ survey only when cross-event) (T2.6).
     if (isFocus) {
-      entry.attendees = att.map(a => ({
+      // Participants only (facilitators excluded) so any headcount/breakdown the
+      // LLM derives from these rows matches the Attendees page. Facilitator/person
+      // lookups go through the dedicated find_person tool, which queries all rows.
+      entry.attendees = part.map(a => ({
         name: a.name, ticket: a.ticket_type, payment: a.payment_status,
         method: a.payment_method, amount: a.payment_amount,
         confirmed: a.attendance_confirmed, phone: a.phone, email: a.email, notes: a.notes,
