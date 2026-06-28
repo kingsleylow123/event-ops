@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth/guard'
-import { buildScorecard, syncInstagram, setIgHandle, SINCE_DEFAULT } from '@/lib/creators'
+import { buildScorecard, syncInstagram, setIgHandle, setCommissionRate, SINCE_DEFAULT } from '@/lib/creators'
 
 const NO_STORE_HEADERS = { 'Cache-Control': 'no-store, no-cache, must-revalidate' } as const
 
@@ -44,6 +44,17 @@ export async function POST(req: NextRequest) {
     if (!affiliate_id) return NextResponse.json({ error: 'affiliate_id required' }, { status: 400, headers: NO_STORE_HEADERS })
     try {
       await setIgHandle(affiliate_id, ig_handle ?? null)
+      return NextResponse.json({ success: true }, { headers: NO_STORE_HEADERS })
+    } catch (e) {
+      return NextResponse.json({ error: (e as Error).message }, { status: 500, headers: NO_STORE_HEADERS })
+    }
+  }
+
+  if (action === 'set_rate') {
+    const { affiliate_id, rate } = body as { affiliate_id?: string; rate?: number }
+    if (!affiliate_id || typeof rate !== 'number') return NextResponse.json({ error: 'affiliate_id and rate required' }, { status: 400, headers: NO_STORE_HEADERS })
+    try {
+      await setCommissionRate(affiliate_id, rate)
       return NextResponse.json({ success: true }, { headers: NO_STORE_HEADERS })
     } catch (e) {
       return NextResponse.json({ error: (e as Error).message }, { status: 500, headers: NO_STORE_HEADERS })
