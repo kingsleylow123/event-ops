@@ -49,6 +49,7 @@ const icons = {
   claims: I(<><path d="M5 3v18l2-1 2 1 2-1 2 1 2-1 2 1V3l-2 1-2-1-2 1-2-1-2 1z" /><path d="M9 8h6M9 12h5" /></>),
   deposits: I(<><rect x="2" y="6" width="20" height="13" rx="2" /><circle cx="12" cy="12.5" r="3" /><path d="M6 6V4h14a2 2 0 0 1 2 2v9" /></>),
   reports: I(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M8 13h2M8 17h2M14 13h2M14 17h2" /></>),
+  commandcenter: I(<><path d="M3 5h18l-7 8.5V19l-4 2v-7.5z" /></>),
 }
 
 export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarProps) {
@@ -72,6 +73,7 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
   const activeId = events.length ? pickActiveEvent(events)?.id : undefined
 
   const dashboard: Item = { href: '/', label: 'Dashboard', icon: icons.dashboard }
+  const commandCenter: Item = { href: '/command-center', label: 'Command Center', icon: icons.commandcenter }
   const groups: { id: string; title: string; items: Item[] }[] = [
     {
       id: 'pre', title: 'Pre-Event', items: [
@@ -181,6 +183,7 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
       <nav className="flex-1 overflow-y-auto px-3 pb-2 space-y-1
         [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {renderLink(dashboard)}
+        {isAdmin && renderLink(commandCenter)}
         {groups.map(g => (
           <div key={g.id} className="pt-3">
             <button

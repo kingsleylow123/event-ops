@@ -4,6 +4,8 @@ import { notifyAdmins, esc, b } from '@/lib/telegram'
 import { pickActiveEvent } from '@/lib/event'
 import { rm, fmtDate, normPhone } from '@/lib/format'
 import { computeDeltas, projectFill, rankDigestActions } from '@/lib/jarvis-trends'
+import { buildFunnel } from '@/lib/funnel'
+import { computeStandingInsight } from '@/lib/funnel-advisor'
 import type { Event } from '@/lib/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -297,6 +299,17 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // 📉 Funnel constraint + daily AI insight (whole-business) — best-effort, never blocks the digest.
+  let aiInsight: string | null = null
+  try {
+    const funnel = await buildFunnel({})
+    if (funnel.weakLink) {
+      trendLines.push(`📉 ${b('Funnel')}: weakest link ${esc(funnel.weakLink.label)} at ${funnel.weakLink.convPct}% — ~${esc(rm(funnel.weakLink.upsideRM))} upside if fixed`)
+    }
+    aiInsight = await computeStandingInsight()
+    if (aiInsight) trendLines.push(`🤖 ${esc(aiInsight)}`)
+  } catch { /* funnel/advisor optional — never block the digest */ }
+
   if (trendLines.length) {
     msg += `\n`
     for (const l of trendLines) msg += `\n${l}`
@@ -323,6 +336,7 @@ export async function GET(req: NextRequest) {
     registered, paid_count: paid.length, free_count: free.length,
     gross_revenue: grossRevenue, survey_count: surveyCount,
     deals_new: dealsNew, deals_contacted: dealsContacted, deals_meeting: dealsMeeting, deals_won: dealsWon,
+    ai_insight: aiInsight,
   }, { onConflict: 'event_id,snapshot_date' })
 
   return NextResponse.json({
