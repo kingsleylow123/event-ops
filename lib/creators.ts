@@ -5,6 +5,8 @@ import { scrapeAccountPosts, COMMUNITY_ACCOUNT } from '@/lib/instagram'
 // Default backtest window: the program effectively started May 2026.
 export const SINCE_DEFAULT = '2026-05-01T00:00:00Z'
 
+export interface Settings { commission_rate: number; override_rate: number }
+
 export interface ScorecardRow {
   ig_handle: string
   display_name: string | null
@@ -19,12 +21,13 @@ export interface ScorecardRow {
   leads: number | null
   seats: number | null
   revenue: number | null        // attributed buyer revenue
-  rate: number | null           // commission rate, e.g. 0.10
-  commission: number | null     // = revenue × rate (editable via rate)
+  commission: number | null     // = revenue × global commission_rate
+  override: number | null       // = revenue × global override_rate (the team lead's cut)
 }
 
 export interface Scorecard {
   rows: ScorecardRow[]
+  settings: Settings
   unmapped_affiliates: Array<{ id: string; handle: string; name: string | null; leads: number; commission: number }>
   affiliates: Array<{ id: string; handle: string; name: string | null; ig_handle: string | null }>
   totals: {
@@ -34,6 +37,9 @@ export interface Scorecard {
     reach: number
     engagement: number
     active_creators: number
+    revenue: number
+    commission: number
+    override: number
   }
   range: { from: string; to: string }
   last_synced: string | null
@@ -54,6 +60,21 @@ interface IgPostRow {
 const lc = (s: string | null | undefined) => (s ?? '').trim().toLowerCase()
 const reachOf = (likes: number, views: number) => (views > 0 ? views : (likes > 0 ? likes * 10 : 0))
 
+// ── Global rate settings (single-row config) ──────────────────────────────────
+export async function getCreatorSettings(): Promise<Settings> {
+  const { data } = await supabaseAdmin.from('creator_settings').select('commission_rate, override_rate').eq('id', 1).maybeSingle()
+  return { commission_rate: Number(data?.commission_rate ?? 0.10), override_rate: Number(data?.override_rate ?? 0.05) }
+}
+
+export async function setCreatorSettings(p: { commission_rate?: number; override_rate?: number }): Promise<void> {
+  const clamp = (n: number) => Math.max(0, Math.min(1, Number(n) || 0))
+  const patch: Record<string, number | string> = { updated_at: new Date().toISOString() }
+  if (typeof p.commission_rate === 'number') patch.commission_rate = clamp(p.commission_rate)
+  if (typeof p.override_rate === 'number') patch.override_rate = clamp(p.override_rate)
+  const { error } = await supabaseAdmin.from('creator_settings').upsert({ id: 1, ...patch }, { onConflict: 'id' })
+  if (error) throw new Error(error.message)
+}
+
 // ── Sync: scrape @claudemalaysiacommunity → upsert creator_ig_posts ───────────
 export async function syncInstagram(sinceISO: string = SINCE_DEFAULT, limit = 300): Promise<{ scraped: number; collabs: number }> {
   const posts = await scrapeAccountPosts(COMMUNITY_ACCOUNT, sinceISO, limit)
@@ -73,7 +94,7 @@ export async function syncInstagram(sinceISO: string = SINCE_DEFAULT, limit = 30
 export async function buildScorecard(fromISO: string = SINCE_DEFAULT, toISO?: string): Promise<Scorecard> {
   const to = toISO ?? new Date().toISOString()
 
-  const [{ rows: igPosts }, affRes, eventsRes] = await Promise.all([
+  const [{ rows: igPosts }, affRes, eventsRes, settings] = await Promise.all([
     fetchAllRows<IgPostRow>((from, t) =>
       supabaseAdmin
         .from('creator_ig_posts')
@@ -83,11 +104,12 @@ export async function buildScorecard(fromISO: string = SINCE_DEFAULT, toISO?: st
         .order('posted_at', { ascending: false })
         .range(from, t),
     ),
-    supabaseAdmin.from('affiliates').select('id, handle, name, ig_handle, active, commission_rate'),
+    supabaseAdmin.from('affiliates').select('id, handle, name, ig_handle, active'),
     supabaseAdmin.from('events').select('id'),
+    getCreatorSettings(),
   ])
 
-  const affs = (affRes.data ?? []) as Array<{ id: string; handle: string; name: string | null; ig_handle: string | null; active: boolean; commission_rate: string | number | null }>
+  const affs = (affRes.data ?? []) as Array<{ id: string; handle: string; name: string | null; ig_handle: string | null; active: boolean }>
 
   // Attributed revenue + seats per affiliate, summed across all events (reuses the
   // tested per-event buildReport so buyer de-duping matches the Payout tab exactly).
@@ -134,15 +156,17 @@ export async function buildScorecard(fromISO: string = SINCE_DEFAULT, toISO?: st
 
   const affByIg = new Map<string, typeof affs[number]>()
   for (const a of affs) if (a.ig_handle) affByIg.set(lc(a.ig_handle), a)
-  const rateOf = (a: typeof affs[number]) => Number(a.commission_rate ?? 0.10)
 
   const rows: ScorecardRow[] = []
   const mappedAffIds = new Set<string>()
+  let totRevenue = 0, totCommission = 0, totOverride = 0
   for (const [ig, agg] of igByCreator) {
     const aff = affByIg.get(ig) ?? null
     if (aff) mappedAffIds.add(aff.id)
     const revenue = aff ? Math.round(revByAff.get(aff.id) ?? 0) : null
-    const rate = aff ? rateOf(aff) : null
+    const commission = revenue != null ? Math.round(revenue * settings.commission_rate) : null
+    const override = revenue != null ? Math.round(revenue * settings.override_rate) : null
+    if (revenue != null) { totRevenue += revenue; totCommission += commission ?? 0; totOverride += override ?? 0 }
     rows.push({
       ig_handle: ig,
       display_name: aff?.name ?? null,
@@ -155,24 +179,25 @@ export async function buildScorecard(fromISO: string = SINCE_DEFAULT, toISO?: st
       leads: aff ? (leadsByHandle.get(lc(aff.handle)) ?? 0) : null,
       seats: aff ? (seatsByAff.get(aff.id) ?? 0) : null,
       revenue,
-      rate,
-      commission: revenue != null && rate != null ? Math.round(revenue * rate) : null,
+      commission,
+      override,
     })
   }
   rows.sort((a, b) => b.collab_posts - a.collab_posts || b.reach - a.reach)
 
   const unmapped_affiliates = affs
     .filter(a => !mappedAffIds.has(a.id) && ((revByAff.get(a.id) ?? 0) > 0 || (leadsByHandle.get(lc(a.handle)) ?? 0) > 0))
-    .map(a => ({ id: a.id, handle: a.handle, name: a.name, leads: leadsByHandle.get(lc(a.handle)) ?? 0, commission: Math.round((revByAff.get(a.id) ?? 0) * rateOf(a)) }))
+    .map(a => ({ id: a.id, handle: a.handle, name: a.name, leads: leadsByHandle.get(lc(a.handle)) ?? 0, commission: Math.round((revByAff.get(a.id) ?? 0) * settings.commission_rate) }))
     .sort((x, y) => y.commission - x.commission)
 
   const last_synced = igPosts.reduce<string | null>((m, p) => (p.synced_at && (!m || p.synced_at > m) ? p.synced_at : m), null)
 
   return {
     rows,
+    settings,
     unmapped_affiliates,
     affiliates: affs.map(a => ({ id: a.id, handle: a.handle, name: a.name, ig_handle: a.ig_handle })),
-    totals: { total_posts: totalPosts, collab_posts: collabPosts, community_posts: communityPosts, reach: totReach, engagement: totEng, active_creators: igByCreator.size },
+    totals: { total_posts: totalPosts, collab_posts: collabPosts, community_posts: communityPosts, reach: totReach, engagement: totEng, active_creators: igByCreator.size, revenue: totRevenue, commission: totCommission, override: totOverride },
     range: { from: fromISO, to },
     last_synced,
   }
@@ -184,12 +209,5 @@ export async function setIgHandle(affiliateId: string, igHandle: string | null):
     .from('affiliates')
     .update({ ig_handle: igHandle ? lc(igHandle).replace(/^@/, '') : null })
     .eq('id', affiliateId)
-  if (error) throw new Error(error.message)
-}
-
-// ── Set an affiliate's commission rate (0–1). Commission = revenue × rate ──────
-export async function setCommissionRate(affiliateId: string, rate: number): Promise<void> {
-  const r = Math.max(0, Math.min(1, Number(rate) || 0))
-  const { error } = await supabaseAdmin.from('affiliates').update({ commission_rate: r }).eq('id', affiliateId)
   if (error) throw new Error(error.message)
 }
