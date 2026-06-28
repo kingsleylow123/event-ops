@@ -15,14 +15,15 @@ interface Row {
   leads: number | null
   seats: number | null
   revenue: number | null
-  rate: number | null
   commission: number | null
+  override: number | null
 }
 interface Report {
   rows: Row[]
+  settings: { commission_rate: number; override_rate: number }
   unmapped_affiliates: Array<{ id: string; handle: string; name: string | null; leads: number; commission: number }>
   affiliates: Array<{ id: string; handle: string; name: string | null; ig_handle: string | null }>
-  totals: { total_posts: number; collab_posts: number; community_posts: number; reach: number; engagement: number; active_creators: number }
+  totals: { total_posts: number; collab_posts: number; community_posts: number; reach: number; engagement: number; active_creators: number; revenue: number; commission: number; override: number }
   range: { from: string; to: string }
   last_synced: string | null
 }
@@ -38,7 +39,7 @@ const MONTHS: Record<string, { from: string; to?: string; label: string }> = {
   jul: { from: '2026-07-01T00:00:00Z', to: '2026-08-01T00:00:00Z', label: 'July' },
 }
 
-type SortKey = 'collab_posts' | 'reach' | 'engagement' | 'leads' | 'seats' | 'revenue' | 'commission'
+type SortKey = 'collab_posts' | 'reach' | 'engagement' | 'leads' | 'seats' | 'revenue' | 'commission' | 'override'
 
 export default function CreatorsPage() {
   const [report, setReport] = useState<Report | null>(null)
@@ -48,6 +49,8 @@ export default function CreatorsPage() {
   const [msg, setMsg] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('collab_posts')
   const [sortDir, setSortDir] = useState<1 | -1>(-1)
+  const [commPct, setCommPct] = useState(10)
+  const [ovrPct, setOvrPct] = useState(5)
   const [revenueHidden] = useRevenueHidden()
   const money = (n: number | null) => n == null ? '—' : revenueHidden ? 'RM ••••' : rm(n)
 
@@ -65,6 +68,10 @@ export default function CreatorsPage() {
   }, [month])
 
   useEffect(() => { load() }, [load])
+  // Sync the rate inputs from saved settings when a report loads.
+  useEffect(() => {
+    if (report?.settings) { setCommPct(Math.round(report.settings.commission_rate * 100)); setOvrPct(Math.round(report.settings.override_rate * 100)) }
+  }, [report?.settings?.commission_rate, report?.settings?.override_rate])
 
   async function sync() {
     setSyncing(true); setMsg('Syncing Instagram… (this can take up to ~90s)')
@@ -83,11 +90,9 @@ export default function CreatorsPage() {
     load()
   }
 
-  async function setRate(affiliate_id: string, ig_handle: string, pct: string) {
-    const rate = Math.max(0, Math.min(1, (Number(pct) || 0) / 100))
-    setReport(prev => prev && ({ ...prev, rows: prev.rows.map(r => r.ig_handle === ig_handle ? { ...r, rate, commission: r.revenue != null ? Math.round(r.revenue * rate) : r.commission } : r) }))
-    await fetch('/api/creators?action=set_rate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ affiliate_id, rate }) })
-    load()
+  // Persist the global rates (debounced via onBlur). Display recalcs live from state.
+  async function saveRates() {
+    await fetch('/api/creators?action=set_rates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ commission_rate: commPct / 100, override_rate: ovrPct / 100 }) })
   }
 
   function toggleSort(k: SortKey) {
@@ -95,8 +100,16 @@ export default function CreatorsPage() {
     else { setSortKey(k); setSortDir(-1) }
   }
 
-  const rows = report ? [...report.rows].sort((a, b) => (((a[sortKey] ?? -1) as number) - ((b[sortKey] ?? -1) as number)) * sortDir) : []
+  // Commission/override computed LIVE from revenue × the on-screen rates.
+  const commOf = (r: Row) => r.revenue == null ? null : Math.round(r.revenue * commPct / 100)
+  const ovrOf = (r: Row) => r.revenue == null ? null : Math.round(r.revenue * ovrPct / 100)
+  const sortVal = (r: Row, k: SortKey): number => k === 'commission' ? (commOf(r) ?? -1) : k === 'override' ? (ovrOf(r) ?? -1) : ((r[k] ?? -1) as number)
+  const rows = report ? [...report.rows].sort((a, b) => (sortVal(a, sortKey) - sortVal(b, sortKey)) * sortDir) : []
   const unmappedAffs = report?.affiliates.filter(a => !a.ig_handle) ?? []
+
+  const totRevenue = rows.reduce((t, r) => t + (r.revenue ?? 0), 0)
+  const totComm = Math.round(totRevenue * commPct / 100)
+  const totOvr = Math.round(totRevenue * ovrPct / 100)
 
   const cols: Array<{ key: SortKey; label: string }> = [
     { key: 'collab_posts', label: 'Collab posts' },
@@ -105,6 +118,8 @@ export default function CreatorsPage() {
     { key: 'leads', label: 'Leads' },
     { key: 'seats', label: 'Seats' },
     { key: 'revenue', label: 'Revenue' },
+    { key: 'commission', label: 'Commission' },
+    { key: 'override', label: 'Lead override' },
   ]
   const arrow = (k: SortKey) => sortKey === k ? (sortDir === -1 ? ' ↓' : ' ↑') : ''
 
@@ -134,11 +149,38 @@ export default function CreatorsPage() {
         </div>
       </div>
 
+      {/* Global rates — change once, applies to everyone */}
+      <div className="bg-[#111] border border-zinc-800 rounded-xl px-5 py-4 flex flex-wrap items-end gap-6">
+        <div>
+          <label className="block text-[11px] text-zinc-500 uppercase tracking-wider mb-1">Commission rate (all creators)</label>
+          <div className="flex items-center gap-1">
+            <input type="number" min={0} max={100} step={1} value={commPct}
+              onChange={e => setCommPct(Number(e.target.value))} onBlur={saveRates}
+              className="w-20 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-lg font-bold focus:border-amber-500/60 focus:outline-none" />
+            <span className="text-zinc-400 text-lg font-bold">%</span>
+          </div>
+        </div>
+        <div>
+          <label className="block text-[11px] text-zinc-500 uppercase tracking-wider mb-1">Team Lead override</label>
+          <div className="flex items-center gap-1">
+            <input type="number" min={0} max={100} step={1} value={ovrPct}
+              onChange={e => setOvrPct(Number(e.target.value))} onBlur={saveRates}
+              className="w-20 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white text-lg font-bold focus:border-indigo-400/60 focus:outline-none" />
+            <span className="text-zinc-400 text-lg font-bold">%</span>
+          </div>
+        </div>
+        <div className="ml-auto flex gap-6 text-right">
+          <div><p className="text-[11px] text-zinc-500 uppercase tracking-wider mb-1">Total revenue</p><p className="text-lg font-bold">{money(totRevenue)}</p></div>
+          <div><p className="text-[11px] text-zinc-500 uppercase tracking-wider mb-1">Total commission</p><p className="text-lg font-bold text-emerald-400">{money(totComm)}</p></div>
+          <div><p className="text-[11px] text-zinc-500 uppercase tracking-wider mb-1">Lead override</p><p className="text-lg font-bold text-indigo-300">{money(totOvr)}</p></div>
+        </div>
+      </div>
+
       {msg && <div className="text-sm text-zinc-300 bg-[#111] border border-zinc-800 rounded-lg px-4 py-2">{msg}</div>}
 
       {report && (
         <>
-          {/* Totals */}
+          {/* IG totals */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {[
               { l: 'Total posts', v: num(report.totals.total_posts) },
@@ -159,7 +201,7 @@ export default function CreatorsPage() {
           <div className="bg-[#111] border border-zinc-800 rounded-xl overflow-hidden">
             <div className="px-5 py-3 border-b border-zinc-800 flex justify-between items-center">
               <h2 className="font-semibold text-sm">Creator leaderboard ({rows.length})</h2>
-              <span className="text-xs text-zinc-500">click a column to sort · edit Rate % to recalc commission{report.last_synced ? ` · synced ${new Date(report.last_synced).toLocaleDateString('en-MY', { day: 'numeric', month: 'short' })}` : ''}</span>
+              <span className="text-xs text-zinc-500">click a column to sort{report.last_synced ? ` · synced ${new Date(report.last_synced).toLocaleDateString('en-MY', { day: 'numeric', month: 'short' })}` : ''}</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -171,10 +213,6 @@ export default function CreatorsPage() {
                         {c.label}{arrow(c.key)}
                       </th>
                     ))}
-                    <th className="px-4 py-2 text-right whitespace-nowrap">Rate %</th>
-                    <th className="px-4 py-2 text-right cursor-pointer select-none whitespace-nowrap hover:text-zinc-300" onClick={() => toggleSort('commission')}>
-                      Commission{arrow('commission')}
-                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -197,18 +235,8 @@ export default function CreatorsPage() {
                       <td className="px-4 py-3 text-right text-zinc-300">{r.leads ?? '—'}</td>
                       <td className="px-4 py-3 text-right text-zinc-300">{r.seats ?? '—'}</td>
                       <td className="px-4 py-3 text-right text-zinc-300">{money(r.revenue)}</td>
-                      <td className="px-4 py-3 text-right whitespace-nowrap">
-                        {r.affiliate_id ? (
-                          <span className="inline-flex items-center gap-1 justify-end">
-                            <input key={`rate-${r.affiliate_id}-${r.rate}`} type="number" min={0} max={100} step={1}
-                              defaultValue={r.rate != null ? Math.round(r.rate * 100) : ''}
-                              onBlur={e => setRate(r.affiliate_id!, r.ig_handle, e.target.value)}
-                              className="w-12 bg-zinc-800 border border-zinc-700 rounded px-1.5 py-1 text-right text-xs text-white focus:border-amber-500/50 focus:outline-none" />
-                            <span className="text-zinc-500 text-xs">%</span>
-                          </span>
-                        ) : <span className="text-zinc-600">—</span>}
-                      </td>
-                      <td className="px-4 py-3 text-right font-semibold">{r.commission == null ? <span className="text-zinc-600">—</span> : <span className="text-emerald-400">{money(r.commission)}</span>}</td>
+                      <td className="px-4 py-3 text-right font-semibold">{commOf(r) == null ? <span className="text-zinc-600">—</span> : <span className="text-emerald-400">{money(commOf(r))}</span>}</td>
+                      <td className="px-4 py-3 text-right">{ovrOf(r) == null ? <span className="text-zinc-600">—</span> : <span className="text-indigo-300">{money(ovrOf(r))}</span>}</td>
                     </tr>
                   ))}
                   {!rows.length && (
