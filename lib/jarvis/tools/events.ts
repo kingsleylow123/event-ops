@@ -7,7 +7,9 @@ type Totals = { registered: number; paid: number; pending: number; free: number;
 function emptyTotals(): Totals { return { registered: 0, paid: 0, pending: 0, free: 0, revenue: 0 } }
 
 async function totalsByEvent(eventIds?: string[]) {
+  // Exclude facilitators (is_facilitator) so headcounts match the Attendees page.
   let sb = supabase.from('attendees').select('event_id,payment_status,payment_amount')
+    .not('is_facilitator', 'is', true)
   if (eventIds && eventIds.length) sb = sb.in('event_id', eventIds)
   const { data, error } = await sb
   if (error) throw new Error(error.message)

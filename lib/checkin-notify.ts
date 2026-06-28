@@ -16,10 +16,13 @@ export async function pingRegistration(opts: {
   try {
     const { event_id, name, payment_status, payment_amount } = opts
 
-    // Total registered for this event (refunded excluded — they're not really registered).
+    // Total registered for this event. Excludes refunded (not really registered)
+    // and facilitators (is_facilitator) — facilitators are staff, not seats, so
+    // the count matches the Attendees page (which filters !is_facilitator).
     const [{ count: totalCount }, { data: ev }] = await Promise.all([
       supabase.from('attendees').select('id', { count: 'exact', head: true })
-        .eq('event_id', event_id).neq('payment_status', 'refunded'),
+        .eq('event_id', event_id).neq('payment_status', 'refunded')
+        .not('is_facilitator', 'is', true),
       supabase.from('events').select('name, capacity').eq('id', event_id).maybeSingle(),
     ])
 
@@ -53,12 +56,15 @@ export async function pingCheckin(opts: {
     const field = day === 1 ? 'day1_attended' : 'day2_attended'
 
     // Count of attendees registered for this event, and how many checked in
-    // for the relevant day. We exclude refunded — they aren't really attendees.
+    // for the relevant day. Excludes refunded and facilitators so the totals
+    // match the Attendees page (facilitators are staff, not participants).
     const [{ count: totalCount }, { count: dayCount }, { data: ev }] = await Promise.all([
       supabase.from('attendees').select('id', { count: 'exact', head: true })
-        .eq('event_id', event_id).neq('payment_status', 'refunded'),
+        .eq('event_id', event_id).neq('payment_status', 'refunded')
+        .not('is_facilitator', 'is', true),
       supabase.from('attendees').select('id', { count: 'exact', head: true })
-        .eq('event_id', event_id).eq(field, true).neq('payment_status', 'refunded'),
+        .eq('event_id', event_id).eq(field, true).neq('payment_status', 'refunded')
+        .not('is_facilitator', 'is', true),
       supabase.from('events').select('name, floor_plan').eq('id', event_id).maybeSingle(),
     ])
 

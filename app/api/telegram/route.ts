@@ -1654,6 +1654,9 @@ async function askClaude(question: string, ev: Row, d: Awaited<ReturnType<typeof
 
   const eventsSnapshot = allEvents.map(e => {
     const att = across.attendees.filter(a => a.event_id === e.id)
+    // Participant subset (facilitators excluded) drives the headcount/revenue totals
+    // so they match the Attendees page; full `att` still feeds the agent's row context.
+    const part = att.filter(a => !a.is_facilitator)
     const exp = across.expenses.filter(x => x.event_id === e.id)
     // Per-event survey + meetings were already loaded by loadAcrossEvents but
     // previously discarded — without them Claude had NO survey data for any
@@ -1671,12 +1674,12 @@ async function askClaude(question: string, ev: Row, d: Awaited<ReturnType<typeof
       is_active: e.is_active,
       days_until: daysUntil(e.date as string),
       totals: {
-        registered: att.length,
-        paid: att.filter(a => a.payment_status === 'paid').length,
-        pending: att.filter(a => a.payment_status === 'pending').length,
-        free: att.filter(a => a.payment_status === 'free').length,
-        confirmed: att.filter(a => a.attendance_confirmed).length,
-        revenue_rm: revenue(att),
+        registered: part.length,
+        paid: part.filter(a => a.payment_status === 'paid').length,
+        pending: part.filter(a => a.payment_status === 'pending').length,
+        free: part.filter(a => a.payment_status === 'free').length,
+        confirmed: part.filter(a => a.attendance_confirmed).length,
+        revenue_rm: revenue(part),
         expenses_rm: totalExpenses(exp),
         survey_responses: svy.length,
         meetings: mtg.length,
@@ -2100,11 +2103,15 @@ async function handle(
     ? `📌 ${b(target.name)} — ${esc(target.date ? new Date(target.date as string).toLocaleDateString('en-MY', { day: 'numeric', month: 'short', year: 'numeric' }) : '—')}\n\n`
     : ''
 
-  if (base === '/stats') return banner + fmtStats(target, scoped.attendees, scoped.expenses)
-  if (base === '/money') return banner + fmtMoney(scoped.attendees, scoped.expenses)
-  if (base === '/checkins') return banner + fmtCheckins(scoped.attendees)
-  if (base === '/pending') return banner + fmtPending(scoped.attendees)
-  if (base === '/vip') return banner + fmtVip(scoped.attendees)
+  // Facilitators (is_facilitator) are staff, not seats — exclude them from the
+  // headcount/money commands so these match the Attendees page. Person/data
+  // commands (/find, /duplicates, /survey) keep the full roster below.
+  const participants = scoped.attendees.filter(a => !a.is_facilitator)
+  if (base === '/stats') return banner + fmtStats(target, participants, scoped.expenses)
+  if (base === '/money') return banner + fmtMoney(participants, scoped.expenses)
+  if (base === '/checkins') return banner + fmtCheckins(participants)
+  if (base === '/pending') return banner + fmtPending(participants)
+  if (base === '/vip') return banner + fmtVip(participants)
   if (base === '/checklist') return banner + fmtChecklist(scoped.checklist)
   if (base === '/team') return banner + fmtTeam(target)
   if (base === '/floorplan') return banner + fmtFloorplan(target)
