@@ -1,5 +1,5 @@
 import { supabaseAdmin, fetchAllRows } from '@/lib/supabase-admin'
-import { fetchLeads } from '@/lib/affiliates'
+import { fetchLeads, buildReport } from '@/lib/affiliates'
 import { scrapeAccountPosts, COMMUNITY_ACCOUNT } from '@/lib/instagram'
 
 // Default backtest window: the program effectively started May 2026.
@@ -18,8 +18,9 @@ export interface ScorecardRow {
   affiliate_handle: string | null
   leads: number | null
   seats: number | null
-  commission: number | null
-  revenue_est: number | null
+  revenue: number | null        // attributed buyer revenue
+  rate: number | null           // commission rate, e.g. 0.10
+  commission: number | null     // = revenue × rate (editable via rate)
 }
 
 export interface Scorecard {
@@ -72,7 +73,7 @@ export async function syncInstagram(sinceISO: string = SINCE_DEFAULT, limit = 30
 export async function buildScorecard(fromISO: string = SINCE_DEFAULT, toISO?: string): Promise<Scorecard> {
   const to = toISO ?? new Date().toISOString()
 
-  const [{ rows: igPosts }, affRes, payoutRes, attrRes] = await Promise.all([
+  const [{ rows: igPosts }, affRes, eventsRes] = await Promise.all([
     fetchAllRows<IgPostRow>((from, t) =>
       supabaseAdmin
         .from('creator_ig_posts')
@@ -82,20 +83,25 @@ export async function buildScorecard(fromISO: string = SINCE_DEFAULT, toISO?: st
         .order('posted_at', { ascending: false })
         .range(from, t),
     ),
-    supabaseAdmin.from('affiliates').select('id, handle, name, ig_handle, active'),
-    supabaseAdmin.from('affiliate_payouts').select('affiliate_id, amount'),
-    supabaseAdmin.from('affiliate_attributions').select('affiliate_id'),
+    supabaseAdmin.from('affiliates').select('id, handle, name, ig_handle, active, commission_rate'),
+    supabaseAdmin.from('events').select('id'),
   ])
 
-  const affs = (affRes.data ?? []) as Array<{ id: string; handle: string; name: string | null; ig_handle: string | null; active: boolean }>
-  const payouts = (payoutRes.data ?? []) as Array<{ affiliate_id: string; amount: string | number }>
-  const attrs = (attrRes.data ?? []) as Array<{ affiliate_id: string }>
+  const affs = (affRes.data ?? []) as Array<{ id: string; handle: string; name: string | null; ig_handle: string | null; active: boolean; commission_rate: string | number | null }>
 
-  // Affiliate-side aggregates
-  const commByAff = new Map<string, number>()
-  for (const p of payouts) commByAff.set(p.affiliate_id, (commByAff.get(p.affiliate_id) ?? 0) + Number(p.amount))
+  // Attributed revenue + seats per affiliate, summed across all events (reuses the
+  // tested per-event buildReport so buyer de-duping matches the Payout tab exactly).
+  const events = (eventsRes.data ?? []) as Array<{ id: string }>
+  const reports = await Promise.all(events.map(e => buildReport(e.id).then(r => r).catch(() => null)))
+  const revByAff = new Map<string, number>()
   const seatsByAff = new Map<string, number>()
-  for (const a of attrs) seatsByAff.set(a.affiliate_id, (seatsByAff.get(a.affiliate_id) ?? 0) + 1)
+  for (const r of reports) {
+    if (!r) continue
+    for (const s of r.summary) {
+      revByAff.set(s.affiliate_id, (revByAff.get(s.affiliate_id) ?? 0) + s.revenue)
+      seatsByAff.set(s.affiliate_id, (seatsByAff.get(s.affiliate_id) ?? 0) + s.buyers)
+    }
+  }
 
   const leadsByHandle = new Map<string, number>()
   try {
@@ -128,13 +134,15 @@ export async function buildScorecard(fromISO: string = SINCE_DEFAULT, toISO?: st
 
   const affByIg = new Map<string, typeof affs[number]>()
   for (const a of affs) if (a.ig_handle) affByIg.set(lc(a.ig_handle), a)
+  const rateOf = (a: typeof affs[number]) => Number(a.commission_rate ?? 0.10)
 
   const rows: ScorecardRow[] = []
   const mappedAffIds = new Set<string>()
   for (const [ig, agg] of igByCreator) {
     const aff = affByIg.get(ig) ?? null
     if (aff) mappedAffIds.add(aff.id)
-    const commission = aff ? (commByAff.get(aff.id) ?? 0) : null
+    const revenue = aff ? Math.round(revByAff.get(aff.id) ?? 0) : null
+    const rate = aff ? rateOf(aff) : null
     rows.push({
       ig_handle: ig,
       display_name: aff?.name ?? null,
@@ -146,15 +154,16 @@ export async function buildScorecard(fromISO: string = SINCE_DEFAULT, toISO?: st
       affiliate_handle: aff?.handle ?? null,
       leads: aff ? (leadsByHandle.get(lc(aff.handle)) ?? 0) : null,
       seats: aff ? (seatsByAff.get(aff.id) ?? 0) : null,
-      commission,
-      revenue_est: commission != null ? Math.round(commission * 10) : null, // 10% rate → revenue ≈ commission ×10
+      revenue,
+      rate,
+      commission: revenue != null && rate != null ? Math.round(revenue * rate) : null,
     })
   }
   rows.sort((a, b) => b.collab_posts - a.collab_posts || b.reach - a.reach)
 
   const unmapped_affiliates = affs
-    .filter(a => !mappedAffIds.has(a.id) && ((commByAff.get(a.id) ?? 0) > 0 || (leadsByHandle.get(lc(a.handle)) ?? 0) > 0))
-    .map(a => ({ id: a.id, handle: a.handle, name: a.name, leads: leadsByHandle.get(lc(a.handle)) ?? 0, commission: commByAff.get(a.id) ?? 0 }))
+    .filter(a => !mappedAffIds.has(a.id) && ((revByAff.get(a.id) ?? 0) > 0 || (leadsByHandle.get(lc(a.handle)) ?? 0) > 0))
+    .map(a => ({ id: a.id, handle: a.handle, name: a.name, leads: leadsByHandle.get(lc(a.handle)) ?? 0, commission: Math.round((revByAff.get(a.id) ?? 0) * rateOf(a)) }))
     .sort((x, y) => y.commission - x.commission)
 
   const last_synced = igPosts.reduce<string | null>((m, p) => (p.synced_at && (!m || p.synced_at > m) ? p.synced_at : m), null)
@@ -175,5 +184,12 @@ export async function setIgHandle(affiliateId: string, igHandle: string | null):
     .from('affiliates')
     .update({ ig_handle: igHandle ? lc(igHandle).replace(/^@/, '') : null })
     .eq('id', affiliateId)
+  if (error) throw new Error(error.message)
+}
+
+// ── Set an affiliate's commission rate (0–1). Commission = revenue × rate ──────
+export async function setCommissionRate(affiliateId: string, rate: number): Promise<void> {
+  const r = Math.max(0, Math.min(1, Number(rate) || 0))
+  const { error } = await supabaseAdmin.from('affiliates').update({ commission_rate: r }).eq('id', affiliateId)
   if (error) throw new Error(error.message)
 }

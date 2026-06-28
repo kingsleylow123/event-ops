@@ -14,8 +14,9 @@ interface Row {
   affiliate_handle: string | null
   leads: number | null
   seats: number | null
+  revenue: number | null
+  rate: number | null
   commission: number | null
-  revenue_est: number | null
 }
 interface Report {
   rows: Row[]
@@ -37,7 +38,7 @@ const MONTHS: Record<string, { from: string; to?: string; label: string }> = {
   jul: { from: '2026-07-01T00:00:00Z', to: '2026-08-01T00:00:00Z', label: 'July' },
 }
 
-type SortKey = 'collab_posts' | 'reach' | 'engagement' | 'leads' | 'seats' | 'commission' | 'revenue_est'
+type SortKey = 'collab_posts' | 'reach' | 'engagement' | 'leads' | 'seats' | 'revenue' | 'commission'
 
 export default function CreatorsPage() {
   const [report, setReport] = useState<Report | null>(null)
@@ -82,6 +83,13 @@ export default function CreatorsPage() {
     load()
   }
 
+  async function setRate(affiliate_id: string, ig_handle: string, pct: string) {
+    const rate = Math.max(0, Math.min(1, (Number(pct) || 0) / 100))
+    setReport(prev => prev && ({ ...prev, rows: prev.rows.map(r => r.ig_handle === ig_handle ? { ...r, rate, commission: r.revenue != null ? Math.round(r.revenue * rate) : r.commission } : r) }))
+    await fetch('/api/creators?action=set_rate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ affiliate_id, rate }) })
+    load()
+  }
+
   function toggleSort(k: SortKey) {
     if (k === sortKey) setSortDir(d => (d === 1 ? -1 : 1))
     else { setSortKey(k); setSortDir(-1) }
@@ -90,15 +98,15 @@ export default function CreatorsPage() {
   const rows = report ? [...report.rows].sort((a, b) => (((a[sortKey] ?? -1) as number) - ((b[sortKey] ?? -1) as number)) * sortDir) : []
   const unmappedAffs = report?.affiliates.filter(a => !a.ig_handle) ?? []
 
-  const cols: Array<{ key: SortKey; label: string; money?: boolean }> = [
+  const cols: Array<{ key: SortKey; label: string }> = [
     { key: 'collab_posts', label: 'Collab posts' },
     { key: 'reach', label: 'Reach' },
     { key: 'engagement', label: 'Engagement' },
     { key: 'leads', label: 'Leads' },
     { key: 'seats', label: 'Seats' },
-    { key: 'commission', label: 'Commission', money: true },
-    { key: 'revenue_est', label: 'Revenue (est)', money: true },
+    { key: 'revenue', label: 'Revenue' },
   ]
+  const arrow = (k: SortKey) => sortKey === k ? (sortDir === -1 ? ' ↓' : ' ↑') : ''
 
   if (loading && !report) return <div className="text-zinc-500 mt-20 text-center">Loading…</div>
 
@@ -151,7 +159,7 @@ export default function CreatorsPage() {
           <div className="bg-[#111] border border-zinc-800 rounded-xl overflow-hidden">
             <div className="px-5 py-3 border-b border-zinc-800 flex justify-between items-center">
               <h2 className="font-semibold text-sm">Creator leaderboard ({rows.length})</h2>
-              <span className="text-xs text-zinc-500">click a column to sort{report.last_synced ? ` · synced ${new Date(report.last_synced).toLocaleDateString('en-MY', { day: 'numeric', month: 'short' })}` : ''}</span>
+              <span className="text-xs text-zinc-500">click a column to sort · edit Rate % to recalc commission{report.last_synced ? ` · synced ${new Date(report.last_synced).toLocaleDateString('en-MY', { day: 'numeric', month: 'short' })}` : ''}</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -159,11 +167,14 @@ export default function CreatorsPage() {
                   <tr className="text-left text-zinc-500 text-xs border-b border-zinc-900">
                     <th className="px-4 py-2">Creator</th>
                     {cols.map(c => (
-                      <th key={c.key} className="px-4 py-2 text-right cursor-pointer select-none whitespace-nowrap hover:text-zinc-300"
-                        onClick={() => toggleSort(c.key)}>
-                        {c.label}{sortKey === c.key ? (sortDir === -1 ? ' ↓' : ' ↑') : ''}
+                      <th key={c.key} className="px-4 py-2 text-right cursor-pointer select-none whitespace-nowrap hover:text-zinc-300" onClick={() => toggleSort(c.key)}>
+                        {c.label}{arrow(c.key)}
                       </th>
                     ))}
+                    <th className="px-4 py-2 text-right whitespace-nowrap">Rate %</th>
+                    <th className="px-4 py-2 text-right cursor-pointer select-none whitespace-nowrap hover:text-zinc-300" onClick={() => toggleSort('commission')}>
+                      Commission{arrow('commission')}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -185,12 +196,23 @@ export default function CreatorsPage() {
                       <td className="px-4 py-3 text-right text-zinc-300">{num(r.engagement)}</td>
                       <td className="px-4 py-3 text-right text-zinc-300">{r.leads ?? '—'}</td>
                       <td className="px-4 py-3 text-right text-zinc-300">{r.seats ?? '—'}</td>
-                      <td className="px-4 py-3 text-right text-zinc-300">{money(r.commission)}</td>
-                      <td className="px-4 py-3 text-right text-zinc-500">{money(r.revenue_est)}</td>
+                      <td className="px-4 py-3 text-right text-zinc-300">{money(r.revenue)}</td>
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
+                        {r.affiliate_id ? (
+                          <span className="inline-flex items-center gap-1 justify-end">
+                            <input key={`rate-${r.affiliate_id}-${r.rate}`} type="number" min={0} max={100} step={1}
+                              defaultValue={r.rate != null ? Math.round(r.rate * 100) : ''}
+                              onBlur={e => setRate(r.affiliate_id!, r.ig_handle, e.target.value)}
+                              className="w-12 bg-zinc-800 border border-zinc-700 rounded px-1.5 py-1 text-right text-xs text-white focus:border-amber-500/50 focus:outline-none" />
+                            <span className="text-zinc-500 text-xs">%</span>
+                          </span>
+                        ) : <span className="text-zinc-600">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold">{r.commission == null ? <span className="text-zinc-600">—</span> : <span className="text-emerald-400">{money(r.commission)}</span>}</td>
                     </tr>
                   ))}
                   {!rows.length && (
-                    <tr><td colSpan={8} className="px-4 py-10 text-center text-zinc-500">No collab posts in range. Click <span className="text-amber-400">Sync Instagram</span> to pull data.</td></tr>
+                    <tr><td colSpan={9} className="px-4 py-10 text-center text-zinc-500">No collab posts in range. Click <span className="text-amber-400">Sync Instagram</span> to pull data.</td></tr>
                   )}
                 </tbody>
               </table>
