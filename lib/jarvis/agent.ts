@@ -17,7 +17,7 @@ const MAX_ITERATIONS = 8
 // multi-hop / disambiguation cases where Haiku is least reliable. Trivial counts
 // and status checks stay on cheaper Haiku.
 const SONNET_RE =
-  /\b(compare|comparison|vs|trend|across|each event|all events|breakdown|why|most|least|average|top|conversion|which|better|worse|price|pricing|stripe|revenue|profit|net|margin|contact|phone|email|whatsapp|number|find|who|bank|account|submitted|paid|pay|owe|payout|reconcile|analy|survey|industr|pain|insight|theme|summar|communit|member|trend|pace|accelerat|momentum|project|lifecycle|readiness|facilitator|checklist|bukku|crew|tab|flow|stage|ratio|historical|vip)\b/i
+  /\b(compare|comparison|vs|trend|across|each event|all events|breakdown|why|most|least|average|top|conversion|which|better|worse|price|pricing|stripe|revenue|profit|net|margin|contact|phone|email|whatsapp|number|find|who|bank|account|submitted|paid|pay|owe|payout|reconcile|analy|survey|industr|pain|insight|theme|summar|communit|member|trend|pace|accelerat|momentum|project|lifecycle|readiness|facilitator|checklist|bukku|crew|tab|flow|stage|ratio|historical|vip|funnel|bottleneck|leak|constraint|weak)\b/i
 
 function pickModel(question: string): { model: string; maxTokens: number } {
   return SONNET_RE.test(question)
