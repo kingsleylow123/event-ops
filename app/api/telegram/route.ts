@@ -957,9 +957,13 @@ async function executeInvoiceTool(
       subject: `Invoice — ${a.name} (RM ${amount.toLocaleString('en-MY')})`,
       html: invoiceEmailHtml({ clientName: a.name, amount: amount as number, description: desc }),
       attachments: [{ filename: `Invoice-${safeName}.pdf`, content: pdfBuffer }],
-      // Same attendee + same amount = same key → re-issuing within 24h won't
-      // double-email the client (or double-BCC the finance archive).
-      idempotencyKey: `inv-${a.id}-${amount}`,
+      // Key per ISSUED invoice number — each CMO-YYYY-NNNN is unique, so this
+      // dedups true accidental retries (same invoice, same body) without
+      // tripping Resend's "key reused with modified body" error when the admin
+      // legitimately re-invoices the same attendee+amount with a fresh number.
+      // Falls back to attendee+amount when no number was issued (rare; only the
+      // legacy non-Quick paths skip issue_invoice_number).
+      idempotencyKey: invoiceNo ? `inv-${invoiceNo}` : `inv-${a.id}-${amount}`,
     })
     return res.ok
       ? `✅ <b>Invoice sent to ${esc(a.name)}</b>\n\nThe branded PDF has been generated and dispatched. They'll receive it shortly at their registered email.`
