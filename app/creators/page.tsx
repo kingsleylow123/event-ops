@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { peekCache, mutateCache } from '@/lib/useCachedFetch'
 import { useRevenueHidden } from '@/lib/useRevenueHidden'
+import { ComboBarLine, AreaLineChart, CashflowChart, Sparkline } from '@/components/finance/Charts'
 
 interface Row {
   ig_handle: string
@@ -17,10 +18,18 @@ interface Row {
   revenue: number | null
   commission: number | null
   override: number | null
+  weekly_collabs: number[]
+}
+interface TrendBucket {
+  key: string; label: string
+  posts: number; collab_posts: number; community_posts: number
+  reach: number; engagement: number; active_creators: number
+  leads: number; seats: number; revenue: number; commission: number
 }
 interface Report {
   rows: Row[]
   settings: { commission_rate: number; override_rate: number }
+  trends: { weekly: TrendBucket[]; monthly: TrendBucket[] }
   unmapped_affiliates: Array<{ id: string; handle: string; name: string | null; leads: number; commission: number }>
   affiliates: Array<{ id: string; handle: string; name: string | null; ig_handle: string | null }>
   totals: { total_posts: number; collab_posts: number; community_posts: number; reach: number; engagement: number; active_creators: number; revenue: number; commission: number; override: number; total_leads: number }
@@ -49,6 +58,7 @@ export default function CreatorsPage() {
   const [msg, setMsg] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('collab_posts')
   const [sortDir, setSortDir] = useState<1 | -1>(-1)
+  const [gran, setGran] = useState<'week' | 'month'>('week')
   const [commPct, setCommPct] = useState(10)
   const [ovrPct, setOvrPct] = useState(5)
   const [revenueHidden] = useRevenueHidden()
@@ -112,6 +122,23 @@ export default function CreatorsPage() {
   const totComm = Math.round(totRevenue * commPct / 100)
   const totOvr = Math.round(totRevenue * ovrPct / 100)
   const tCollab = sumBy(r => r.collab_posts), tReach = sumBy(r => r.reach), tEng = sumBy(r => r.engagement), tLeads = sumBy(r => r.leads ?? 0), tSeats = sumBy(r => r.seats ?? 0)
+
+  // ── Momentum: week/month trend series + deltas ──
+  const mondayISO = (d: Date) => { const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())); const day = x.getUTCDay(); x.setUTCDate(x.getUTCDate() + (day === 0 ? -6 : 1 - day)); return x.toISOString().slice(0, 10) }
+  const series = report ? (gran === 'week' ? report.trends.weekly : report.trends.monthly) : []
+  const now = new Date()
+  const curKey = gran === 'week' ? mondayISO(now) : `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`
+  const livePartial = series.length > 0 && series[series.length - 1].key === curKey
+  const complete = livePartial ? series.slice(0, -1) : series   // fair Δ: compare finished periods only
+  const cur = complete[complete.length - 1], prv = complete[complete.length - 2]
+  const pct = (a: number, b: number) => b > 0 ? Math.round(((a - b) / b) * 100) : (a > 0 ? 100 : 0)
+  const kpis = cur ? [
+    { l: 'Collab posts', v: cur.collab_posts, d: prv ? pct(cur.collab_posts, prv.collab_posts) : null },
+    { l: 'Leads signed', v: cur.leads, d: prv ? pct(cur.leads, prv.leads) : null },
+    { l: 'Reach', v: cur.reach, d: prv ? pct(cur.reach, prv.reach) : null },
+    { l: 'Seats', v: cur.seats, d: prv ? pct(cur.seats, prv.seats) : null },
+  ] : []
+  const topMovers = report ? [...report.rows].filter(r => r.collab_posts > 0).sort((a, b) => b.collab_posts - a.collab_posts).slice(0, 3) : []
 
   const cols: Array<{ key: SortKey; label: string }> = [
     { key: 'collab_posts', label: 'Collab posts' },
@@ -199,6 +226,80 @@ export default function CreatorsPage() {
             ))}
           </div>
 
+          {/* ── Momentum: week-by-week / month-by-month trends ── */}
+          {series.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <h2 className="text-sm font-semibold">📈 Momentum</h2>
+                  <p className="text-xs text-zinc-500">{gran === 'week' ? 'Week by week' : 'Month by month'} — more posts → more reach → more leads → more seats{livePartial ? ` · latest ${gran} still in progress` : ''}</p>
+                </div>
+                <div className="flex rounded-lg border border-zinc-700 overflow-hidden">
+                  {(['week', 'month'] as const).map(g => (
+                    <button key={g} onClick={() => setGran(g)}
+                      className={`px-3 py-2 text-xs ${gran === g ? 'bg-amber-500 text-black font-semibold' : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-800'}`}>
+                      {g === 'week' ? 'Weekly' : 'Monthly'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* KPI cards — Δ vs previous finished period */}
+              {kpis.length > 0 && (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  {kpis.map(k => (
+                    <div key={k.l} className="bg-[#111] border border-zinc-800 rounded-xl p-4">
+                      <p className="text-[11px] text-zinc-500 uppercase tracking-wider mb-1">{k.l}</p>
+                      <div className="flex items-baseline gap-2">
+                        <p className="text-2xl font-bold">{num(k.v)}</p>
+                        {k.d != null && (
+                          <span className={`text-xs font-semibold ${k.d > 0 ? 'text-emerald-400' : k.d < 0 ? 'text-red-400' : 'text-zinc-500'}`}>
+                            {k.d > 0 ? '▲' : k.d < 0 ? '▼' : '–'} {Math.abs(k.d)}%
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-zinc-600 mt-0.5">vs prev {gran}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Trend charts */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                <div className="bg-[#111] border border-zinc-800 rounded-xl p-4">
+                  <p className="text-sm text-zinc-300 mb-2">Collab posts <span className="text-zinc-500">+ active creators</span></p>
+                  <ComboBarLine points={series.map(s => ({ label: s.label, bar: s.collab_posts, line: s.active_creators }))} barColor="#f59e0b" lineColor="#818cf8" />
+                </div>
+                <div className="bg-[#111] border border-zinc-800 rounded-xl p-4">
+                  <p className="text-sm text-zinc-300 mb-2">Leads signed</p>
+                  <AreaLineChart points={series.map(s => ({ label: s.label, value: s.leads }))} color="#38bdf8" />
+                </div>
+              </div>
+              <div className="bg-[#111] border border-zinc-800 rounded-xl p-4">
+                <p className="text-sm text-zinc-300 mb-2">Seats sold via creators{revenueHidden ? '' : ' + revenue'} <span className="text-zinc-500">· seats left axis{revenueHidden ? '' : ', RM right axis'}</span></p>
+                <CashflowChart mode="history" hidden={revenueHidden} points={series.map(s => ({ label: s.label, flow: s.seats, balance: s.revenue }))} />
+              </div>
+
+              {/* Top movers podium */}
+              {topMovers.length > 0 && (
+                <div>
+                  <p className="text-[11px] text-zinc-500 uppercase tracking-wider mb-2">Top creators ({MONTHS[month].label})</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {topMovers.map((r, i) => (
+                      <div key={r.ig_handle} className={`bg-[#111] border rounded-xl p-4 flex items-center gap-3 ${i === 0 ? 'border-amber-500/50' : 'border-zinc-800'}`}>
+                        <span className="text-2xl">{['🥇', '🥈', '🥉'][i]}</span>
+                        <div className="min-w-0">
+                          <a href={`https://instagram.com/${r.ig_handle}`} target="_blank" rel="noreferrer" className="font-semibold text-white hover:text-amber-400 truncate block">@{r.ig_handle}</a>
+                          <p className="text-xs text-zinc-500">{r.collab_posts} collab posts · {num(r.reach)} reach</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Leaderboard */}
           <div className="bg-[#111] border border-zinc-800 rounded-xl overflow-hidden">
             <div className="px-5 py-3 border-b border-zinc-800 flex justify-between items-center">
@@ -210,6 +311,7 @@ export default function CreatorsPage() {
                 <thead>
                   <tr className="text-left text-zinc-500 text-xs border-b border-zinc-900">
                     <th className="px-4 py-2">Creator</th>
+                    <th className="px-4 py-2 text-right whitespace-nowrap">8-wk trend</th>
                     {cols.map(c => (
                       <th key={c.key} className="px-4 py-2 text-right cursor-pointer select-none whitespace-nowrap hover:text-zinc-300" onClick={() => toggleSort(c.key)}>
                         {c.label}{arrow(c.key)}
@@ -221,6 +323,7 @@ export default function CreatorsPage() {
                   {/* TOTAL row — leads shown vs full sheet for tally check */}
                   <tr className="border-b border-zinc-800 bg-zinc-900/50 font-semibold sticky top-0">
                     <td className="px-4 py-3">TOTAL</td>
+                    <td className="px-4 py-3"></td>
                     <td className="px-4 py-3 text-right text-amber-400">{tCollab}</td>
                     <td className="px-4 py-3 text-right">{num(tReach)}</td>
                     <td className="px-4 py-3 text-right">{num(tEng)}</td>
@@ -243,6 +346,7 @@ export default function CreatorsPage() {
                           </select>
                         )}
                       </td>
+                      <td className="px-4 py-3"><div className="flex justify-end"><Sparkline values={r.weekly_collabs ?? []} /></div></td>
                       <td className="px-4 py-3 text-right font-semibold text-amber-400">{r.collab_posts}</td>
                       <td className="px-4 py-3 text-right text-zinc-300">{num(r.reach)}</td>
                       <td className="px-4 py-3 text-right text-zinc-300">{num(r.engagement)}</td>
@@ -254,7 +358,7 @@ export default function CreatorsPage() {
                     </tr>
                   ))}
                   {!rows.length && (
-                    <tr><td colSpan={9} className="px-4 py-10 text-center text-zinc-500">No collab posts in range. Click <span className="text-amber-400">Sync Instagram</span> to pull data.</td></tr>
+                    <tr><td colSpan={10} className="px-4 py-10 text-center text-zinc-500">No collab posts in range. Click <span className="text-amber-400">Sync Instagram</span> to pull data.</td></tr>
                   )}
                 </tbody>
               </table>

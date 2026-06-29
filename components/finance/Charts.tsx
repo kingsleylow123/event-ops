@@ -499,3 +499,32 @@ export function BreakdownPie({
     </div>
   )
 }
+
+// ── Sparkline ──────────────────────────────────────────────────────────────────
+// Tiny inline trend line (no axes/labels) for per-row "is this creator heating up?".
+export function Sparkline({
+  values,
+  color = '#f59e0b',
+  width = 88,
+  height = 24,
+}: {
+  values: number[]
+  color?: string
+  width?: number
+  height?: number
+}) {
+  const n = values.length
+  if (!n) return <svg width={width} height={height} aria-hidden />
+  const max = Math.max(1, ...values)
+  const pad = 2
+  const xAt = (i: number) => (n === 1 ? width / 2 : pad + (i * (width - 2 * pad)) / (n - 1))
+  const yAt = (v: number) => height - pad - (v / max) * (height - 2 * pad)
+  const pts = values.map((v, i) => `${xAt(i).toFixed(1)},${yAt(v).toFixed(1)}`).join(' ')
+  const lastV = values[n - 1]
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="overflow-visible">
+      <polyline points={pts} fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" opacity={0.9} />
+      <circle cx={xAt(n - 1)} cy={yAt(lastV)} r={2} fill={lastV > 0 ? color : '#3f3f46'} />
+    </svg>
+  )
+}

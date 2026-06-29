@@ -1,5 +1,5 @@
 import { supabaseAdmin, fetchAllRows } from '@/lib/supabase-admin'
-import { fetchLeads, buildReport } from '@/lib/affiliates'
+import { fetchLeads, buildReport, type Lead, type PayoutReport } from '@/lib/affiliates'
 import { scrapeAccountPosts, COMMUNITY_ACCOUNT } from '@/lib/instagram'
 
 // Default backtest window: the program effectively started May 2026.
@@ -23,11 +23,34 @@ export interface ScorecardRow {
   revenue: number | null        // attributed buyer revenue
   commission: number | null     // = revenue × global commission_rate
   override: number | null       // = revenue × global override_rate (the team lead's cut)
+  weekly_collabs: number[]      // collab posts per week, last 8 weeks (oldest→newest) — sparkline
+}
+
+// One time bucket (a week or a month) of team-wide performance, for the trend charts.
+export interface TrendBucket {
+  key: string                   // 'YYYY-MM-DD' (week's Monday) or 'YYYY-MM'
+  label: string                 // 'D Mon' (week) or 'Mon' (month)
+  posts: number
+  collab_posts: number
+  community_posts: number
+  reach: number
+  engagement: number
+  active_creators: number
+  leads: number
+  seats: number
+  revenue: number
+  commission: number
+}
+
+export interface Trends {
+  weekly: TrendBucket[]
+  monthly: TrendBucket[]
 }
 
 export interface Scorecard {
   rows: ScorecardRow[]
   settings: Settings
+  trends: Trends
   unmapped_affiliates: Array<{ id: string; handle: string; name: string | null; leads: number; commission: number }>
   affiliates: Array<{ id: string; handle: string; name: string | null; ig_handle: string | null }>
   totals: {
@@ -61,6 +84,89 @@ interface IgPostRow {
 const lc = (s: string | null | undefined) => (s ?? '').trim().toLowerCase()
 const reachOf = (likes: number, views: number) => (views > 0 ? views : (likes > 0 ? likes * 10 : 0))
 
+// ── Time bucketing (week = Monday-start, all UTC) ─────────────────────────────
+const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+function mondayOf(d: Date): Date {
+  const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()))
+  const day = x.getUTCDay()                 // 0=Sun..6=Sat
+  x.setUTCDate(x.getUTCDate() + (day === 0 ? -6 : 1 - day))
+  return x
+}
+function weekKey(iso: string): { key: string; label: string; sort: number } {
+  const m = mondayOf(new Date(iso))
+  return { key: m.toISOString().slice(0, 10), label: `${m.getUTCDate()} ${MON[m.getUTCMonth()]}`, sort: m.getTime() }
+}
+function monthKey(iso: string): { key: string; label: string; sort: number } {
+  const d = new Date(iso)
+  return { key: `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`, label: MON[d.getUTCMonth()], sort: Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1) }
+}
+function lastNWeekKeys(n: number): string[] {
+  const out: string[] = []
+  const m = mondayOf(new Date())
+  for (let i = 0; i < n; i++) { out.unshift(m.toISOString().slice(0, 10)); m.setUTCDate(m.getUTCDate() - 7) }
+  return out
+}
+
+type EventReport = { id: string; date: string | null; report: PayoutReport }
+
+// All events' payout reports + their dates — shared by the lifetime per-affiliate sum
+// AND the time-bucketed trends, so buildReport runs once per event (not twice).
+async function loadEventReports(): Promise<EventReport[]> {
+  const { data } = await supabaseAdmin.from('events').select('id, date')
+  const events = (data ?? []) as Array<{ id: string; date: string | null }>
+  const out = await Promise.all(events.map(async e => {
+    const report = await buildReport(e.id).catch(() => null)
+    return report ? { id: e.id, date: e.date, report } : null
+  }))
+  return out.filter(Boolean) as EventReport[]
+}
+
+type MutBucket = { sort: number; label: string; posts: number; collab_posts: number; community_posts: number; reach: number; engagement: number; creators: Set<string>; leads: number; seats: number; revenue: number; commission: number }
+
+// Build week + month trend series across the FULL program window (independent of any
+// table filter) so the charts can compare periods against each other.
+function buildTrends(igPosts: IgPostRow[], leads: Lead[], eventReports: EventReport[], settings: Settings): Trends {
+  const wk = new Map<string, MutBucket>()
+  const mo = new Map<string, MutBucket>()
+  const get = (map: Map<string, MutBucket>, k: { key: string; label: string; sort: number }): MutBucket => {
+    let b = map.get(k.key)
+    if (!b) { b = { sort: k.sort, label: k.label, posts: 0, collab_posts: 0, community_posts: 0, reach: 0, engagement: 0, creators: new Set(), leads: 0, seats: 0, revenue: 0, commission: 0 }; map.set(k.key, b) }
+    return b
+  }
+
+  for (const p of igPosts) {
+    if (!p.posted_at) continue
+    const eng = (p.likes ?? 0) + (p.comments ?? 0)
+    const reach = reachOf(p.likes ?? 0, p.views ?? 0)
+    const creators = (p.collab_creators ?? []).map(lc).filter(Boolean)
+    for (const [map, kf] of [[wk, weekKey], [mo, monthKey]] as const) {
+      const b = get(map, kf(p.posted_at))
+      b.posts++; b.reach += reach; b.engagement += eng
+      if (p.is_collab && creators.length) { b.collab_posts++; for (const c of creators) b.creators.add(c) } else b.community_posts++
+    }
+  }
+  for (const l of leads) {
+    if (!l.date) continue
+    for (const [map, kf] of [[wk, weekKey], [mo, monthKey]] as const) get(map, kf(l.date)).leads++
+  }
+  for (const { date, report } of eventReports) {
+    if (!date) continue
+    const seats = report.summary.reduce((a, s) => a + s.buyers, 0)
+    const revenue = report.summary.reduce((a, s) => a + s.revenue, 0)
+    for (const [map, kf] of [[wk, weekKey], [mo, monthKey]] as const) {
+      const b = get(map, kf(date)); b.seats += seats; b.revenue += revenue; b.commission += Math.round(revenue * settings.commission_rate)
+    }
+  }
+
+  const finalize = (map: Map<string, MutBucket>): TrendBucket[] =>
+    [...map.entries()].sort((a, b) => a[1].sort - b[1].sort).map(([key, b]) => ({
+      key, label: b.label, posts: b.posts, collab_posts: b.collab_posts, community_posts: b.community_posts,
+      reach: b.reach, engagement: b.engagement, active_creators: b.creators.size,
+      leads: b.leads, seats: b.seats, revenue: Math.round(b.revenue), commission: b.commission,
+    }))
+  return { weekly: finalize(wk), monthly: finalize(mo) }
+}
+
 // ── Global rate settings (single-row config) ──────────────────────────────────
 export async function getCreatorSettings(): Promise<Settings> {
   const { data } = await supabaseAdmin.from('creator_settings').select('commission_rate, override_rate').eq('id', 1).maybeSingle()
@@ -93,44 +199,45 @@ export async function syncInstagram(sinceISO: string = SINCE_DEFAULT, limit = 30
 
 // ── Build the unified Creator Scorecard for a date range ──────────────────────
 export async function buildScorecard(fromISO: string = SINCE_DEFAULT, toISO?: string): Promise<Scorecard> {
-  const to = toISO ?? new Date().toISOString()
+  const fullTo = new Date().toISOString()
+  const to = toISO ?? fullTo
 
-  const [{ rows: igPosts }, affRes, eventsRes, settings] = await Promise.all([
+  // Fetch the FULL program window once; the trends use all of it, the table filters in-memory.
+  const [{ rows: igPostsFull }, affRes, eventReports, settings, leads] = await Promise.all([
     fetchAllRows<IgPostRow>((from, t) =>
       supabaseAdmin
         .from('creator_ig_posts')
         .select('ig_post_id, is_collab, collab_creators, owner_username, posted_at, likes, comments, views, synced_at')
-        .gte('posted_at', fromISO)
-        .lte('posted_at', to)
+        .gte('posted_at', SINCE_DEFAULT)
+        .lte('posted_at', fullTo)
         .order('posted_at', { ascending: false })
         .range(from, t),
     ),
     supabaseAdmin.from('affiliates').select('id, handle, name, ig_handle, active'),
-    supabaseAdmin.from('events').select('id'),
+    loadEventReports(),
     getCreatorSettings(),
+    fetchLeads().catch(() => [] as Lead[]),  // lead sheet fetch can fail server-side; degrade to no leads
   ])
 
   const affs = (affRes.data ?? []) as Array<{ id: string; handle: string; name: string | null; ig_handle: string | null; active: boolean }>
 
+  // Windowed posts for the table/leaderboard (trends use the full range above).
+  const fromMs = new Date(fromISO).getTime(), toMs = new Date(to).getTime()
+  const igPosts = igPostsFull.filter(p => { if (!p.posted_at) return false; const ms = new Date(p.posted_at).getTime(); return ms >= fromMs && ms <= toMs })
+
   // Attributed revenue + seats per affiliate, summed across all events (reuses the
   // tested per-event buildReport so buyer de-duping matches the Payout tab exactly).
-  const events = (eventsRes.data ?? []) as Array<{ id: string }>
-  const reports = await Promise.all(events.map(e => buildReport(e.id).then(r => r).catch(() => null)))
   const revByAff = new Map<string, number>()
   const seatsByAff = new Map<string, number>()
-  for (const r of reports) {
-    if (!r) continue
-    for (const s of r.summary) {
+  for (const { report } of eventReports) {
+    for (const s of report.summary) {
       revByAff.set(s.affiliate_id, (revByAff.get(s.affiliate_id) ?? 0) + s.revenue)
       seatsByAff.set(s.affiliate_id, (seatsByAff.get(s.affiliate_id) ?? 0) + s.buyers)
     }
   }
 
   const leadsByHandle = new Map<string, number>()
-  try {
-    const leads = await fetchLeads()
-    for (const l of leads) { const h = lc(l.handle); if (h) leadsByHandle.set(h, (leadsByHandle.get(h) ?? 0) + 1) }
-  } catch { /* lead sheet fetch can fail server-side; degrade to no leads */ }
+  for (const l of leads) { const h = lc(l.handle); if (h) leadsByHandle.set(h, (leadsByHandle.get(h) ?? 0) + 1) }
 
   // IG-side aggregates: explode collab_creators so each co-author gets credit
   type Agg = { collab_posts: number; reach: number; engagement: number; last: string | null }
@@ -152,6 +259,18 @@ export async function buildScorecard(fromISO: string = SINCE_DEFAULT, toISO?: st
       }
     } else {
       communityPosts++
+    }
+  }
+
+  // Per-creator collab-posts-per-week (last 8 weeks, full range) → sparkline.
+  const weekKeys8 = lastNWeekKeys(8)
+  const sparkByCreator = new Map<string, Map<string, number>>()
+  for (const p of igPostsFull) {
+    if (!p.is_collab || !p.posted_at) continue
+    const wk = weekKey(p.posted_at).key
+    for (const c of (p.collab_creators ?? []).map(lc).filter(Boolean)) {
+      let m = sparkByCreator.get(c); if (!m) { m = new Map(); sparkByCreator.set(c, m) }
+      m.set(wk, (m.get(wk) ?? 0) + 1)
     }
   }
 
@@ -182,6 +301,7 @@ export async function buildScorecard(fromISO: string = SINCE_DEFAULT, toISO?: st
       revenue,
       commission,
       override,
+      weekly_collabs: weekKeys8.map(k => sparkByCreator.get(ig)?.get(k) ?? 0),
     })
   }
   rows.sort((a, b) => b.collab_posts - a.collab_posts || b.reach - a.reach)
@@ -191,11 +311,12 @@ export async function buildScorecard(fromISO: string = SINCE_DEFAULT, toISO?: st
     .map(a => ({ id: a.id, handle: a.handle, name: a.name, leads: leadsByHandle.get(lc(a.handle)) ?? 0, commission: Math.round((revByAff.get(a.id) ?? 0) * settings.commission_rate) }))
     .sort((x, y) => y.commission - x.commission)
 
-  const last_synced = igPosts.reduce<string | null>((m, p) => (p.synced_at && (!m || p.synced_at > m) ? p.synced_at : m), null)
+  const last_synced = igPostsFull.reduce<string | null>((m, p) => (p.synced_at && (!m || p.synced_at > m) ? p.synced_at : m), null)
 
   return {
     rows,
     settings,
+    trends: buildTrends(igPostsFull, leads, eventReports, settings),
     unmapped_affiliates,
     affiliates: affs.map(a => ({ id: a.id, handle: a.handle, name: a.name, ig_handle: a.ig_handle })),
     totals: { total_posts: totalPosts, collab_posts: collabPosts, community_posts: communityPosts, reach: totReach, engagement: totEng, active_creators: igByCreator.size, revenue: totRevenue, commission: totCommission, override: totOverride, total_leads: [...leadsByHandle.values()].reduce((a, b) => a + b, 0) },
