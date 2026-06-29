@@ -35,6 +35,7 @@ interface Report {
   settings: { commission_rate: number; override_rate: number }
   trends: { weekly: TrendBucket[]; monthly: TrendBucket[] }
   events: EventTicketRow[]
+  insights: { icon: string; text: string; priority: number }[]
   unmapped_affiliates: Array<{ id: string; handle: string; name: string | null; leads: number; commission: number }>
   affiliates: Array<{ id: string; handle: string; name: string | null; ig_handle: string | null }>
   totals: { total_posts: number; collab_posts: number; community_posts: number; reach: number; engagement: number; active_creators: number; revenue: number; commission: number; override: number; total_leads: number }
@@ -170,37 +171,9 @@ export default function CreatorsPage() {
   const upcoming = eventsList.filter(e => e.date && new Date(e.date).getTime() >= now.getTime())
   const daysTo = (d: string) => Math.max(0, Math.ceil((new Date(d).getTime() - now.getTime()) / 86400000))
 
-  // ── Auto-generated coaching insights (deterministic, recompute every render) ──
-  const insights: { icon: string; text: string }[] = (() => {
-    if (!report) return []
-    const out: { icon: string; text: string; pri: number }[] = []
-    const mapped = report.rows.filter(r => r.leads != null)        // linked to an affiliate → leads are real
-    const lpp = (r: Row) => r.collab_posts > 0 ? (r.leads ?? 0) / r.collab_posts : 0
-
-    // Momentum vs previous finished period (drives the "post more" message)
-    if (cur && prv) {
-      const d = pct(cur.collab_posts, prv.collab_posts)
-      if (cur.collab_posts < prv.collab_posts) out.push({ pri: 1, icon: '📉', text: `Team posts fell ${Math.abs(d)}% this ${gran} (${prv.collab_posts}→${cur.collab_posts}). Set a floor — 15 collab posts/creator/week — and DM anyone below it today.` })
-      else if (d > 0) out.push({ pri: 4, icon: '📈', text: `Posts up ${d}% this ${gran} — momentum's real. Publicly credit the top posters so they keep the cadence.` })
-    }
-    // Biggest leak: heavy poster converting poorly → fix their CTA
-    const heavy = mapped.filter(r => r.collab_posts >= 10).sort((a, b) => lpp(a) - lpp(b))[0]
-    if (heavy && lpp(heavy) < 0.5) out.push({ pri: 2, icon: '🔧', text: `@${heavy.ig_handle} posted ${heavy.collab_posts} collabs but only ${heavy.leads} leads — the CTA isn't landing. Rewrite their hook + ManyChat link this week.` })
-    // Fill the next event creators should push
-    const target = [...upcoming].sort((a, b) => (a.date ?? '').localeCompare(b.date ?? '')).find(e => { const c = e.capacity ?? 0; return c > 0 ? e.total_seats / c < 0.6 : e.total_seats < 5 })
-    if (target) { const c = target.capacity ?? 0; const fill = c > 0 ? `${Math.round(target.total_seats / c * 100)}% full (${target.total_seats}/${c})` : `${target.total_seats} sold`; out.push({ pri: 3, icon: '💰', text: `${target.name?.trim()} is ${fill}, ${daysTo(target.date!)} days out. Aim every creator's next 3 posts at it to convert seats.` }) }
-    // Clone the winner
-    const winner = [...mapped].sort((a, b) => (b.leads ?? 0) - (a.leads ?? 0))[0]
-    if (winner && (winner.leads ?? 0) > 0) out.push({ pri: 5, icon: '🏆', text: `@${winner.ig_handle} drove ${winner.leads} leads from ${winner.collab_posts} posts (${lpp(winner).toFixed(1)}/post). Make their format the template for everyone.` })
-    // Hidden gem: high conversion, low volume
-    const gem = mapped.filter(r => (r.leads ?? 0) >= 3 && r.collab_posts > 0 && r.collab_posts <= 5).sort((a, b) => lpp(b) - lpp(a))[0]
-    if (gem) out.push({ pri: 6, icon: '⚡', text: `@${gem.ig_handle} converts at ${lpp(gem).toFixed(1)} leads/post but only posted ${gem.collab_posts}. Highest-ROI lever you have — get them posting 3× more.` })
-    // Attribution leak
-    const unmappedLeads = (report.unmapped_affiliates ?? []).reduce((a, x) => a + x.leads, 0)
-    if (unmappedLeads >= 10) out.push({ pri: 7, icon: '🔗', text: `${unmappedLeads} leads came from affiliates with no IG creator linked — map them so the right creator gets credit + commission.` })
-
-    return out.sort((a, b) => a.pri - b.pri).slice(0, 3).map(({ icon, text }) => ({ icon, text }))
-  })()
+  // Coaching insights are computed server-side (single source of truth, shared with
+  // the dedicated /creators/insights page). Panel shows the top 3.
+  const insights = report?.insights ?? []
 
   const cols: Array<{ key: SortKey; label: string }> = [
     { key: 'collab_posts', label: 'Collab posts' },
@@ -279,13 +252,16 @@ export default function CreatorsPage() {
                 <span className="flex items-center gap-1.5 text-[10px] text-emerald-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" /> auto-updates</span>
               </div>
               <ul className="space-y-2.5">
-                {insights.map((it, i) => (
+                {insights.slice(0, 3).map((it, i) => (
                   <li key={i} className="flex gap-2.5 text-sm">
                     <span className="text-base leading-none mt-0.5">{it.icon}</span>
                     <span className="text-zinc-200">{it.text}</span>
                   </li>
                 ))}
               </ul>
+              {insights.length > 3 && (
+                <a href="/creators/insights" className="inline-block mt-3 text-xs text-amber-400 hover:text-amber-300">See all {insights.length} insights →</a>
+              )}
             </div>
           )}
 

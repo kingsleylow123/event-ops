@@ -75,6 +75,12 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
   const dashboard: Item = { href: '/', label: 'Dashboard', icon: icons.dashboard }
   const commandCenter: Item = { href: '/command-center', label: 'Command Center', icon: icons.commandcenter }
   const groups: { id: string; title: string; items: Item[] }[] = [
+    ...(isAdmin ? [{
+      id: 'creators', title: 'Creators', items: [
+        { href: '/creators', label: 'Scorecard', icon: icons.creators },
+        { href: '/creators/insights', label: 'Insights', icon: icons.insights },
+      ],
+    }] : []),
     {
       id: 'pre', title: 'Pre-Event', items: [
         { href: '/events', label: 'Events', icon: icons.events },
@@ -99,7 +105,6 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
         { href: '/pipeline', label: 'Pipeline', icon: icons.pipeline },
         { href: '/revenue', label: 'Revenue', icon: icons.revenue },
         { href: '/affiliates', label: 'Affiliates', icon: icons.affiliates },
-        { href: '/creators', label: 'Creators', icon: icons.creators },
         { href: '/payment-template', label: 'Payment', icon: icons.payment },
       ],
     }] : []),
