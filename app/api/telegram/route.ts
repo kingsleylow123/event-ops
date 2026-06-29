@@ -725,16 +725,17 @@ const HELP = `🤖 ${b('Jarvis')} — your EventOps assistant\n\n` +
 const GENERATE_INVOICE_TOOL: Anthropic.Tool = {
   name: 'generate_invoice',
   description:
-    'Generate a branded Oppa-Media PDF invoice for an attendee and send it as a file. ' +
-    'Use this whenever the admin asks to create, send, or make an invoice — including when they ' +
-    'PASTE a customer\'s WhatsApp order/payment message: extract the customer\'s name, phone, ' +
-    'email and amount from the pasted text and set create_if_missing=true so a brand-new customer ' +
-    'is added as an attendee automatically. Never invent an amount — if the pasted message has no ' +
-    'amount, ask for it instead of calling this tool. ' +
-    'Look up the attendee by their name (partial match supported). The PDF is sent ' +
-    'to the chat as a file — do NOT also reply with a text summary; the tool result handles it. ' +
-    'If the admin asks to EMAIL the invoice to the client, set email_to_client=true ' +
-    '(and client_email when they specify an address — otherwise the attendee\'s recorded email is used).',
+    'Generate a branded CMO Consulting PDF invoice for an attendee, send it as a file in this chat, ' +
+    'AND email it to the client by default. Use this whenever the admin asks to create, send, or ' +
+    'make an invoice — including when they PASTE a customer\'s WhatsApp order/payment message: ' +
+    'extract the customer\'s name, phone, email and amount from the pasted text and set ' +
+    'create_if_missing=true so a brand-new customer is added as an attendee automatically. Never ' +
+    'invent an amount — if the pasted message has no amount, ask for it instead of calling this tool. ' +
+    'Look up the attendee by their name (partial match supported). The PDF is sent to the chat as a ' +
+    'file — do NOT also reply with a text summary; the tool result handles it. ' +
+    'The email goes to the attendee\'s recorded address by default; set client_email when the admin ' +
+    'specifies a different one. Only set email_to_client=false when the admin EXPLICITLY says to skip ' +
+    'the email (e.g. "don\'t email", "no email", "just the chat").',
   input_schema: {
     type: 'object',
     properties: {
@@ -774,7 +775,7 @@ const GENERATE_INVOICE_TOOL: Anthropic.Tool = {
       },
       email_to_client: {
         type: 'boolean',
-        description: 'Set true when the admin asks to EMAIL the invoice to the client (e.g. "invoice Ken RM497 and email it to him"). The email goes to client_email if given, else the attendee\'s recorded email, and always BCCs the finance mailbox.',
+        description: 'Defaults to TRUE — every invoice is emailed to the client automatically (recipient = client_email if given, else the attendee\'s recorded email; BCC always goes to the finance mailbox). Only set to FALSE if the admin explicitly says to skip the email ("don\'t email", "no email", "chat only").',
       },
       client_email: {
         type: 'string',
@@ -940,9 +941,10 @@ async function executeInvoiceTool(
     return `⚠️ Built the invoice for ${a.name} (RM ${amount}) but the upload to Telegram failed — nothing was delivered. Try again, or grab it from the /invoice page.`
   }
 
-  // Email the same PDF when the admin asked for it. BCC finance@ (inside
-  // sendEmail) keeps the accountant's archive complete automatically.
-  if (input.email_to_client) {
+  // Email the same PDF by default. BCC finance@ (inside sendEmail) keeps the
+  // accountant's archive complete automatically. The admin can suppress this by
+  // explicitly passing email_to_client=false ("don't email", "chat only").
+  if (input.email_to_client !== false) {
     const toEmail = (input.client_email || a.email || '').trim()
     if (!toEmail) {
       return `⚠️ Invoice PDF is in the chat, but ${a.name} has no email on file — NOT emailed. Tell me their address, e.g. "email it to ken@gmail.com".`
@@ -1918,9 +1920,9 @@ DATA>>>`
       for (const p of inv.payments_received) preview += `\n  − ${esc(p.label)}: ${showRM(Number(p.amount) || 0)}`
       preview += `\n${b('Balance due')}: ${showRM((amount as number) - recv)}`
     }
-    // Email delivery is part of what the admin is confirming — show the exact
-    // recipient (or the missing-address warning) BEFORE the YES.
-    if (inv.email_to_client) {
+    // Email delivery is on by default — show the exact recipient (or a missing-
+    // address warning) BEFORE the YES. Skipped only when the admin opted out.
+    if (inv.email_to_client !== false) {
       const toEmail = (inv.client_email || (a ? a.email : inv.customer_email) || '').trim()
       preview += toEmail
         ? `\n✉️ Will also email to ${b(toEmail)} (BCC finance)`
