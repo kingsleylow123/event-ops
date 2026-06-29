@@ -1832,7 +1832,7 @@ DATA>>>`
   // sent" / "PDF delivered") and never actually call the tool — so executeInvoiceTool
   // never ran and no PDF was ever produced. Forcing the tool makes it deterministic.
   const invoiceIntent =
-    /^(?:can you\s+|could you\s+|please\s+|pls\s+|hey\s+|jarvis[,\s]+)*(invoice|bill|send|make|create|generate|issue|draft|raise)\b/i
+    /^(?:can you\s+|could you\s+|please\s+|pls\s+|hey\s+|jarvis[,\s]+|give me\s+(?:an?\s+)?|i\s+(?:want|need|wanna|wan)\s+(?:to\s+)?(?:an?\s+)?|do me\s+(?:an?\s+)?|help me\s+(?:to\s+)?)*(invoice|bill|send|make|create|generate|issue|draft|raise|get)\b/i
       .test(question.trim())
     && /\b(invoice|bill)\b/i.test(question)
 
@@ -2173,7 +2173,7 @@ async function handle(
 function isInvoiceIntent(question: string): boolean {
   const t = question.trim()
   return (
-    /^(?:can you\s+|could you\s+|please\s+|pls\s+|hey\s+|jarvis[,\s]+)*(invoice|bill|send|make|create|generate|issue|draft|raise)\b/i.test(t)
+    /^(?:can you\s+|could you\s+|please\s+|pls\s+|hey\s+|jarvis[,\s]+|give me\s+(?:an?\s+)?|i\s+(?:want|need|wanna|wan)\s+(?:to\s+)?(?:an?\s+)?|do me\s+(?:an?\s+)?|help me\s+(?:to\s+)?)*(invoice|bill|send|make|create|generate|issue|draft|raise|get)\b/i.test(t)
     && /\b(invoice|bill)\b/i.test(t)
   )
 }
