@@ -46,11 +46,25 @@ const rm = (n: number) => `RM ${n.toLocaleString('en-MY', { minimumFractionDigit
 const num = (n: number) => n.toLocaleString('en-MY')
 const SINCE = '2026-05-01T00:00:00Z'
 
-const MONTHS: Record<string, { from: string; to?: string; label: string }> = {
-  all: { from: SINCE, label: 'May–Now' },
-  may: { from: '2026-05-01T00:00:00Z', to: '2026-06-01T00:00:00Z', label: 'May' },
-  jun: { from: '2026-06-01T00:00:00Z', to: '2026-07-01T00:00:00Z', label: 'June' },
-  jul: { from: '2026-07-01T00:00:00Z', to: '2026-08-01T00:00:00Z', label: 'July' },
+// Leaderboard time windows. 7d/30d are rolling (computed at load); the rest are fixed.
+const WINDOWS: Record<string, { label: string }> = {
+  '7d': { label: '7d' },
+  '30d': { label: '30d' },
+  may: { label: 'May' },
+  jun: { label: 'June' },
+  jul: { label: 'July' },
+  all: { label: 'May–Now' },
+}
+const FIXED: Record<string, { from: string; to?: string }> = {
+  all: { from: SINCE },
+  may: { from: '2026-05-01T00:00:00Z', to: '2026-06-01T00:00:00Z' },
+  jun: { from: '2026-06-01T00:00:00Z', to: '2026-07-01T00:00:00Z' },
+  jul: { from: '2026-07-01T00:00:00Z', to: '2026-08-01T00:00:00Z' },
+}
+function rangeFor(key: string): { from: string; to?: string } {
+  if (key === '7d') return { from: new Date(Date.now() - 7 * 86400000).toISOString() }
+  if (key === '30d') return { from: new Date(Date.now() - 30 * 86400000).toISOString() }
+  return FIXED[key] ?? { from: SINCE }
 }
 
 type SortKey = 'collab_posts' | 'reach' | 'engagement' | 'leads' | 'seats' | 'revenue' | 'commission' | 'override'
@@ -58,7 +72,7 @@ type SortKey = 'collab_posts' | 'reach' | 'engagement' | 'leads' | 'seats' | 're
 export default function CreatorsPage() {
   const [report, setReport] = useState<Report | null>(null)
   const [loading, setLoading] = useState(true)
-  const [month, setMonth] = useState<keyof typeof MONTHS>('all')
+  const [month, setMonth] = useState<string>('all')
   const [syncing, setSyncing] = useState(false)
   const [msg, setMsg] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('collab_posts')
@@ -70,7 +84,7 @@ export default function CreatorsPage() {
   const money = (n: number | null) => n == null ? '—' : revenueHidden ? 'RM ••••' : rm(n)
 
   const load = useCallback(() => {
-    const m = MONTHS[month]
+    const m = rangeFor(month)
     const url = `/api/creators?from=${encodeURIComponent(m.from)}${m.to ? `&to=${encodeURIComponent(m.to)}` : ''}`
     const cacheKey = `creators:v2:${month}` // v2 = trends/events shape; ignores stale pre-trends cache
     const cached = peekCache<Report>(cacheKey)
@@ -83,6 +97,11 @@ export default function CreatorsPage() {
   }, [month])
 
   useEffect(() => { load() }, [load])
+  // Auto-refresh data + insights every 2 min while the tab is visible (live during the weekly creator call).
+  useEffect(() => {
+    const id = setInterval(() => { if (typeof document !== 'undefined' && !document.hidden) load() }, 120000)
+    return () => clearInterval(id)
+  }, [load])
   // Sync the rate inputs from saved settings when a report loads.
   useEffect(() => {
     if (report?.settings) { setCommPct(Math.round(report.settings.commission_rate * 100)); setOvrPct(Math.round(report.settings.override_rate * 100)) }
@@ -151,6 +170,38 @@ export default function CreatorsPage() {
   const upcoming = eventsList.filter(e => e.date && new Date(e.date).getTime() >= now.getTime())
   const daysTo = (d: string) => Math.max(0, Math.ceil((new Date(d).getTime() - now.getTime()) / 86400000))
 
+  // ── Auto-generated coaching insights (deterministic, recompute every render) ──
+  const insights: { icon: string; text: string }[] = (() => {
+    if (!report) return []
+    const out: { icon: string; text: string; pri: number }[] = []
+    const mapped = report.rows.filter(r => r.leads != null)        // linked to an affiliate → leads are real
+    const lpp = (r: Row) => r.collab_posts > 0 ? (r.leads ?? 0) / r.collab_posts : 0
+
+    // Momentum vs previous finished period (drives the "post more" message)
+    if (cur && prv) {
+      const d = pct(cur.collab_posts, prv.collab_posts)
+      if (cur.collab_posts < prv.collab_posts) out.push({ pri: 1, icon: '📉', text: `Team posts fell ${Math.abs(d)}% this ${gran} (${prv.collab_posts}→${cur.collab_posts}). Set a floor — 15 collab posts/creator/week — and DM anyone below it today.` })
+      else if (d > 0) out.push({ pri: 4, icon: '📈', text: `Posts up ${d}% this ${gran} — momentum's real. Publicly credit the top posters so they keep the cadence.` })
+    }
+    // Biggest leak: heavy poster converting poorly → fix their CTA
+    const heavy = mapped.filter(r => r.collab_posts >= 10).sort((a, b) => lpp(a) - lpp(b))[0]
+    if (heavy && lpp(heavy) < 0.5) out.push({ pri: 2, icon: '🔧', text: `@${heavy.ig_handle} posted ${heavy.collab_posts} collabs but only ${heavy.leads} leads — the CTA isn't landing. Rewrite their hook + ManyChat link this week.` })
+    // Fill the next event creators should push
+    const target = [...upcoming].sort((a, b) => (a.date ?? '').localeCompare(b.date ?? '')).find(e => { const c = e.capacity ?? 0; return c > 0 ? e.total_seats / c < 0.6 : e.total_seats < 5 })
+    if (target) { const c = target.capacity ?? 0; const fill = c > 0 ? `${Math.round(target.total_seats / c * 100)}% full (${target.total_seats}/${c})` : `${target.total_seats} sold`; out.push({ pri: 3, icon: '💰', text: `${target.name?.trim()} is ${fill}, ${daysTo(target.date!)} days out. Aim every creator's next 3 posts at it to convert seats.` }) }
+    // Clone the winner
+    const winner = [...mapped].sort((a, b) => (b.leads ?? 0) - (a.leads ?? 0))[0]
+    if (winner && (winner.leads ?? 0) > 0) out.push({ pri: 5, icon: '🏆', text: `@${winner.ig_handle} drove ${winner.leads} leads from ${winner.collab_posts} posts (${lpp(winner).toFixed(1)}/post). Make their format the template for everyone.` })
+    // Hidden gem: high conversion, low volume
+    const gem = mapped.filter(r => (r.leads ?? 0) >= 3 && r.collab_posts > 0 && r.collab_posts <= 5).sort((a, b) => lpp(b) - lpp(a))[0]
+    if (gem) out.push({ pri: 6, icon: '⚡', text: `@${gem.ig_handle} converts at ${lpp(gem).toFixed(1)} leads/post but only posted ${gem.collab_posts}. Highest-ROI lever you have — get them posting 3× more.` })
+    // Attribution leak
+    const unmappedLeads = (report.unmapped_affiliates ?? []).reduce((a, x) => a + x.leads, 0)
+    if (unmappedLeads >= 10) out.push({ pri: 7, icon: '🔗', text: `${unmappedLeads} leads came from affiliates with no IG creator linked — map them so the right creator gets credit + commission.` })
+
+    return out.sort((a, b) => a.pri - b.pri).slice(0, 3).map(({ icon, text }) => ({ icon, text }))
+  })()
+
   const cols: Array<{ key: SortKey; label: string }> = [
     { key: 'collab_posts', label: 'Collab posts' },
     { key: 'reach', label: 'Reach' },
@@ -175,10 +226,10 @@ export default function CreatorsPage() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex rounded-lg border border-zinc-700 overflow-hidden">
-            {(Object.keys(MONTHS) as Array<keyof typeof MONTHS>).map(k => (
+            {Object.keys(WINDOWS).map(k => (
               <button key={k} onClick={() => setMonth(k)}
                 className={`px-3 py-2 text-xs ${month === k ? 'bg-amber-500 text-black font-semibold' : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-800'}`}>
-                {MONTHS[k].label}
+                {WINDOWS[k].label}
               </button>
             ))}
           </div>
@@ -220,6 +271,24 @@ export default function CreatorsPage() {
 
       {report && (
         <>
+          {/* 🧠 Auto-generated coaching insights for the creator lead */}
+          {insights.length > 0 && (
+            <div className="bg-gradient-to-br from-amber-500/10 to-[#111] border border-amber-500/30 rounded-xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-semibold text-sm flex items-center gap-2">🧠 Coach&apos;s insights <span className="text-[10px] text-zinc-500 font-normal normal-case">— what to tell your creator lead ({WINDOWS[month].label})</span></h2>
+                <span className="flex items-center gap-1.5 text-[10px] text-emerald-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" /> auto-updates</span>
+              </div>
+              <ul className="space-y-2.5">
+                {insights.map((it, i) => (
+                  <li key={i} className="flex gap-2.5 text-sm">
+                    <span className="text-base leading-none mt-0.5">{it.icon}</span>
+                    <span className="text-zinc-200">{it.text}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* IG totals */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {[
@@ -364,7 +433,7 @@ export default function CreatorsPage() {
               {/* Top movers podium */}
               {topMovers.length > 0 && (
                 <div>
-                  <p className="text-[11px] text-zinc-500 uppercase tracking-wider mb-2">Top creators ({MONTHS[month].label})</p>
+                  <p className="text-[11px] text-zinc-500 uppercase tracking-wider mb-2">Top creators ({WINDOWS[month].label})</p>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {topMovers.map((r, i) => (
                       <div key={r.ig_handle} className={`bg-[#111] border rounded-xl p-4 flex items-center gap-3 ${i === 0 ? 'border-amber-500/50' : 'border-zinc-800'}`}>

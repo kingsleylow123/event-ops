@@ -234,15 +234,22 @@ export async function buildScorecard(fromISO: string = SINCE_DEFAULT, toISO?: st
 
   const affs = (affRes.data ?? []) as Array<{ id: string; handle: string; name: string | null; ig_handle: string | null; active: boolean }>
 
-  // Windowed posts for the table/leaderboard (trends use the full range above).
+  // A "bounded" window (7d / 30d / a specific month) scopes leads + seats + revenue
+  // by date too, not just posts — so the leaderboard is internally consistent.
+  // The default "All" view (from = SINCE_DEFAULT, no `to`) stays lifetime.
   const fromMs = new Date(fromISO).getTime(), toMs = new Date(to).getTime()
-  const igPosts = igPostsFull.filter(p => { if (!p.posted_at) return false; const ms = new Date(p.posted_at).getTime(); return ms >= fromMs && ms <= toMs })
+  const bounded = !!toISO || fromISO !== SINCE_DEFAULT
+  const inWindow = (iso: string | null) => { if (!iso) return false; const ms = new Date(iso).getTime(); return ms >= fromMs && ms <= toMs }
 
-  // Attributed revenue + seats per affiliate, summed across all events (reuses the
-  // tested per-event buildReport so buyer de-duping matches the Payout tab exactly).
+  const igPosts = igPostsFull.filter(p => inWindow(p.posted_at))
+
+  // Attributed revenue + seats per affiliate (reuses the tested per-event buildReport
+  // so buyer de-duping matches the Payout tab); in a bounded window only count events
+  // whose date falls inside it.
   const revByAff = new Map<string, number>()
   const seatsByAff = new Map<string, number>()
-  for (const { report } of eventReports) {
+  for (const { date, report } of eventReports) {
+    if (bounded && !inWindow(date)) continue
     for (const s of report.summary) {
       revByAff.set(s.affiliate_id, (revByAff.get(s.affiliate_id) ?? 0) + s.revenue)
       seatsByAff.set(s.affiliate_id, (seatsByAff.get(s.affiliate_id) ?? 0) + s.buyers)
@@ -250,7 +257,11 @@ export async function buildScorecard(fromISO: string = SINCE_DEFAULT, toISO?: st
   }
 
   const leadsByHandle = new Map<string, number>()
-  for (const l of leads) { const h = lc(l.handle); if (h) leadsByHandle.set(h, (leadsByHandle.get(h) ?? 0) + 1) }
+  for (const l of leads) {
+    const h = lc(l.handle); if (!h) continue
+    if (bounded && !inWindow(l.date)) continue
+    leadsByHandle.set(h, (leadsByHandle.get(h) ?? 0) + 1)
+  }
 
   // IG-side aggregates: explode collab_creators so each co-author gets credit
   type Agg = { collab_posts: number; reach: number; engagement: number; last: string | null }
