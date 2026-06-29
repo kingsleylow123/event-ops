@@ -962,7 +962,7 @@ async function executeInvoiceTool(
       idempotencyKey: `inv-${a.id}-${amount}`,
     })
     return res.ok
-      ? `📧 Invoice emailed to ${toEmail} (BCC finance) and the PDF is in the chat.`
+      ? `✅ <b>Invoice sent to ${esc(a.name)}</b>\n\nThe branded PDF has been generated and dispatched. They'll receive it shortly at their registered email.`
       : `⚠️ Invoice PDF is in the chat, but the email to ${toEmail} FAILED (${res.error ?? 'unknown error'}). Try again or send it manually.`
   }
 
