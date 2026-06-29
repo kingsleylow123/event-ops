@@ -154,7 +154,7 @@ export default function CreatorsPage() {
   const now = new Date()
   const curKey = gran === 'week' ? mondayISO(now) : `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`
   const livePartial = series.length > 0 && series[series.length - 1].key === curKey
-  const complete = livePartial ? series.slice(0, -1) : series   // fair Δ: compare finished periods only
+  const complete = series.filter(s => s.key < curKey)   // completed periods only (exclude current + future)
   const cur = complete[complete.length - 1], prv = complete[complete.length - 2]
   const pct = (a: number, b: number) => b > 0 ? Math.round(((a - b) / b) * 100) : (a > 0 ? 100 : 0)
   const kpis = cur ? [

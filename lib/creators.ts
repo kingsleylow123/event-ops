@@ -175,12 +175,17 @@ function buildTrends(igPosts: IgPostRow[], leads: Lead[], eventReports: EventRep
     }
   }
 
-  const finalize = (map: Map<string, MutBucket>): TrendBucket[] =>
-    [...map.entries()].sort((a, b) => a[1].sort - b[1].sort).map(([key, b]) => ({
+  const finalize = (map: Map<string, MutBucket>): TrendBucket[] => {
+    const arr = [...map.entries()].sort((a, b) => a[1].sort - b[1].sort).map(([key, b]) => ({
       key, label: b.label, posts: b.posts, collab_posts: b.collab_posts, community_posts: b.community_posts,
       reach: b.reach, engagement: b.engagement, active_creators: b.creators.size,
       leads: b.leads, seats: b.seats, revenue: Math.round(b.revenue), commission: b.commission,
     }))
+    // Drop trailing all-zero buckets — future events seed empty weeks/months via their
+    // dated seats/leads, which would otherwise tack dead space onto the trend charts.
+    while (arr.length) { const x = arr[arr.length - 1]; if (x.posts || x.leads || x.seats || x.revenue) break; arr.pop() }
+    return arr
+  }
   return { weekly: finalize(wk), monthly: finalize(mo) }
 }
 
@@ -228,11 +233,10 @@ function buildCoachInsights(
   const used = new Set<string>()                                            // don't feature one creator twice
 
   // Momentum: latest finished week vs the one before (exclude the in-progress week).
-  const wk = trends.weekly
-  if (wk.length >= 2) {
-    const curMonday = mondayOf(new Date(nowMs)).toISOString().slice(0, 10)
-    const complete = wk[wk.length - 1].key === curMonday ? wk.slice(0, -1) : wk
-    const cur = complete[complete.length - 1], prv = complete[complete.length - 2]
+  const curMonday = mondayOf(new Date(nowMs)).toISOString().slice(0, 10)
+  const past = trends.weekly.filter(w => w.key < curMonday)   // completed weeks only (exclude current + future)
+  {
+    const cur = past[past.length - 1], prv = past[past.length - 2]
     if (cur && prv) {
       const d = prv.collab_posts > 0 ? Math.round(((cur.collab_posts - prv.collab_posts) / prv.collab_posts) * 100) : (cur.collab_posts > 0 ? 100 : 0)
       if (d < 0) out.push({ priority: 1, icon: '📉', text: `Team posts fell ${Math.abs(d)}% last week (${prv.collab_posts}→${cur.collab_posts}). Set a floor — 15 collab posts/creator/week — and DM anyone below it today.` })
