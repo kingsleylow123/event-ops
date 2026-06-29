@@ -888,9 +888,30 @@ async function executeInvoiceTool(
     lineItems = [{ desc, qty: 1, unit: amount }]
   }
 
+  // Burn an invoice number ONLY on Quick mode and ONLY here — executeInvoiceTool
+  // is reached only via the YES handler (line ~2056), so the staged preview never
+  // wastes a number. Balance mode keeps its current behaviour (no auto-number) to
+  // mirror the /invoice web page rule.
+  const invoiceDate = new Date()
+  let invoiceNo: string | undefined
+  if (mode === 'quick') {
+    const { data: num, error: numErr } = await supabase.rpc('issue_invoice_number', {
+      p_year: invoiceDate.getFullYear(),
+      p_client: a.name,
+      p_date: invoiceDate.toISOString().slice(0, 10),
+      p_amount: amount,
+    })
+    if (numErr || !num) {
+      console.error('[telegram] issue_invoice_number failed', numErr)
+      return `⚠️ Couldn't issue an invoice number for ${a.name} (RM ${amount}) — nothing was sent. Try again in a moment.`
+    }
+    invoiceNo = String(num)
+  }
+
   const invoice: InvoiceData = {
     clientName: a.name,
-    date: new Date(),
+    date: invoiceDate,
+    invoiceNo,
     lineItems,
     payments,
     note: mode === 'quick' ? 'Non-refundable.' : undefined,

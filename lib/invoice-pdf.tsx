@@ -1,8 +1,20 @@
 // Server-side PDF invoice generator using @react-pdf/renderer.
-// Renders the CMOAI Consulting branded invoice as a Buffer for Telegram delivery.
+// Renders the CMO Consulting Sdn. Bhd. branded invoice as a Buffer for Telegram delivery.
 
 import React from 'react'
-import { Document, Page, View, Text, StyleSheet, pdf } from '@react-pdf/renderer'
+import fs from 'node:fs'
+import path from 'node:path'
+import { Document, Page, View, Text, Image, StyleSheet, pdf } from '@react-pdf/renderer'
+
+// Load the brand logo once at module init. If the file isn't bundled into the
+// serverless function (Next.js sometimes doesn't trace public/ assets), we fall
+// back to a text-based logo block in the component below — the PDF still ships.
+let LOGO_BUFFER: Buffer | null = null
+try {
+  LOGO_BUFFER = fs.readFileSync(path.join(process.cwd(), 'public', 'cmo-logo-orange.png'))
+} catch (e) {
+  console.warn('[invoice-pdf] cmo-logo-orange.png not found, falling back to text logo', e)
+}
 
 // ── Types ───────────────────────────────────────────────────────────────
 export type InvoiceLineItem = {
@@ -19,6 +31,7 @@ export type InvoicePayment = {
 export type InvoiceData = {
   clientName: string
   date: Date
+  invoiceNo?: string            // e.g. 'CMO-2026-0025' — rendered top-right under the INVOICE title. Optional so Balance-mode / legacy callers keep working without burning a number.
   companyName?: string
   companyEmail?: string
   companyPhone?: string
@@ -58,7 +71,7 @@ function rm(n: number): string {
 }
 
 // ── Styles ──────────────────────────────────────────────────────────────
-const RED = '#ed1c24'
+const ORANGE = '#F26522'     // CMO Consulting brand color (matches the /invoice web page)
 const INK = '#111111'
 const MUTED = '#999999'
 const RULE = '#d8d8d8'
@@ -72,8 +85,8 @@ const styles = StyleSheet.create({
     color: INK,
   },
   // Left red stripe with notch (gap from 90→108 pts approx)
-  stripeTop:    { position: 'absolute', left: 0, top: 0,   width: 12, height: 75,  backgroundColor: RED },
-  stripeBottom: { position: 'absolute', left: 0, top: 90,  width: 12, bottom: 0,   backgroundColor: RED },
+  stripeTop:    { position: 'absolute', left: 0, top: 0,   width: 12, height: 75,  backgroundColor: ORANGE },
+  stripeBottom: { position: 'absolute', left: 0, top: 90,  width: 12, bottom: 0,   backgroundColor: ORANGE },
 
   content: {
     flex: 1,
@@ -91,13 +104,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  logo: {
+  logoImage: {
+    width: 56,
+    height: 56,
+  },
+  logoFallback: {
     flexDirection: 'row',
     borderWidth: 1.5,
     borderColor: INK,
   },
-  logoOppa: {
-    backgroundColor: RED,
+  logoFallbackOrange: {
+    backgroundColor: ORANGE,
     color: '#ffffff',
     fontSize: 13,
     fontWeight: 900,
@@ -106,7 +123,7 @@ const styles = StyleSheet.create({
     paddingLeft: 10,
     paddingRight: 10,
   },
-  logoMedia: {
+  logoFallbackText: {
     color: INK,
     fontSize: 13,
     fontWeight: 800,
@@ -116,11 +133,23 @@ const styles = StyleSheet.create({
     paddingLeft: 10,
     paddingRight: 10,
   },
+  invoiceTitleCol: {
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+  },
   invoiceTitle: {
     fontSize: 36,
     fontWeight: 400,
     letterSpacing: 3,
     marginTop: -8,
+  },
+  invoiceNo: {
+    fontSize: 11,
+    fontWeight: 600,
+    letterSpacing: 1,
+    color: ORANGE,
+    marginTop: 4,
+    textAlign: 'right',
   },
   divider: {
     height: 1,
@@ -150,6 +179,12 @@ const styles = StyleSheet.create({
   companyName: {
     fontSize: 14,
     color: INK,
+    marginBottom: 2,
+  },
+  companyReg: {
+    fontSize: 9,
+    color: '#777777',
+    textAlign: 'right',
     marginBottom: 4,
   },
   companyContact: {
@@ -180,7 +215,7 @@ const styles = StyleSheet.create({
   // Table
   tableHeader: {
     flexDirection: 'row',
-    backgroundColor: RED,
+    backgroundColor: ORANGE,
     paddingVertical: 9,
     paddingHorizontal: 12,
   },
@@ -251,7 +286,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: 700,
     letterSpacing: 1,
-    color: RED,
+    color: ORANGE,
   },
   balanceAmt: {
     fontSize: 14,
@@ -287,7 +322,7 @@ const styles = StyleSheet.create({
   // Quick-mode single-line "Description / Price" variant
   quickTableHeader: {
     flexDirection: 'row',
-    backgroundColor: RED,
+    backgroundColor: ORANGE,
     paddingVertical: 11,
     paddingHorizontal: 18,
   },
@@ -321,9 +356,10 @@ function InvoiceDocument({ data }: { data: InvoiceData }) {
   // "Quick" look = exactly 1 line item, no payments → render single big TOTAL box
   const isQuick = items.length === 1 && (!data.payments || data.payments.length === 0)
 
-  const companyName = data.companyName || 'CMOAI Consulting'
-  const companyEmail = data.companyEmail || 'finance@cmoaiconsulting.com'
-  const companyPhone = data.companyPhone || '6012 285 0125'
+  const companyName = data.companyName || 'CMO Consulting Sdn. Bhd.'
+  const companyReg = '202601024007 (1686104-X)'
+  const companyEmail = data.companyEmail || 'claudemalaysiaofficial@gmail.com'
+  const companyPhone = data.companyPhone || '012-285 0125'
   const bankName = data.bankName || 'Maybank SME Biz'
   const bankAccount = data.bankAccount || '5142 8090 1848'
   const bankHolder = data.bankHolder || 'Kingsley Low Yean Wee'
@@ -331,18 +367,25 @@ function InvoiceDocument({ data }: { data: InvoiceData }) {
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        {/* Red stripe (two pieces with a gap) */}
+        {/* Orange stripe (two pieces with a gap) */}
         <View style={styles.stripeTop} />
         <View style={styles.stripeBottom} />
 
         <View style={styles.content}>
           {/* Header */}
           <View style={styles.header}>
-            <View style={styles.logo}>
-              <Text style={styles.logoOppa}>CMOAI</Text>
-              <Text style={styles.logoMedia}>CONSULTING</Text>
+            {LOGO_BUFFER ? (
+              <Image style={styles.logoImage} src={{ data: LOGO_BUFFER, format: 'png' }} />
+            ) : (
+              <View style={styles.logoFallback}>
+                <Text style={styles.logoFallbackOrange}>CMO</Text>
+                <Text style={styles.logoFallbackText}>CONSULTING</Text>
+              </View>
+            )}
+            <View style={styles.invoiceTitleCol}>
+              <Text style={styles.invoiceTitle}>INVOICE</Text>
+              {data.invoiceNo ? <Text style={styles.invoiceNo}>{data.invoiceNo}</Text> : null}
             </View>
-            <Text style={styles.invoiceTitle}>INVOICE</Text>
           </View>
 
           <View style={styles.divider} />
@@ -356,6 +399,7 @@ function InvoiceDocument({ data }: { data: InvoiceData }) {
             <View style={styles.billingRight}>
               <Text style={styles.lbl}>COMPANY:</Text>
               <Text style={styles.companyName}>{companyName}</Text>
+              <Text style={styles.companyReg}>{companyReg}</Text>
               <Text style={styles.companyContact}>{companyEmail}</Text>
               <Text style={styles.companyContact}>{companyPhone}</Text>
             </View>
