@@ -1,6 +1,25 @@
+'use client'
+import { useState, type ReactNode } from 'react'
 import { rm, type AgingBuckets } from '@/lib/finance'
 
 // ── Internal helpers ─────────────────────────────────────────────────────────
+
+// Hover tooltip shared by the interactive charts. Positioned in the chart's
+// relative wrapper: x as a % of width (SVG is viewBox 0..600, stretched to 100%),
+// y in px (chart height is fixed, so SVG units == px vertically).
+function ChartTip({ xPct, topPx, children }: { xPct: number; topPx: number; children: ReactNode }) {
+  const clampedX = Math.max(8, Math.min(92, xPct))
+  return (
+    <div
+      className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-md border border-zinc-700 bg-zinc-900/95 px-2 py-1 text-[11px] leading-tight text-white shadow-lg"
+      style={{ left: `${clampedX}%`, top: Math.max(26, topPx) - 6 }}
+    >
+      {children}
+    </div>
+  )
+}
+
+const TIP_DOT = '#fafafa'
 
 // Build a linear scale from a value-domain [min,max] onto a pixel-range [a,b].
 // Always returns a finite number even when the domain collapses (min === max),
@@ -63,11 +82,15 @@ export function AreaLineChart({
   height = 180,
   color = '#22c55e',
   label,
+  valueLabel = 'Value',
+  format = (n: number) => n.toLocaleString(),
 }: {
   points: { label: string; value: number }[]
   height?: number
   color?: string
   label?: string
+  valueLabel?: string
+  format?: (n: number) => string
 }) {
   const W = 600
   const H = height
@@ -75,6 +98,7 @@ export function AreaLineChart({
   const plotH = H - PAD.top - PAD.bottom
   const x0 = PAD.left
   const y0 = PAD.top
+  const [hover, setHover] = useState<number | null>(null)
 
   const values = points.map((p) => p.value)
   const rawMax = values.length ? Math.max(0, ...values) : 0
@@ -96,49 +120,68 @@ export function AreaLineChart({
       : ''
 
   const gradId = `area-grad-${color.replace(/[^a-z0-9]/gi, '')}`
+  const n = points.length
+  const band = n > 0 ? plotW / n : plotW
+  const hp = hover != null ? points[hover] : null
 
   return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      width="100%"
-      height={H}
-      preserveAspectRatio="none"
-      role="img"
-      aria-label={label ?? 'Area chart'}
-    >
-      <defs>
-        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.28" />
-          <stop offset="100%" stopColor={color} stopOpacity="0.02" />
-        </linearGradient>
-      </defs>
+    <div className="relative" onMouseLeave={() => setHover(null)}>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        width="100%"
+        height={H}
+        preserveAspectRatio="none"
+        role="img"
+        aria-label={label ?? 'Area chart'}
+      >
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.28" />
+            <stop offset="100%" stopColor={color} stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
 
-      {/* gridlines */}
-      {gridYs.map((gy, i) => (
-        <line key={i} x1={x0} y1={gy} x2={x0 + plotW} y2={gy} stroke={GRID} strokeWidth={1} />
-      ))}
-      {/* zero baseline */}
-      <line x1={x0} y1={baseY} x2={x0 + plotW} y2={baseY} stroke={AXIS} strokeWidth={1} strokeOpacity={0.5} />
+        {/* gridlines */}
+        {gridYs.map((gy, i) => (
+          <line key={i} x1={x0} y1={gy} x2={x0 + plotW} y2={gy} stroke={GRID} strokeWidth={1} />
+        ))}
+        {/* zero baseline */}
+        <line x1={x0} y1={baseY} x2={x0 + plotW} y2={baseY} stroke={AXIS} strokeWidth={1} strokeOpacity={0.5} />
 
-      {areaPath && <path d={areaPath} fill={`url(#${gradId})`} />}
-      {linePath && <path d={linePath} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />}
-      {/* lone datum: a zero-length path is invisible, so draw a marker */}
-      {points.length === 1 && <circle cx={sx(0)} cy={sy(points[0].value)} r={2.5} fill={color} />}
+        {areaPath && <path d={areaPath} fill={`url(#${gradId})`} />}
+        {linePath && <path d={linePath} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />}
+        {/* lone datum: a zero-length path is invisible, so draw a marker */}
+        {points.length === 1 && <circle cx={sx(0)} cy={sy(points[0].value)} r={2.5} fill={color} />}
 
-      {/* x-axis labels */}
-      {xticks.map((idx) => (
-        <text
-          key={points[idx]?.label ?? idx}
-          x={sx(idx)}
-          y={H - 6}
-          fill={AXIS}
-          fontSize={10}
-          textAnchor={idx === 0 ? 'start' : idx === points.length - 1 ? 'end' : 'middle'}
-        >
-          {points[idx]?.label ?? ''}
-        </text>
-      ))}
-    </svg>
+        {/* hover guide + dot */}
+        {hp && <line x1={sx(hover!)} y1={y0} x2={sx(hover!)} y2={y0 + plotH} stroke={AXIS} strokeWidth={1} strokeOpacity={0.4} />}
+        {hp && <circle cx={sx(hover!)} cy={sy(hp.value)} r={3} fill={color} stroke={TIP_DOT} strokeWidth={1} />}
+
+        {/* x-axis labels */}
+        {xticks.map((idx) => (
+          <text
+            key={points[idx]?.label ?? idx}
+            x={sx(idx)}
+            y={H - 6}
+            fill={AXIS}
+            fontSize={10}
+            textAnchor={idx === 0 ? 'start' : idx === points.length - 1 ? 'end' : 'middle'}
+          >
+            {points[idx]?.label ?? ''}
+          </text>
+        ))}
+
+        {/* invisible hover hit-zones (one per datum) */}
+        {points.map((_, i) => (
+          <rect key={i} x={x0 + i * band} y={y0} width={band} height={plotH} fill="transparent" onMouseEnter={() => setHover(i)} />
+        ))}
+      </svg>
+      {hp && (
+        <ChartTip xPct={(sx(hover!) / W) * 100} topPx={sy(hp.value)}>
+          <span className="text-zinc-400">{hp.label}</span> · {valueLabel} <span className="font-semibold">{format(hp.value)}</span>
+        </ChartTip>
+      )}
+    </div>
   )
 }
 
@@ -149,11 +192,17 @@ export function ComboBarLine({
   height = 180,
   barColor = '#3b82f6',
   lineColor = '#84cc16',
+  barLabel = 'Bar',
+  lineLabel = 'Line',
+  format = (n: number) => n.toLocaleString(),
 }: {
   points: { label: string; bar: number; line: number }[]
   height?: number
   barColor?: string
   lineColor?: string
+  barLabel?: string
+  lineLabel?: string
+  format?: (n: number) => string
 }) {
   const W = 600
   const H = height
@@ -161,6 +210,7 @@ export function ComboBarLine({
   const plotH = H - PAD.top - PAD.bottom
   const x0 = PAD.left
   const y0 = PAD.top
+  const [hover, setHover] = useState<number | null>(null)
 
   const all = points.flatMap((p) => [p.bar, p.line])
   const rawMax = all.length ? Math.max(0, ...all) : 0
@@ -180,43 +230,61 @@ export function ComboBarLine({
 
   const linePts = points.map((p, i) => `${cx(i)},${sy(p.line)}`)
   const linePath = linePts.length ? `M ${linePts.join(' L ')}` : ''
+  const hp = hover != null ? points[hover] : null
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" role="img" aria-label="Combo bar and line chart">
-      {/* gridlines */}
-      {gridYs.map((gy, i) => (
-        <line key={i} x1={x0} y1={gy} x2={x0 + plotW} y2={gy} stroke={GRID} strokeWidth={1} />
-      ))}
-      {/* zero baseline */}
-      <line x1={x0} y1={baseY} x2={x0 + plotW} y2={baseY} stroke={AXIS} strokeWidth={1} strokeOpacity={0.5} />
+    <div className="relative" onMouseLeave={() => setHover(null)}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" role="img" aria-label="Combo bar and line chart">
+        {/* gridlines */}
+        {gridYs.map((gy, i) => (
+          <line key={i} x1={x0} y1={gy} x2={x0 + plotW} y2={gy} stroke={GRID} strokeWidth={1} />
+        ))}
+        {/* zero baseline */}
+        <line x1={x0} y1={baseY} x2={x0 + plotW} y2={baseY} stroke={AXIS} strokeWidth={1} strokeOpacity={0.5} />
 
-      {/* bars */}
-      {points.map((p, i) => {
-        const yVal = sy(p.bar)
-        const top = Math.min(yVal, baseY)
-        const h = Math.max(0, Math.abs(yVal - baseY))
-        return <rect key={points[i]?.label ?? i} x={cx(i) - barW / 2} y={top} width={barW} height={h} fill={barColor} rx={1.5} opacity={0.85} />
-      })}
+        {/* bars */}
+        {points.map((p, i) => {
+          const yVal = sy(p.bar)
+          const top = Math.min(yVal, baseY)
+          const h = Math.max(0, Math.abs(yVal - baseY))
+          return <rect key={points[i]?.label ?? i} x={cx(i) - barW / 2} y={top} width={barW} height={h} fill={barColor} rx={1.5} opacity={hover === i ? 1 : 0.85} />
+        })}
 
-      {/* line */}
-      {linePath && <path d={linePath} fill="none" stroke={lineColor} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />}
-      {/* lone datum: a zero-length path is invisible, so draw a marker */}
-      {points.length === 1 && <circle cx={cx(0)} cy={sy(points[0].line)} r={2.5} fill={lineColor} />}
+        {/* line */}
+        {linePath && <path d={linePath} fill="none" stroke={lineColor} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />}
+        {/* lone datum: a zero-length path is invisible, so draw a marker */}
+        {points.length === 1 && <circle cx={cx(0)} cy={sy(points[0].line)} r={2.5} fill={lineColor} />}
 
-      {/* x-axis labels */}
-      {xticks.map((idx) => (
-        <text
-          key={points[idx]?.label ?? idx}
-          x={cx(idx)}
-          y={H - 6}
-          fill={AXIS}
-          fontSize={10}
-          textAnchor={idx === 0 ? 'start' : idx === n - 1 ? 'end' : 'middle'}
-        >
-          {points[idx]?.label ?? ''}
-        </text>
-      ))}
-    </svg>
+        {/* hover dot on the line */}
+        {hp && <circle cx={cx(hover!)} cy={sy(hp.line)} r={3} fill={lineColor} stroke={TIP_DOT} strokeWidth={1} />}
+
+        {/* x-axis labels */}
+        {xticks.map((idx) => (
+          <text
+            key={points[idx]?.label ?? idx}
+            x={cx(idx)}
+            y={H - 6}
+            fill={AXIS}
+            fontSize={10}
+            textAnchor={idx === 0 ? 'start' : idx === n - 1 ? 'end' : 'middle'}
+          >
+            {points[idx]?.label ?? ''}
+          </text>
+        ))}
+
+        {/* invisible hover hit-zones (one per datum) */}
+        {points.map((_, i) => (
+          <rect key={i} x={x0 + slot * i} y={y0} width={slot} height={plotH} fill="transparent" onMouseEnter={() => setHover(i)} />
+        ))}
+      </svg>
+      {hp && (
+        <ChartTip xPct={(cx(hover!) / W) * 100} topPx={Math.min(sy(hp.bar), sy(hp.line))}>
+          <div className="text-zinc-400">{hp.label}</div>
+          <div><span style={{ color: barColor }}>■</span> {barLabel} <span className="font-semibold">{format(hp.bar)}</span></div>
+          <div><span style={{ color: lineColor }}>■</span> {lineLabel} <span className="font-semibold">{format(hp.line)}</span></div>
+        </ChartTip>
+      )}
+    </div>
   )
 }
 
@@ -227,14 +295,23 @@ export function CashflowChart({
   height = 200,
   mode = 'history',
   hidden = false,
+  flowLabel = 'Flow',
+  balanceLabel = 'Balance',
+  flowFormat = (n: number) => n.toLocaleString(),
+  balanceFormat = (n: number) => rm(n),
 }: {
   points: { label: string; flow: number; balance: number }[]
   height?: number
   mode?: 'history' | 'forecast'
   hidden?: boolean
+  flowLabel?: string
+  balanceLabel?: string
+  flowFormat?: (n: number) => string
+  balanceFormat?: (n: number) => string
 }) {
   const W = 600
   const H = height
+  const [hover, setHover] = useState<number | null>(null)
   // Wider side padding to fit dual y-axis labels.
   const pad = { top: 12, right: 46, bottom: 22, left: 46 }
   const plotW = W - pad.left - pad.right
@@ -291,8 +368,10 @@ export function CashflowChart({
 
   const linePts = points.map((p, i) => `${cx(i)},${syBal(p.balance)}`)
   const linePath = linePts.length ? `M ${linePts.join(' L ')}` : ''
+  const hp = hover != null ? points[hover] : null
 
   return (
+   <div className="relative" onMouseLeave={() => setHover(null)}>
     <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" role="img" aria-label="Cashflow chart">
       {/* gridlines + dual y tick labels */}
       {gridYs.map((gy, i) => (
@@ -332,6 +411,9 @@ export function CashflowChart({
       {/* lone datum: a zero-length path is invisible, so draw a marker */}
       {points.length === 1 && <circle cx={cx(0)} cy={syBal(points[0].balance)} r={2.5} fill={balColor} />}
 
+      {/* hover dots */}
+      {hp && <circle cx={cx(hover!)} cy={syBal(hp.balance)} r={3} fill={balColor} stroke={TIP_DOT} strokeWidth={1} />}
+
       {/* x-axis labels */}
       {xticks.map((idx) => (
         <text
@@ -345,7 +427,20 @@ export function CashflowChart({
           {points[idx]?.label ?? ''}
         </text>
       ))}
+
+      {/* invisible hover hit-zones (one per datum) */}
+      {points.map((_, i) => (
+        <rect key={i} x={x0 + slot * i} y={y0} width={slot} height={plotH} fill="transparent" onMouseEnter={() => setHover(i)} />
+      ))}
     </svg>
+    {hp && (
+      <ChartTip xPct={(cx(hover!) / W) * 100} topPx={Math.min(syFlow(hp.flow), syBal(hp.balance))}>
+        <div className="text-zinc-400">{hp.label}</div>
+        <div><span style={{ color: flowColor }}>■</span> {flowLabel} <span className="font-semibold">{flowFormat(hp.flow)}</span></div>
+        <div><span style={{ color: balColor }}>■</span> {balanceLabel} <span className="font-semibold">{hidden ? '••••' : balanceFormat(hp.balance)}</span></div>
+      </ChartTip>
+    )}
+   </div>
   )
 }
 

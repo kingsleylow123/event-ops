@@ -47,10 +47,22 @@ export interface Trends {
   monthly: TrendBucket[]
 }
 
+// One event's ticket sales — links the dashboard to actual workshop/GLCC tickets.
+export interface EventTicketRow {
+  id: string
+  name: string | null
+  date: string | null
+  capacity: number | null
+  total_seats: number       // all paid tickets sold for the event
+  attributed_seats: number  // tickets attributed to a creator/affiliate
+  revenue: number           // total event revenue (attributed + unattributed)
+}
+
 export interface Scorecard {
   rows: ScorecardRow[]
   settings: Settings
   trends: Trends
+  events: EventTicketRow[]
   unmapped_affiliates: Array<{ id: string; handle: string; name: string | null; leads: number; commission: number }>
   affiliates: Array<{ id: string; handle: string; name: string | null; ig_handle: string | null }>
   totals: {
@@ -107,16 +119,17 @@ function lastNWeekKeys(n: number): string[] {
   return out
 }
 
-type EventReport = { id: string; date: string | null; report: PayoutReport }
+type EventReport = { id: string; name: string | null; date: string | null; capacity: number | null; report: PayoutReport }
 
-// All events' payout reports + their dates — shared by the lifetime per-affiliate sum
-// AND the time-bucketed trends, so buildReport runs once per event (not twice).
+// All events' payout reports + their meta — shared by the lifetime per-affiliate sum,
+// the time-bucketed trends, AND the per-event ticket breakdown, so buildReport runs
+// once per event (not three times).
 async function loadEventReports(): Promise<EventReport[]> {
-  const { data } = await supabaseAdmin.from('events').select('id, date')
-  const events = (data ?? []) as Array<{ id: string; date: string | null }>
+  const { data } = await supabaseAdmin.from('events').select('id, name, date, capacity')
+  const events = (data ?? []) as Array<{ id: string; name: string | null; date: string | null; capacity: number | null }>
   const out = await Promise.all(events.map(async e => {
     const report = await buildReport(e.id).catch(() => null)
-    return report ? { id: e.id, date: e.date, report } : null
+    return report ? { id: e.id, name: e.name, date: e.date, capacity: e.capacity, report } : null
   }))
   return out.filter(Boolean) as EventReport[]
 }
@@ -313,10 +326,21 @@ export async function buildScorecard(fromISO: string = SINCE_DEFAULT, toISO?: st
 
   const last_synced = igPostsFull.reduce<string | null>((m, p) => (p.synced_at && (!m || p.synced_at > m) ? p.synced_at : m), null)
 
+  // Per-event ticket sales (chronological) — the bridge to "tickets we're selling".
+  const events: EventTicketRow[] = eventReports
+    .map(({ id, name, date, capacity, report }) => ({
+      id, name, date, capacity,
+      total_seats: report.buyers.length,
+      attributed_seats: report.summary.reduce((a, s) => a + s.buyers, 0),
+      revenue: Math.round((report.totals?.attributed_revenue ?? 0) + (report.totals?.unattributed_revenue ?? 0)),
+    }))
+    .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
+
   return {
     rows,
     settings,
     trends: buildTrends(igPostsFull, leads, eventReports, settings),
+    events,
     unmapped_affiliates,
     affiliates: affs.map(a => ({ id: a.id, handle: a.handle, name: a.name, ig_handle: a.ig_handle })),
     totals: { total_posts: totalPosts, collab_posts: collabPosts, community_posts: communityPosts, reach: totReach, engagement: totEng, active_creators: igByCreator.size, revenue: totRevenue, commission: totCommission, override: totOverride, total_leads: [...leadsByHandle.values()].reduce((a, b) => a + b, 0) },
