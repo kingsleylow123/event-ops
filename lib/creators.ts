@@ -40,6 +40,7 @@ export interface Scorecard {
     revenue: number
     commission: number
     override: number
+    total_leads: number
   }
   range: { from: string; to: string }
   last_synced: string | null
@@ -197,7 +198,7 @@ export async function buildScorecard(fromISO: string = SINCE_DEFAULT, toISO?: st
     settings,
     unmapped_affiliates,
     affiliates: affs.map(a => ({ id: a.id, handle: a.handle, name: a.name, ig_handle: a.ig_handle })),
-    totals: { total_posts: totalPosts, collab_posts: collabPosts, community_posts: communityPosts, reach: totReach, engagement: totEng, active_creators: igByCreator.size, revenue: totRevenue, commission: totCommission, override: totOverride },
+    totals: { total_posts: totalPosts, collab_posts: collabPosts, community_posts: communityPosts, reach: totReach, engagement: totEng, active_creators: igByCreator.size, revenue: totRevenue, commission: totCommission, override: totOverride, total_leads: [...leadsByHandle.values()].reduce((a, b) => a + b, 0) },
     range: { from: fromISO, to },
     last_synced,
   }

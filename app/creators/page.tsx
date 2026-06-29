@@ -23,7 +23,7 @@ interface Report {
   settings: { commission_rate: number; override_rate: number }
   unmapped_affiliates: Array<{ id: string; handle: string; name: string | null; leads: number; commission: number }>
   affiliates: Array<{ id: string; handle: string; name: string | null; ig_handle: string | null }>
-  totals: { total_posts: number; collab_posts: number; community_posts: number; reach: number; engagement: number; active_creators: number; revenue: number; commission: number; override: number }
+  totals: { total_posts: number; collab_posts: number; community_posts: number; reach: number; engagement: number; active_creators: number; revenue: number; commission: number; override: number; total_leads: number }
   range: { from: string; to: string }
   last_synced: string | null
 }
@@ -107,9 +107,11 @@ export default function CreatorsPage() {
   const rows = report ? [...report.rows].sort((a, b) => (sortVal(a, sortKey) - sortVal(b, sortKey)) * sortDir) : []
   const unmappedAffs = report?.affiliates.filter(a => !a.ig_handle) ?? []
 
-  const totRevenue = rows.reduce((t, r) => t + (r.revenue ?? 0), 0)
+  const sumBy = (f: (r: Row) => number) => rows.reduce((t, r) => t + f(r), 0)
+  const totRevenue = sumBy(r => r.revenue ?? 0)
   const totComm = Math.round(totRevenue * commPct / 100)
   const totOvr = Math.round(totRevenue * ovrPct / 100)
+  const tCollab = sumBy(r => r.collab_posts), tReach = sumBy(r => r.reach), tEng = sumBy(r => r.engagement), tLeads = sumBy(r => r.leads ?? 0), tSeats = sumBy(r => r.seats ?? 0)
 
   const cols: Array<{ key: SortKey; label: string }> = [
     { key: 'collab_posts', label: 'Collab posts' },
@@ -216,6 +218,18 @@ export default function CreatorsPage() {
                   </tr>
                 </thead>
                 <tbody>
+                  {/* TOTAL row — leads shown vs full sheet for tally check */}
+                  <tr className="border-b border-zinc-800 bg-zinc-900/50 font-semibold sticky top-0">
+                    <td className="px-4 py-3">TOTAL</td>
+                    <td className="px-4 py-3 text-right text-amber-400">{tCollab}</td>
+                    <td className="px-4 py-3 text-right">{num(tReach)}</td>
+                    <td className="px-4 py-3 text-right">{num(tEng)}</td>
+                    <td className="px-4 py-3 text-right whitespace-nowrap">{tLeads} <span className="text-zinc-500 font-normal">/ {report.totals.total_leads} sheet</span></td>
+                    <td className="px-4 py-3 text-right">{tSeats}</td>
+                    <td className="px-4 py-3 text-right">{money(totRevenue)}</td>
+                    <td className="px-4 py-3 text-right text-emerald-400">{money(totComm)}</td>
+                    <td className="px-4 py-3 text-right text-indigo-300">{money(totOvr)}</td>
+                  </tr>
                   {rows.map(r => (
                     <tr key={r.ig_handle} className="border-b border-zinc-900 hover:bg-zinc-900/30">
                       <td className="px-4 py-3 whitespace-nowrap">
