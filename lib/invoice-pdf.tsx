@@ -31,7 +31,7 @@ export type InvoicePayment = {
 export type InvoiceData = {
   clientName: string
   date: Date
-  invoiceNo?: string            // e.g. 'CMO-2026-0025' — rendered top-right under the INVOICE title. Optional so Balance-mode / legacy callers keep working without burning a number.
+  invoiceNo?: string            // e.g. 'CMO-2026-0025' — rendered top-right under the INVOICE title.
   companyName?: string
   companyEmail?: string
   companyPhone?: string
@@ -74,8 +74,8 @@ function rm(n: number): string {
 const ORANGE = '#F26522'     // CMO Consulting brand color (matches the /invoice web page)
 const INK = '#111111'
 const MUTED = '#999999'
-const RULE = '#d8d8d8'
-const TOTAL_BG = '#efeeec'
+const PEACH = '#fdebe0'      // soft orange used for the TOTAL pill
+const BALANCE_BG = '#efeeec'
 
 const styles = StyleSheet.create({
   page: {
@@ -84,16 +84,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: INK,
   },
-  // Left red stripe with notch (gap from 90→108 pts approx)
-  stripeTop:    { position: 'absolute', left: 0, top: 0,   width: 12, height: 75,  backgroundColor: ORANGE },
-  stripeBottom: { position: 'absolute', left: 0, top: 90,  width: 12, bottom: 0,   backgroundColor: ORANGE },
 
   content: {
     flex: 1,
     paddingTop: 36,
-    paddingRight: 44,
+    paddingRight: 38,
     paddingBottom: 36,
-    paddingLeft: 28,
+    paddingLeft: 38,
     flexDirection: 'column',
   },
 
@@ -107,6 +104,7 @@ const styles = StyleSheet.create({
   logoImage: {
     width: 56,
     height: 56,
+    borderRadius: 8,
   },
   logoFallback: {
     flexDirection: 'row',
@@ -152,9 +150,9 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   divider: {
-    height: 1,
-    backgroundColor: RULE,
-    marginBottom: 20,
+    height: 2,
+    backgroundColor: ORANGE,
+    marginBottom: 22,
   },
 
   // Billing
@@ -177,9 +175,9 @@ const styles = StyleSheet.create({
     color: INK,
   },
   companyName: {
-    fontSize: 14,
+    fontSize: 16,
     color: INK,
-    marginBottom: 2,
+    marginBottom: 3,
   },
   companyReg: {
     fontSize: 9,
@@ -212,17 +210,20 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
 
-  // Table
+  // Table — matches /invoice web page: orange header text + orange bottom rule, no fill
   tableHeader: {
     flexDirection: 'row',
-    backgroundColor: ORANGE,
-    paddingVertical: 9,
-    paddingHorizontal: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderBottomWidth: 1.5,
+    borderBottomColor: ORANGE,
   },
   th: {
-    color: '#ffffff',
-    fontSize: 10,
+    color: ORANGE,
+    fontSize: 8,
     fontWeight: 700,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
   thDesc: { flex: 1, textAlign: 'left' },
   thQty: { width: 40, textAlign: 'center' },
@@ -231,21 +232,37 @@ const styles = StyleSheet.create({
 
   tableRow: {
     flexDirection: 'row',
-    paddingVertical: 11,
-    paddingHorizontal: 12,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#f0f0f0',
-  },
-  td: {
-    fontSize: 10.5,
-    color: '#222222',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
   },
   tdDesc: { flex: 1, textAlign: 'left', paddingRight: 8 },
   tdQty: { width: 40, textAlign: 'center' },
   tdUnit: { width: 70, textAlign: 'right' },
   tdAmount: { width: 90, textAlign: 'right' },
+  td: {
+    fontSize: 11,
+    color: '#222222',
+    lineHeight: 1.45,
+  },
 
-  // Totals stack (right column)
+  // Quick-mode TOTAL pill (peach background, orange label) — matches the web page
+  totalBox: {
+    flexDirection: 'row',
+    backgroundColor: PEACH,
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    justifyContent: 'space-between',
+    gap: 22,
+    minWidth: 220,
+    marginTop: 16,
+  },
+  totalLbl: { fontSize: 10, fontWeight: 700, letterSpacing: 1, color: ORANGE },
+  totalAmt: { fontSize: 14, fontWeight: 700, color: INK },
+
+  // Balance-mode totals stack (right column)
   totals: {
     marginTop: 14,
     marginLeft: 'auto',
@@ -277,7 +294,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: TOTAL_BG,
+    backgroundColor: BALANCE_BG,
     paddingVertical: 11,
     paddingHorizontal: 14,
     marginTop: 6,
@@ -318,32 +335,6 @@ const styles = StyleSheet.create({
     maxWidth: 260,
     lineHeight: 1.5,
   },
-
-  // Quick-mode single-line "Description / Price" variant
-  quickTableHeader: {
-    flexDirection: 'row',
-    backgroundColor: ORANGE,
-    paddingVertical: 11,
-    paddingHorizontal: 18,
-  },
-  quickHeaderTitle: { color: '#ffffff', fontSize: 12, fontWeight: 700 },
-  quickRow: {
-    flexDirection: 'row',
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-  },
-  totalBox: {
-    flexDirection: 'row',
-    backgroundColor: TOTAL_BG,
-    paddingVertical: 12,
-    paddingHorizontal: 22,
-    alignItems: 'center',
-    alignSelf: 'flex-end',
-    gap: 22,
-    marginTop: 16,
-  },
-  totalLbl: { fontSize: 11, fontWeight: 700, letterSpacing: 1 },
-  totalAmt: { fontSize: 13, fontWeight: 700 },
 })
 
 // ── Component ───────────────────────────────────────────────────────────
@@ -353,7 +344,7 @@ function InvoiceDocument({ data }: { data: InvoiceData }) {
   const subtotal = items.reduce((s, li) => s + li.qty * li.unit, 0)
   const totalPaid = (data.payments || []).reduce((s, p) => s + p.amount, 0)
   const balance = subtotal - totalPaid
-  // "Quick" look = exactly 1 line item, no payments → render single big TOTAL box
+  // "Quick" look = exactly 1 line item, no payments → render single TOTAL pill
   const isQuick = items.length === 1 && (!data.payments || data.payments.length === 0)
 
   const companyName = data.companyName || 'CMO Consulting Sdn. Bhd.'
@@ -367,10 +358,6 @@ function InvoiceDocument({ data }: { data: InvoiceData }) {
   return (
     <Document>
       <Page size="A4" style={styles.page}>
-        {/* Orange stripe (two pieces with a gap) */}
-        <View style={styles.stripeTop} />
-        <View style={styles.stripeBottom} />
-
         <View style={styles.content}>
           {/* Header */}
           <View style={styles.header}>
@@ -412,47 +399,36 @@ function InvoiceDocument({ data }: { data: InvoiceData }) {
             <Text style={styles.dateText}>{` ${dp.month} ${dp.year}`}</Text>
           </View>
 
-          {/* Table */}
-          {isQuick ? (
-            <View>
-              <View style={styles.quickTableHeader}>
-                <Text style={[styles.quickHeaderTitle, { flex: 1 }]}>Description</Text>
-                <Text style={[styles.quickHeaderTitle, { width: 100, textAlign: 'right' }]}>Price</Text>
-              </View>
-              <View style={styles.quickRow}>
-                <View style={{ flex: 1, paddingRight: 8 }}>
-                  <Text style={{ fontSize: 11, color: '#222222', lineHeight: 1.4 }}>{items[0].desc}</Text>
-                  {data.note ? (
-                    <Text style={{ fontSize: 11, color: '#222222', lineHeight: 1.4 }}>{data.note}</Text>
+          {/* Table — 4-column (Description / Qty / Unit / Amount) for both modes,
+              mirroring the /invoice web page. Quick mode appends a peach TOTAL pill;
+              Balance mode appends the Subtotal / Payments / Balance stack. */}
+          <View>
+            <View style={styles.tableHeader}>
+              <Text style={[styles.th, styles.thDesc]}>Description</Text>
+              <Text style={[styles.th, styles.thQty]}>Qty</Text>
+              <Text style={[styles.th, styles.thUnit]}>Unit</Text>
+              <Text style={[styles.th, styles.thAmount]}>Amount</Text>
+            </View>
+            {items.map((li, i) => (
+              <View key={i} style={styles.tableRow}>
+                <View style={styles.tdDesc}>
+                  <Text style={styles.td}>{li.desc}</Text>
+                  {i === 0 && data.note ? (
+                    <Text style={styles.td}>{data.note}</Text>
                   ) : null}
                 </View>
-                <Text style={{ width: 100, textAlign: 'right', fontSize: 11, color: '#222222' }}>
-                  {items[0].unit.toLocaleString('en-MY')}
-                </Text>
+                <Text style={[styles.td, styles.tdQty]}>{li.qty}</Text>
+                <Text style={[styles.td, styles.tdUnit]}>{li.unit.toLocaleString('en-MY')}</Text>
+                <Text style={[styles.td, styles.tdAmount]}>{rm(li.qty * li.unit)}</Text>
               </View>
+            ))}
+
+            {isQuick ? (
               <View style={styles.totalBox}>
                 <Text style={styles.totalLbl}>TOTAL</Text>
                 <Text style={styles.totalAmt}>{rm(subtotal)}</Text>
               </View>
-            </View>
-          ) : (
-            <View>
-              <View style={styles.tableHeader}>
-                <Text style={[styles.th, styles.thDesc]}>Description</Text>
-                <Text style={[styles.th, styles.thQty]}>Qty</Text>
-                <Text style={[styles.th, styles.thUnit]}>Unit</Text>
-                <Text style={[styles.th, styles.thAmount]}>Amount</Text>
-              </View>
-              {items.map((li, i) => (
-                <View key={i} style={styles.tableRow}>
-                  <Text style={[styles.td, styles.tdDesc]}>{li.desc}</Text>
-                  <Text style={[styles.td, styles.tdQty]}>{li.qty}</Text>
-                  <Text style={[styles.td, styles.tdUnit]}>{li.unit.toLocaleString('en-MY')}</Text>
-                  <Text style={[styles.td, styles.tdAmount]}>{rm(li.qty * li.unit)}</Text>
-                </View>
-              ))}
-
-              {/* Totals stack */}
+            ) : (
               <View style={styles.totals}>
                 <View style={[styles.totalLine, styles.subtotalLine]}>
                   <Text>Subtotal</Text>
@@ -476,8 +452,8 @@ function InvoiceDocument({ data }: { data: InvoiceData }) {
                   <Text style={styles.balanceAmt}>{rm(Math.max(0, balance))}</Text>
                 </View>
               </View>
-            </View>
-          )}
+            )}
+          </View>
 
           {/* Footer */}
           <View style={styles.footer}>
