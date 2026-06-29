@@ -225,6 +225,7 @@ function buildCoachInsights(
   const out: CoachInsight[] = []
   const mapped = rows.filter(r => r.leads != null)                         // linked → leads are real
   const lpp = (r: ScorecardRow) => (r.collab_posts > 0 ? (r.leads ?? 0) / r.collab_posts : 0)
+  const used = new Set<string>()                                            // don't feature one creator twice
 
   // Momentum: latest finished week vs the one before (exclude the in-progress week).
   const wk = trends.weekly
@@ -234,23 +235,24 @@ function buildCoachInsights(
     const cur = complete[complete.length - 1], prv = complete[complete.length - 2]
     if (cur && prv) {
       const d = prv.collab_posts > 0 ? Math.round(((cur.collab_posts - prv.collab_posts) / prv.collab_posts) * 100) : (cur.collab_posts > 0 ? 100 : 0)
-      if (cur.collab_posts < prv.collab_posts) out.push({ priority: 1, icon: '📉', text: `Team posts fell ${Math.abs(d)}% this week (${prv.collab_posts}→${cur.collab_posts}). Set a floor — 15 collab posts/creator/week — and DM anyone below it today.` })
-      else if (d > 0) out.push({ priority: 4, icon: '📈', text: `Posts up ${d}% this week — momentum's real. Publicly credit the top posters so they keep the cadence.` })
+      if (d < 0) out.push({ priority: 1, icon: '📉', text: `Team posts fell ${Math.abs(d)}% last week (${prv.collab_posts}→${cur.collab_posts}). Set a floor — 15 collab posts/creator/week — and DM anyone below it today.` })
+      else if (d > 0) out.push({ priority: 1, icon: '📈', text: `Posts up ${d}% last week (${prv.collab_posts}→${cur.collab_posts}) — momentum's real. Publicly credit the top posters so they keep the cadence.` })
+      else out.push({ priority: 4, icon: '📊', text: `Posts flat last week (${cur.collab_posts}). Push for +20% — set a 15 posts/creator/week target to break the plateau.` })
     }
   }
   // Biggest leak: heavy poster converting poorly → fix their CTA.
   const heavy = mapped.filter(r => r.collab_posts >= 10).sort((a, b) => lpp(a) - lpp(b))[0]
-  if (heavy && lpp(heavy) < 0.5) out.push({ priority: 2, icon: '🔧', text: `@${heavy.ig_handle} posted ${heavy.collab_posts} collabs but only ${heavy.leads} leads — the CTA isn't landing. Rewrite their hook + ManyChat link this week.` })
+  if (heavy && lpp(heavy) < 0.5) { out.push({ priority: 2, icon: '🔧', text: `@${heavy.ig_handle} posted ${heavy.collab_posts} collabs but only ${heavy.leads} leads — the CTA isn't landing. Rewrite their hook + ManyChat link this week.` }); used.add(heavy.ig_handle) }
   // Event to fill.
   const upcoming = events.filter(e => e.date && new Date(e.date).getTime() >= nowMs)
   const target = [...upcoming].sort((a, b) => (a.date ?? '').localeCompare(b.date ?? '')).find(e => { const c = e.capacity ?? 0; return c > 0 ? e.total_seats / c < 0.6 : e.total_seats < 5 })
   if (target) { const c = target.capacity ?? 0; const fill = c > 0 ? `${Math.round(target.total_seats / c * 100)}% full (${target.total_seats}/${c})` : `${target.total_seats} sold`; const dd = Math.max(0, Math.ceil((new Date(target.date!).getTime() - nowMs) / 86400000)); out.push({ priority: 3, icon: '💰', text: `${target.name?.trim()} is ${fill}, ${dd} days out. Aim every creator's next 3 posts at it to convert seats.` }) }
   // Clone the winner.
   const winner = [...mapped].sort((a, b) => (b.leads ?? 0) - (a.leads ?? 0))[0]
-  if (winner && (winner.leads ?? 0) > 0) out.push({ priority: 5, icon: '🏆', text: `@${winner.ig_handle} drove ${winner.leads} leads from ${winner.collab_posts} posts (${lpp(winner).toFixed(1)}/post). Make their format the template for everyone.` })
+  if (winner && (winner.leads ?? 0) > 0 && !used.has(winner.ig_handle)) { out.push({ priority: 5, icon: '🏆', text: `@${winner.ig_handle} drove ${winner.leads} leads from ${winner.collab_posts} posts (${lpp(winner).toFixed(1)}/post). Make their format the template for everyone.` }); used.add(winner.ig_handle) }
   // Hidden gem: high conversion, low volume.
   const gem = mapped.filter(r => (r.leads ?? 0) >= 3 && r.collab_posts > 0 && r.collab_posts <= 5).sort((a, b) => lpp(b) - lpp(a))[0]
-  if (gem) out.push({ priority: 6, icon: '⚡', text: `@${gem.ig_handle} converts at ${lpp(gem).toFixed(1)} leads/post but only posted ${gem.collab_posts}. Highest-ROI lever you have — get them posting 3× more.` })
+  if (gem && !used.has(gem.ig_handle)) { out.push({ priority: 6, icon: '⚡', text: `@${gem.ig_handle} converts at ${lpp(gem).toFixed(1)} leads/post but only posted ${gem.collab_posts}. Highest-ROI lever you have — get them posting 3× more.` }); used.add(gem.ig_handle) }
   // Attribution leak.
   const ul = unmapped.reduce((a, x) => a + x.leads, 0)
   if (ul >= 10) out.push({ priority: 7, icon: '🔗', text: `${ul} leads came from affiliates with no IG creator linked — map them so the right creator gets credit + commission.` })

@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useCachedFetch } from '@/lib/useCachedFetch'
 
 interface Insight { icon: string; text: string; priority: number }
@@ -29,8 +29,12 @@ function rangeFor(k: string): { from: string; to?: string } {
 export default function CreatorInsightsPage() {
   const [win, setWin] = useState('30d')
   const [copied, setCopied] = useState(false)
-  const r = rangeFor(win)
-  const url = `/api/creators?from=${encodeURIComponent(r.from)}${r.to ? `&to=${encodeURIComponent(r.to)}` : ''}`
+  // Memoise so the rolling 7d/30d `from` (Date.now()) is computed once per window —
+  // otherwise the url changes every render and useCachedFetch refetches in a loop.
+  const url = useMemo(() => {
+    const r = rangeFor(win)
+    return `/api/creators?from=${encodeURIComponent(r.from)}${r.to ? `&to=${encodeURIComponent(r.to)}` : ''}`
+  }, [win])
   const { data: report, loading } = useCachedFetch<Report>(`creators:v2:${win}`, url)
 
   const insights = report?.insights ?? []
