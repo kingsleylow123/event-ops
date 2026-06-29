@@ -1920,13 +1920,14 @@ DATA>>>`
       for (const p of inv.payments_received) preview += `\n  − ${esc(p.label)}: ${showRM(Number(p.amount) || 0)}`
       preview += `\n${b('Balance due')}: ${showRM((amount as number) - recv)}`
     }
-    // Email delivery is on by default — show the exact recipient (or a missing-
-    // address warning) BEFORE the YES. Skipped only when the admin opted out.
+    // Keep the preview clean — only WARN when email is on by default but the
+    // attendee has no address on file. The success case ("will email to X") is
+    // implicit and gets confirmed in the post-YES "✅ Invoice sent to X" reply.
     if (inv.email_to_client !== false) {
       const toEmail = (inv.client_email || (a ? a.email : inv.customer_email) || '').trim()
-      preview += toEmail
-        ? `\n✉️ Will also email to ${b(toEmail)} (BCC finance)`
-        : `\n⚠️ No email on file for ${esc(stageName)} — PDF will go to this chat only. Include an address if you want it emailed.`
+      if (!toEmail) {
+        preview += `\n⚠️ No email on file for ${esc(stageName)} — PDF will go to this chat only. Include an address if you want it emailed.`
+      }
     }
     preview += `\n\nReply <b>YES</b> to send, or "cancel". Expires in 10 min.`
     return preview
