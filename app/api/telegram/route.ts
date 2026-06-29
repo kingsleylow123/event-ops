@@ -1935,13 +1935,17 @@ DATA>>>`
 // Returns '' to signal "fall through to natural language (askClaude)".
 // allEvents lets data-scoped commands target a non-active event via matchEventLoose;
 // chatId is needed to resolve a pending "YES" invoice confirmation.
+// Return semantics:
+//   string (non-empty) → send as the bot's reply
+//   ''                 → fall through to natural language (askClaude / agent)
+//   null               → already handled (e.g. PDF sent inside the YES gate); suppress any further reply
 async function handle(
   text: string,
   ev: Row,
   d: Awaited<ReturnType<typeof loadAll>>,
   allEvents: Awaited<ReturnType<typeof getAllEvents>>,
   chatId: number,
-): Promise<string> {
+): Promise<string | null> {
   const trimmed = text.trim()
   const cmd = trimmed.toLowerCase()
 
@@ -2075,8 +2079,11 @@ async function handle(
           mode: (mem.pending.mode as 'quick' | 'balance') || 'quick',
         }
         const status = await executeInvoiceTool(ti, chatId, ev)
-        // PDF already sent inside executeInvoiceTool — swallow the success string.
-        return status.startsWith('Invoice PDF sent') ? '' : status
+        // PDF already sent inside executeInvoiceTool — return null so the POST
+        // handler SUPPRESSES any further reply. Returning '' here used to fall
+        // through to the agent, which then narrated "Nothing's staged" because
+        // the YES had just cleared the pending.
+        return status.startsWith('Invoice PDF sent') ? null : status
       }
       if (isNo) {
         await clearPending(chatId)
@@ -2296,8 +2303,10 @@ async function processMessage(message: Record<string, unknown>): Promise<void> {
     const data = await loadAll(ev.id as string)
     const allEvents = await getAllEvents()
 
-    let reply = await handle(text, ev, data, allEvents, chatId)
-    if (!reply) {
+    let reply: string | null = await handle(text, ev, data, allEvents, chatId)
+    // null = handle() already sent the response (e.g. invoice PDF). Suppress.
+    // '' = fall through to natural language. Any other string = send it.
+    if (reply === '') {
       await sendTyping(chatId)
       // Agent mode: tool-using agent for everything EXCEPT invoice commands.
       // Flag off → legacy single-shot askClaude path.
@@ -2321,7 +2330,6 @@ async function processMessage(message: Record<string, unknown>): Promise<void> {
       }
     }
 
-    // Empty reply = the handler already sent something (e.g. an invoice PDF).
     if (reply) {
       await sendMessage(chatId, reply)
       await appendTurn(chatId, text, reply)
