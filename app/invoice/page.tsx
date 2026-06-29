@@ -327,6 +327,19 @@ function InvoiceContent() {
   }
 
   async function exportPDF() {
+    // Quick Invoice → atomically issue & lock the CMO number before capturing
+    // the PDF, so saving (and sharing the file via WhatsApp / screenshot)
+    // advances the DB counter just like Email does. Falls back to the peeked
+    // draft if the DB call fails — never blocks the save.
+    if (mode === 'quick' && !issued && quickTotal > 0) {
+      const issuedNo = await issueNumber(quickTotal)
+      if (issuedNo) {
+        flushSync(() => {
+          setInvoiceNo(issuedNo)
+          setIssued(true)
+        })
+      }
+    }
     await renderPdf('save')
   }
 
@@ -450,7 +463,7 @@ function InvoiceContent() {
       // Add as a ticket row, dropping the empty placeholder row if present.
       // Stripe product name already contains "(non-refundable)" — skip the note line
       setQuickItems(items => [
-        ...items.filter(it => it.desc.trim() || num(it.price) !== 0),
+        ...items.filter(it => num(it.price) !== 0),
         {
           desc: finalDesc,
           // Never pull the attendee's notes onto the invoice — they hold internal
@@ -660,6 +673,7 @@ function InvoiceContent() {
                     className="inv-edit"
                     value={invoiceNo}
                     onChange={e => setInvoiceNo(e.target.value)}
+                    readOnly={issued}
                     style={{ textAlign: 'right', fontSize: 13, fontWeight: 600, letterSpacing: 1, color: '#F26522', display: 'block', marginLeft: 'auto', minWidth: 150 }}
                   />
                 </div>
