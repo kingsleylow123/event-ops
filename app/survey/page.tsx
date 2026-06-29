@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, Suspense } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { isValidPhone } from '@/lib/validate'
 import { DEFAULT_EVENT_CONFIG, type EventConfig } from '@/lib/event-config'
 
@@ -52,7 +52,9 @@ function isValidUrl(s: string): boolean {
 
 function SurveyForm() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const eventId = searchParams.get('event') || ''
+  const [noActiveEvent, setNoActiveEvent] = useState(false)
   const attendeeId = searchParams.get('a') || ''
   const prefillName = searchParams.get('name') || ''
 
@@ -99,6 +101,25 @@ function SurveyForm() {
         .catch(() => {})
     }
   }, [eventId, attendeeId])
+
+  // No ?event= in the URL → resolve the current active event and canonicalise the
+  // link, so a single stable /survey URL always points at the live workshop.
+  useEffect(() => {
+    if (eventId) return
+    let cancelled = false
+    fetch('/api/active-event', { cache: 'no-store' })
+      .then(r => { if (!r.ok) throw new Error(); return r.json() })
+      .then((d: { id?: string | null }) => {
+        if (cancelled) return
+        if (d?.id) {
+          const qs = new URLSearchParams(searchParams.toString())
+          qs.set('event', d.id)
+          router.replace(`/survey?${qs.toString()}`)
+        } else setNoActiveEvent(true)
+      })
+      .catch(() => { if (!cancelled) setNoActiveEvent(true) })
+    return () => { cancelled = true }
+  }, [eventId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function set(key: keyof typeof form, value: string) {
     setForm(prev => ({ ...prev, [key]: value }))
@@ -217,6 +238,16 @@ function SurveyForm() {
             </a>
           </div>
         </div>
+      </div>
+    )
+  }
+
+  if (!eventId) {
+    // While /api/active-event resolves we show a loader; only fall back to a
+    // message once we've confirmed there's no active event to redirect to.
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a]">
+        <p className="text-zinc-500 text-sm">{noActiveEvent ? 'No upcoming workshop right now — check back soon.' : 'Loading…'}</p>
       </div>
     )
   }

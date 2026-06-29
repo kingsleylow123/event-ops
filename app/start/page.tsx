@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, useRef, Suspense } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { isValidPhone } from '@/lib/validate'
 import { PREP_STEP_KEYS, GLCC_PREP_STEP_KEYS, PREP_TRACKS, PREP_TRACK_TOOLS, emptySteps, type PrepTrackKey } from '@/lib/prep-steps'
 import { GLCC_SETUP_SKILL } from '@/lib/glcc-skill'
@@ -29,7 +29,9 @@ type OS = 'mac' | 'windows' | null
 
 function StartContent() {
   const params = useSearchParams()
+  const router = useRouter()
   const eventId = params.get('event') || ''
+  const [noActiveEvent, setNoActiveEvent] = useState(false)
   // Tester mode: ?preview=1 unlocks every step and never writes to the live dashboard.
   const previewUnlock = params.get('preview') === '1' || params.get('unlock') === '1'
 
@@ -85,6 +87,26 @@ function StartContent() {
     return () => { cancelled = true }
   }, [eventId]) // eslint-disable-line react-hooks/exhaustive-deps
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  // No ?event= in the URL → resolve the current active event and canonicalise the
+  // link. Lets the bare /start link always point at the live workshop, so a single
+  // stable URL never goes stale when the active event changes.
+  useEffect(() => {
+    if (eventId) return
+    let cancelled = false
+    fetch('/api/active-event', { cache: 'no-store' })
+      .then(r => { if (!r.ok) throw new Error(); return r.json() })
+      .then((d: { id?: string | null }) => {
+        if (cancelled) return
+        if (d?.id) {
+          const qs = new URLSearchParams(params.toString())
+          qs.set('event', d.id)
+          router.replace(`/start?${qs.toString()}`)
+        } else setNoActiveEvent(true)
+      })
+      .catch(() => { if (!cancelled) setNoActiveEvent(true) })
+    return () => { cancelled = true }
+  }, [eventId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const isGlcc = resolveEventConfig(facts?.config).prep_variant === 'glcc'
   const stepKeys: readonly string[] = isGlcc ? GLCC_PREP_STEP_KEYS : PREP_STEP_KEYS
@@ -217,7 +239,13 @@ function StartContent() {
   }
 
   if (!eventId) {
-    return <div className="min-h-screen flex items-center justify-center bg-black"><p className="text-zinc-500">Invalid link.</p></div>
+    // While /api/active-event resolves we show a loader; only fall back to a
+    // message once we've confirmed there's no active event to redirect to.
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#060606' }}>
+        <p className="text-zinc-500">{noActiveEvent ? 'No upcoming workshop right now — check back soon.' : 'Loading…'}</p>
+      </div>
+    )
   }
 
   // GLCC setup page is gated to paid attendees (preview=1 bypasses for testing).
