@@ -8,7 +8,7 @@ import type { TicketType } from '@/lib/supabase'
 type CheckinState =
   | { status: 'idle' }
   | { status: 'loading' }
-  | { status: 'success'; name: string; ticket_type: TicketType; is_double: boolean; plus_one_done: boolean }
+  | { status: 'success'; name: string; ticket_type: TicketType; is_double: boolean; plus_one_done: boolean; is_facilitator: boolean }
   | { status: 'not_found' }
   | { status: 'already_checked_in'; name: string }
   | { status: 'multiple'; attendees: { id: string; name: string; ticket_type: string }[] }
@@ -59,6 +59,7 @@ export default function CheckinPage() {
           ticket_type: data.attendee.ticket_type,
           is_double: data.attendee.is_double,
           plus_one_done: false,
+          is_facilitator: data.attendee.is_facilitator === true,
         })
       } else if (data.error === 'not_found') {
         setState({ status: 'not_found' })
@@ -90,6 +91,7 @@ export default function CheckinPage() {
           ticket_type: data.attendee.ticket_type,
           is_double: data.attendee.is_double ?? false,
           plus_one_done: false,
+          is_facilitator: data.attendee.is_facilitator === true,
         })
       } else if (data.error === 'already_checked_in') {
         setState({ status: 'already_checked_in', name: data.name })
@@ -195,15 +197,19 @@ export default function CheckinPage() {
             <div className="text-6xl">✅</div>
             <div>
               <h2 className="text-2xl font-bold text-white">Welcome, {state.name}!</h2>
-              <p className="text-zinc-400 text-sm mt-1">You&apos;re checked in</p>
+              <p className="text-zinc-400 text-sm mt-1">
+                {state.is_facilitator ? "You're checked in (facilitator)" : "You're checked in"}
+              </p>
             </div>
-            <div className="inline-block px-4 py-1.5 rounded-full text-sm font-semibold"
-              style={{ background: '#e8563a22', color: '#e8563a' }}>
-              {TICKET_LABELS[state.ticket_type] ?? state.ticket_type}
-            </div>
+            {!state.is_facilitator && (
+              <div className="inline-block px-4 py-1.5 rounded-full text-sm font-semibold"
+                style={{ background: '#e8563a22', color: '#e8563a' }}>
+                {TICKET_LABELS[state.ticket_type] ?? state.ticket_type}
+              </div>
+            )}
 
             {/* x2 ticket section */}
-            {state.is_double && !state.plus_one_done && (
+            {!state.is_facilitator && state.is_double && !state.plus_one_done && (
               <div className="mt-2 rounded-xl p-4 border" style={{ background: '#1a1a1a', borderColor: '#333' }}>
                 <p className="text-white font-semibold text-sm mb-1">🎟️ You have 2 tickets!</p>
                 <p className="text-zinc-400 text-xs mb-3">Is your +1 guest also here?</p>
@@ -225,14 +231,14 @@ export default function CheckinPage() {
               </div>
             )}
 
-            {state.is_double && state.plus_one_done && (
+            {!state.is_facilitator && state.is_double && state.plus_one_done && (
               <div className="rounded-xl p-3 border" style={{ background: '#0d2b12', borderColor: '#1a5c28' }}>
                 <p className="text-green-400 font-semibold text-sm">✅ +1 Guest also checked in!</p>
                 <p className="text-green-600 text-xs mt-0.5">Both tickets confirmed 🎉</p>
               </div>
             )}
 
-            {(!state.is_double || state.plus_one_done) && (
+            {(state.is_facilitator || !state.is_double || state.plus_one_done) && (
               <button onClick={reset}
                 className="w-full py-3 rounded-xl text-zinc-400 text-sm font-medium border border-zinc-800">
                 Check in another person
