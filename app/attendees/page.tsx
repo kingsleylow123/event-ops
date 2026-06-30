@@ -44,7 +44,7 @@ export default function AttendeesPage() {
   const searchParams = useSearchParams()
   const facilitatorMode = searchParams.get('type') === 'facilitator'
   const { data: eventsData } = useCachedFetch<Event[]>('events', '/api/events')
-  const { data: facilStatsData } = useCachedFetch<FacilitatorStat[]>(
+  const { data: facilStatsData, refetch: refetchFacilStats } = useCachedFetch<FacilitatorStat[]>(
     facilitatorMode ? 'facilitator-stats' : null,
     facilitatorMode ? '/api/facilitator-stats' : null,
     facilitatorMode,
@@ -188,16 +188,23 @@ export default function AttendeesPage() {
       updated.attendance_confirmed = updated.day1_attended || updated.day2_attended
       return updated
     }))
+    // Attendance changed → the 🔥 facilitator leaderboard may have moved; refresh it.
+    refetchFacilStats()
   }
 
+  // Single-day "Attended" toggle. day1_attended is the source of truth for a one-day
+  // event; the DB trigger derives attendance_confirmed = day1 || day2. We drive
+  // day1_attended (not attendance_confirmed directly) so a tick/untick here is
+  // reflected in the 🔥 leaderboard, which counts events actually attended.
   async function toggleAttendance(a: Attendee) {
     const confirmed = !a.attendance_confirmed
     await fetch('/api/attendees', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: a.id, attendance_confirmed: confirmed }),
+      body: JSON.stringify({ id: a.id, day1_attended: confirmed }),
     })
-    setAttendees(prev => prev.map(x => x.id === a.id ? { ...x, attendance_confirmed: confirmed } : x))
+    setAttendees(prev => prev.map(x => x.id === a.id ? { ...x, day1_attended: confirmed, attendance_confirmed: confirmed } : x))
+    refetchFacilStats()
   }
 
   async function deleteAttendee(id: string) {
