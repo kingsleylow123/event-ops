@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
 
   const { data: attendee, error: fetchError } = await supabase
     .from('attendees')
-    .select('id, name, phone, event_id, ticket_type, payment_amount, payment_status, attendance_confirmed, day1_attended, day2_attended')
+    .select('id, name, phone, event_id, ticket_type, payment_amount, payment_status, attendance_confirmed, day1_attended, day2_attended, is_facilitator')
     .eq('id', attendeeId)
     .single()
 
@@ -65,13 +65,14 @@ export async function POST(req: NextRequest) {
     const samePhone = matchedPhone && phoneDigits(a.phone as string | null).length >= 8 && phoneDigits(a.phone as string | null) === matchedPhone
     if (sameName || samePhone) matchCount++
   }
-  const is_double = matchCount >= 2
+  const isFacilitator = attendee.is_facilitator === true
+  const is_double = isFacilitator ? false : matchCount >= 2
 
   // Fire-and-forget Telegram ping with the running per-day count.
   void pingCheckin({ event_id: attendee.event_id as string, name: attendee.name as string, day: checkDay })
 
   return NextResponse.json(
-    { success: true, attendee: { name: attendee.name, ticket_type: attendee.ticket_type, is_double }, day: checkDay },
+    { success: true, attendee: { name: attendee.name, ticket_type: attendee.ticket_type, is_double, is_facilitator: isFacilitator }, day: checkDay },
     { headers: NO_STORE_HEADERS }
   )
 }

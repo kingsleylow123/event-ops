@@ -56,9 +56,9 @@ export async function POST(req: NextRequest) {
 
   const { data, error } = await supabase
     .from('attendees')
-    .select('id, name, phone, ticket_type, payment_amount, attendance_confirmed, day1_attended, day2_attended, notes')
+    .select('id, name, phone, ticket_type, payment_amount, attendance_confirmed, day1_attended, day2_attended, notes, is_facilitator')
     .eq('event_id', eventId)
-    .in('payment_status', ['paid', 'free'])
+    .or('payment_status.in.(paid,free),is_facilitator.eq.true')
     .or('notes.is.null,notes.neq.upgrade_payment')
 
   if (error) {
@@ -134,13 +134,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: 'db_error', detail: updateError.message }, { status: 500, headers: NO_STORE_HEADERS })
   }
 
-  const double = hasPlusOne(attendee, allAttendees)
+  const isFacilitator = attendee.is_facilitator === true
+  const double = isFacilitator ? false : hasPlusOne(attendee, allAttendees)
 
   // Fire-and-forget Telegram ping with the running per-day count.
   void pingCheckin({ event_id: eventId, name: attendee.name as string, day: checkDay })
 
   return NextResponse.json(
-    { success: true, attendee: { name: attendee.name, ticket_type: attendee.ticket_type, is_double: double }, day: checkDay },
+    { success: true, attendee: { name: attendee.name, ticket_type: attendee.ticket_type, is_double: double, is_facilitator: isFacilitator }, day: checkDay },
     { headers: NO_STORE_HEADERS }
   )
 }
