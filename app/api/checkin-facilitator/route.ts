@@ -51,6 +51,9 @@ export async function POST(req: NextRequest) {
   const phoneMatches = phoneProvided
     ? allFacis.filter(a => {
         const stored = (a.phone ?? '').replace(/\D/g, '')
+        // A blank/too-short stored phone must never match — otherwise endsWith('')
+        // is always true and a no-phone facilitator (e.g. Huda) matches everyone.
+        if (stored.length < 8) return false
         const storedLocal = stored.startsWith('60') ? stored.slice(2) : stored
         return storedLocal === phoneDigits || stored === rawPhoneDigits ||
           storedLocal.endsWith(phoneDigits) || phoneDigits.endsWith(storedLocal)
