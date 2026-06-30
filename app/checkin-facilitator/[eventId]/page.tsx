@@ -140,7 +140,7 @@ export default function FacilitatorCheckinPage() {
                 type="text"
                 value={name}
                 onChange={e => setName(e.target.value)}
-                placeholder="e.g. Lucas"
+                placeholder="e.g. Noona"
                 disabled={state.status === 'loading'}
                 className="w-full rounded-xl px-4 py-3.5 text-white text-base outline-none disabled:opacity-50"
                 style={{ background: '#1a1a1a', border: '1px solid #333' }}
