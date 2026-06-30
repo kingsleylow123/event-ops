@@ -601,11 +601,12 @@ export default function AttendeesPage() {
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-[#111] border border-zinc-800 rounded-xl p-6 w-full max-w-sm text-center">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold">QR Check-in</h2>
+              <h2 className="text-lg font-bold">{facilitatorMode ? 'Facilitator QR Check-in' : 'QR Check-in'}</h2>
               <button onClick={() => setShowQRModal(false)} className="text-zinc-500 hover:text-white text-xl leading-none">✕</button>
             </div>
             {(() => {
-              const url = `https://event-ops-six.vercel.app/checkin/${selectedEventId}`
+              const path = facilitatorMode ? `checkin-facilitator/${selectedEventId}` : `checkin/${selectedEventId}`
+              const url = `https://event-ops-six.vercel.app/${path}`
               const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`
               return (
                 <>
