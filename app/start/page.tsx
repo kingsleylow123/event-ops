@@ -6,6 +6,7 @@ import { PREP_STEP_KEYS, GLCC_PREP_STEP_KEYS, PREP_TRACKS, PREP_TRACK_TOOLS, emp
 import { GLCC_SETUP_SKILL } from '@/lib/glcc-skill'
 import { resolveEventConfig, type EventConfig } from '@/lib/event-config'
 import { HALFDAY_PREP_QUIZ, type PrepQuiz } from '@/lib/prep-quiz'
+import { EVENT_GRACE_MS } from '@/lib/event'
 
 // Countdown deadline = midnight (00:00) at the START of the event's calendar
 // day, in Malaysia time (UTC+8). Take the event's date as seen in Asia/
@@ -107,6 +108,26 @@ function StartContent() {
       .catch(() => { if (!cancelled) setNoActiveEvent(true) })
     return () => { cancelled = true }
   }, [eventId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Stale-link guard: if this link points at a workshop that's already well past
+  // (beyond the 3-day grace) and a different event is now active, forward to the
+  // live one. Old WhatsApp/QR links carry a fixed ?event=<past id>, so without this
+  // they'd strand attendees on a finished workshop's date. preview=1 testers bypass.
+  useEffect(() => {
+    if (!eventId || previewUnlock || !facts?.date) return
+    if (Date.now() - new Date(facts.date).getTime() <= EVENT_GRACE_MS) return
+    let cancelled = false
+    fetch('/api/active-event', { cache: 'no-store' })
+      .then(r => { if (!r.ok) throw new Error(); return r.json() })
+      .then((d: { id?: string | null }) => {
+        if (cancelled || !d?.id || d.id === eventId) return
+        const qs = new URLSearchParams(params.toString())
+        qs.set('event', d.id)
+        router.replace(`/start?${qs.toString()}`)
+      })
+      .catch(() => { /* leave them on the requested event */ })
+    return () => { cancelled = true }
+  }, [eventId, facts?.date]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const isGlcc = resolveEventConfig(facts?.config).prep_variant === 'glcc'
   const stepKeys: readonly string[] = isGlcc ? GLCC_PREP_STEP_KEYS : PREP_STEP_KEYS

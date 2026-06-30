@@ -3,6 +3,7 @@ import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { isValidPhone } from '@/lib/validate'
 import { DEFAULT_EVENT_CONFIG, type EventConfig } from '@/lib/event-config'
+import { EVENT_GRACE_MS } from '@/lib/event'
 
 const INDUSTRIES = [
   'Sales & Business Development',
@@ -62,6 +63,7 @@ function SurveyForm() {
   const [submitted, setSubmitted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [eventName, setEventName] = useState('')
+  const [eventDate, setEventDate] = useState<string | null>(null)
   const [format, setFormat] = useState('workshop')
   const [cfg, setCfg] = useState<EventConfig>(DEFAULT_EVENT_CONFIG)
   const [memberNo, setMemberNo] = useState<number | null>(null)
@@ -93,8 +95,9 @@ function SurveyForm() {
     if (eventId) {
       fetch(`/api/survey?event_id=${eventId}&name=1`)
         .then(r => r.json())
-        .then((d: { name?: string; format?: string; config?: EventConfig }) => {
+        .then((d: { name?: string; date?: string | null; format?: string; config?: EventConfig }) => {
           if (d?.name) setEventName(d.name)
+          if (d?.date) setEventDate(d.date)
           if (d?.format) setFormat(d.format)
           if (d?.config) setCfg(d.config)
         })
@@ -120,6 +123,27 @@ function SurveyForm() {
       .catch(() => { if (!cancelled) setNoActiveEvent(true) })
     return () => { cancelled = true }
   }, [eventId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Stale-link guard: a fixed ?event=<past id> from an old WhatsApp/QR link points
+  // at a finished workshop. If the event is well past (beyond the 3-day grace) and a
+  // different one is now active, forward to the live event so nobody surveys a dead
+  // workshop. Drop the attendee binding (?a=) — it belonged to the old event.
+  useEffect(() => {
+    if (!eventId || !eventDate) return
+    if (Date.now() - new Date(eventDate).getTime() <= EVENT_GRACE_MS) return
+    let cancelled = false
+    fetch('/api/active-event', { cache: 'no-store' })
+      .then(r => { if (!r.ok) throw new Error(); return r.json() })
+      .then((d: { id?: string | null }) => {
+        if (cancelled || !d?.id || d.id === eventId) return
+        const qs = new URLSearchParams(searchParams.toString())
+        qs.set('event', d.id)
+        qs.delete('a')
+        router.replace(`/survey?${qs.toString()}`)
+      })
+      .catch(() => { /* leave them on the requested event */ })
+    return () => { cancelled = true }
+  }, [eventId, eventDate]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function set(key: keyof typeof form, value: string) {
     setForm(prev => ({ ...prev, [key]: value }))

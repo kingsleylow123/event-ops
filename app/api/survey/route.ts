@@ -148,9 +148,10 @@ export async function GET(req: NextRequest) {
   // Public mode (?name=1): return the event name + format + content config for
   // the survey form header, variant selection, and thank-you links. No PII.
   if (searchParams.get('name') === '1') {
-    const { data } = await supabase.from('events').select('name, format, config').eq('id', event_id).single()
+    const { data } = await supabase.from('events').select('name, date, format, config').eq('id', event_id).single()
     return NextResponse.json({
       name: data?.name ?? null,
+      date: data?.date ?? null,
       format: data?.format ?? 'workshop',
       config: resolveEventConfig(data?.config),
     })
