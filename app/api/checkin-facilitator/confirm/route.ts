@@ -38,7 +38,9 @@ export async function POST(req: NextRequest) {
 
   const { error: updateError } = await supabase
     .from('attendees')
-    .update({ [dayField]: true })
+    // Mirror the dashboard invariant (attendance_confirmed = day1 || day2) so the
+    // single-day "Attended" column reflects QR check-ins, not just dashboard toggles.
+    .update({ [dayField]: true, attendance_confirmed: true })
     .eq('id', attendeeId)
 
   if (updateError) {
