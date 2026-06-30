@@ -37,7 +37,9 @@ export async function GET() {
     const key = norm(f.name)
     if (!key) continue
     if (!byName.has(key)) byName.set(key, { display: (f.name ?? '').trim(), eventIds: new Set() })
-    byName.get(key)!.eventIds.add(f.event_id)
+    // Count an event only if the facilitator actually attended it (day1 or day2),
+    // so upcoming events and no-shows don't inflate the total / streak badges.
+    if (f.day1_attended || f.day2_attended) byName.get(key)!.eventIds.add(f.event_id)
   }
 
   // Per-name → set of multi-day event ids where they were present on BOTH days.
