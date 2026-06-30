@@ -27,6 +27,22 @@ function uid(): string {
   return Math.random().toString(36).slice(2, 9)
 }
 
+// Standard speaker needs applied to every event by default. An event can still
+// override its own list — this only fills in when speaker_needs is empty.
+const DEFAULT_SPEAKER_NEEDS: string[] = [
+  '1X table and chair',
+  'Clicker',
+  'Macbook',
+  '2 mic for participants and speaker',
+  'Flipchart',
+  'Tv',
+]
+
+function resolveSpeakerNeeds(list: string[] | undefined | null): string[] {
+  const cleaned = (list ?? []).filter(n => n && n.trim().length > 0)
+  return cleaned.length > 0 ? (list ?? []) : DEFAULT_SPEAKER_NEEDS
+}
+
 function emptyFloorPlan(): FloorPlan {
   return { stage_speaker: '', speaker_needs: [], sections: [], registration: '', main_door: '', fnb: '', videographer: '', facilitators: [] }
 }
@@ -91,7 +107,7 @@ export default function FloorPlanPage() {
   function startEdit() {
     setDraft({
       stage_speaker: currentPlan.stage_speaker ?? '',
-      speaker_needs: [...(currentPlan.speaker_needs ?? [])],
+      speaker_needs: [...resolveSpeakerNeeds(currentPlan.speaker_needs)],
       sections: (currentPlan.sections ?? []).map(s => ({ ...s })),
       registration: currentPlan.registration ?? '',
       main_door: currentPlan.main_door ?? '',
@@ -319,6 +335,12 @@ export default function FloorPlanPage() {
   }, [selectedEventId])
 
   const display = editing ? draft : currentPlan
+  // In view/present modes, fall back to DEFAULT_SPEAKER_NEEDS when the event hasn't
+  // set its own list. In edit mode we show the draft verbatim so the user can
+  // freely clear items.
+  const displaySpeakerNeeds: string[] = editing
+    ? (draft.speaker_needs ?? [])
+    : resolveSpeakerNeeds(currentPlan.speaker_needs)
 
   if (loading) return <div className="text-zinc-500 mt-20 text-center">Loading…</div>
 
@@ -470,7 +492,7 @@ export default function FloorPlanPage() {
               so the canvas stays uncluttered. Auto-open in edit mode (so you can actually
               fill them in) by OR-ing `editing` with the manual toggle. */}
           {(() => {
-            const needsCount = (display.speaker_needs ?? []).filter(n => n).length
+            const needsCount = displaySpeakerNeeds.filter(n => n).length
             const facilCount = (display.facilitators ?? []).filter(f => f.name).length
             const open = editing || infoOpen
             return (
@@ -506,7 +528,7 @@ export default function FloorPlanPage() {
                         </div>
                       ) : needsCount > 0 ? (
                         <ul className="space-y-0.5">
-                          {(display.speaker_needs ?? []).map((need, i) => need && (
+                          {displaySpeakerNeeds.map((need, i) => need && (
                             <li key={i} className="text-xs text-zinc-300 flex items-start gap-1.5">
                               <span className="text-blue-400 flex-shrink-0">•</span>
                               <span>{need}</span>
@@ -821,13 +843,13 @@ export default function FloorPlanPage() {
               ))}
             </div>
 
-            {((currentPlan.speaker_needs ?? []).filter(n => n).length > 0 || (currentPlan.facilitators ?? []).length > 0) && (
+            {(displaySpeakerNeeds.filter(n => n).length > 0 || (currentPlan.facilitators ?? []).length > 0) && (
               <div className="mt-6 lg:mt-0 lg:border-l lg:border-dashed lg:border-zinc-700 lg:pl-4 space-y-5">
-                {(currentPlan.speaker_needs ?? []).filter(n => n).length > 0 && (
+                {displaySpeakerNeeds.filter(n => n).length > 0 && (
                   <div className="bg-blue-950/30 border border-blue-800/40 rounded-lg p-3">
                     <p className="text-[10px] text-blue-300 uppercase tracking-wider font-semibold mb-1.5">🎤 Speaker needs</p>
                     <ul className="space-y-0.5">
-                      {(currentPlan.speaker_needs ?? []).map((need, i) => need && (
+                      {displaySpeakerNeeds.map((need, i) => need && (
                         <li key={i} className="text-xs text-zinc-300 flex items-start gap-1.5">
                           <span className="text-blue-400 flex-shrink-0">•</span>
                           <span>{need}</span>
