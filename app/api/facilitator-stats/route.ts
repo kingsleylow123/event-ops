@@ -12,14 +12,14 @@ export async function GET() {
 
   const [eventsRes, facilsRes] = await Promise.all([
     supabaseAdmin.from('events').select('id, name, date, floor_plan').order('date', { ascending: true }),
-    supabaseAdmin.from('attendees').select('name, event_id, day1_attended, day2_attended').eq('is_facilitator', true),
+    supabaseAdmin.from('attendees').select('name, event_id, day1_attended, day2_attended, attendance_confirmed').eq('is_facilitator', true),
   ])
 
   if (eventsRes.error) return NextResponse.json({ error: eventsRes.error.message }, { status: 500 })
   if (facilsRes.error) return NextResponse.json({ error: facilsRes.error.message }, { status: 500 })
 
   type EventRow = { id: string; name: string | null; date: string | null; floor_plan: { days?: unknown[] } | null }
-  type FacilRow = { name: string | null; event_id: string; day1_attended: boolean | null; day2_attended: boolean | null }
+  type FacilRow = { name: string | null; event_id: string; day1_attended: boolean | null; day2_attended: boolean | null; attendance_confirmed: boolean | null }
 
   const allEvents = (eventsRes.data ?? []) as EventRow[]
   // Owner-name suppression: Huda runs the dashboard and doesn't want her own
@@ -37,9 +37,11 @@ export async function GET() {
     const key = norm(f.name)
     if (!key) continue
     if (!byName.has(key)) byName.set(key, { display: (f.name ?? '').trim(), eventIds: new Set() })
-    // Count an event only if the facilitator actually attended it (day1 or day2),
-    // so upcoming events and no-shows don't inflate the total / streak badges.
-    if (f.day1_attended || f.day2_attended) byName.get(key)!.eventIds.add(f.event_id)
+    // Count an event only if attendance is confirmed — the SAME column the
+    // "Attended" checkbox shows. This guarantees the 🔥 count can never disagree
+    // with the ticks (day1_attended can get left stale by an untick from an older
+    // cached page; attendance_confirmed always reflects what's on screen).
+    if (f.attendance_confirmed) byName.get(key)!.eventIds.add(f.event_id)
   }
 
   // Per-name → set of multi-day event ids where they were present on BOTH days.
