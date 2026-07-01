@@ -53,3 +53,44 @@ export async function notifyAdmins(html: string) {
     await sendMessage(id, html)
   }
 }
+
+// ── Inline keyboard / callback support (added for the ads-council approval flow) ─
+export type InlineButton = { text: string; callback_data: string }
+
+// Send a single (un-chunked) message with inline buttons attached. Cards must be
+// short enough to fit one Telegram message so the keyboard stays attached.
+export async function sendMessageWithButtons(chatId: number | string, html: string, buttons: InlineButton[][]) {
+  await tg('sendMessage', {
+    chat_id: chatId,
+    text: html,
+    parse_mode: 'HTML',
+    disable_web_page_preview: true,
+    reply_markup: { inline_keyboard: buttons },
+  })
+}
+
+export async function notifyAdminsWithButtons(html: string, buttons: InlineButton[][]) {
+  for (const id of ALLOWED_IDS) await sendMessageWithButtons(id, html, buttons)
+}
+
+// Acknowledge a button tap (stops the Telegram loading spinner).
+export async function answerCallbackQuery(callbackQueryId: string, text?: string) {
+  await tg('answerCallbackQuery', { callback_query_id: callbackQueryId, text: text ? text.slice(0, 200) : undefined })
+}
+
+// Replace a message's text (used to show the decision outcome on the card),
+// dropping the buttons so it can't be tapped twice.
+export async function editMessageText(chatId: number | string, messageId: number, html: string) {
+  await tg('editMessageText', {
+    chat_id: chatId,
+    message_id: messageId,
+    text: html,
+    parse_mode: 'HTML',
+    disable_web_page_preview: true,
+  })
+}
+
+export function isAllowedTelegramUser(id: number | string | undefined | null): boolean {
+  if (id == null) return false
+  return ALLOWED_IDS.includes(String(id))
+}

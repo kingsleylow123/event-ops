@@ -52,6 +52,7 @@ const icons = {
   deposits: I(<><rect x="2" y="6" width="20" height="13" rx="2" /><circle cx="12" cy="12.5" r="3" /><path d="M6 6V4h14a2 2 0 0 1 2 2v9" /></>),
   reports: I(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M8 13h2M8 17h2M14 13h2M14 17h2" /></>),
   commandcenter: I(<><path d="M3 5h18l-7 8.5V19l-4 2v-7.5z" /></>),
+  csuite: I(<><path d="M3 21h18" /><path d="M5 21V10M9 21V10M15 21V10M19 21V10" /><path d="M4 10l8-6 8 6" /></>),
 }
 
 export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarProps) {
@@ -76,6 +77,7 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
 
   const dashboard: Item = { href: '/', label: 'Dashboard', icon: icons.dashboard }
   const commandCenter: Item = { href: '/command-center', label: 'Command Center', icon: icons.commandcenter }
+  const cSuite: Item = { href: '/c-suite', label: 'AI C-Suite', icon: icons.csuite }
   const groups: { id: string; title: string; items: Item[] }[] = [
     ...(isAdmin ? [{
       id: 'creators', title: 'Creators', items: [
@@ -85,7 +87,7 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
     }] : []),
     {
       id: 'pre', title: 'Pre-Event', items: [
-        { href: '/events', label: 'Events', icon: icons.events },
+        { href: '/manage/events', label: 'Manage Events', icon: icons.events },
         { href: '/venues', label: 'Venues', icon: icons.venue },
         ...(isAdmin ? [{ href: '/leads', label: 'Leads', icon: icons.leads }] : []),
         { href: '/insights', label: 'Insights', icon: icons.insights },
@@ -193,6 +195,7 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
         [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {renderLink(dashboard)}
         {isAdmin && renderLink(commandCenter)}
+        {isAdmin && renderLink(cSuite)}
         {groups.map(g => (
           <div key={g.id} className="pt-3">
             <button

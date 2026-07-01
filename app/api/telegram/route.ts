@@ -17,6 +17,8 @@ import { runAgent } from '@/lib/jarvis/agent'
 import type { AgentContext } from '@/lib/jarvis/types'
 import { isDuplicateUpdate } from '@/lib/jarvis/observability'
 import { executeMarkPaid, executeUpdatePipeline } from '@/lib/jarvis/tools'
+import { handleAdsCallback } from '@/lib/ads-council'
+import { answerCallbackQuery } from '@/lib/telegram'
 import { bukkuEnabled, findOrCreateContact, createBill, EXPENSE_ACCOUNT_BY_CATEGORY } from '@/lib/bukku'
 
 export const dynamic = 'force-dynamic'
@@ -2219,12 +2221,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false }, { status: 401 })
   }
 
-  let update: { update_id?: number; message?: Record<string, unknown> }
+  let update: { update_id?: number; message?: Record<string, unknown>; callback_query?: Record<string, unknown> }
   try {
     update = await req.json()
   } catch {
     return NextResponse.json({ ok: true })
   }
+
+  // Inline-button taps (ads-council approval cards) arrive as callback_query, not
+  // message. Dedupe + dispatch to the ads-council handler, then ack.
+  if (update.callback_query) {
+    if (typeof update.update_id === 'number') {
+      const cq = update.callback_query as { message?: { chat?: { id?: number } } }
+      if (await isDuplicateUpdate(update.update_id, cq.message?.chat?.id ?? null)) {
+        return NextResponse.json({ ok: true, deduped: true })
+      }
+    }
+    const cq = update.callback_query as unknown as Parameters<typeof handleAdsCallback>[0]
+    after(async () => {
+      try {
+        const handled = await handleAdsCallback(cq)
+        if (!handled) await answerCallbackQuery((cq as { id: string }).id)
+      } catch (e) {
+        console.error('[telegram] ads callback', e)
+        try { await answerCallbackQuery((cq as { id: string }).id, 'Something went wrong.') } catch { /* ignore */ }
+      }
+    })
+    return NextResponse.json({ ok: true })
+  }
+
   const message = update.message // ignore edited_message to avoid duplicate replies
   if (!message) return NextResponse.json({ ok: true })
 
