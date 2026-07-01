@@ -106,7 +106,7 @@ async function findContactId(locationId: string, email: string, phone: string): 
   return str((exact ?? contacts[0]).id) || null
 }
 
-async function createContactId(locationId: string, name: string, email: string, phone: string): Promise<string | null> {
+async function createContactId(locationId: string, name: string, email: string, phone: string, source = 'Cal.com'): Promise<string | null> {
   const res = await ghlFetch('/contacts/', {
     method: 'POST',
     body: JSON.stringify({
@@ -114,7 +114,7 @@ async function createContactId(locationId: string, name: string, email: string, 
       name: name || undefined,
       email: email || undefined,
       phone: phone || undefined,
-      source: 'Cal.com',
+      source,
     }),
   })
   if (!res) return null
@@ -189,4 +189,29 @@ export async function ghlHealthcheck(): Promise<{ ok: boolean; status: number; e
   if (!ghlEnabled() || !locationId) return { ok: false, status: 0, enabled: false }
   const res = await ghlFetch(`/opportunities/pipelines?locationId=${encodeURIComponent(locationId)}`)
   return { ok: Boolean(res?.ok), status: res?.status ?? 0, enabled: true }
+}
+
+// ── contact tagging (CashflowOS abandon-cart checkout) ───────────────────────
+// Find-or-create a contact by email/phone → returns its id (or null when GHL is
+// off / no identifier / the call fails). `source` attributes where it came from.
+export async function findOrCreateContact(input: { name?: string; email?: string; phone?: string; source?: string }): Promise<string | null> {
+  const locationId = process.env.GHL_LOCATION_ID
+  if (!ghlEnabled() || !locationId) return null
+  const email = input.email ?? ''
+  const phone = input.phone ?? ''
+  if (!email && !phone) return null
+  let id = await findContactId(locationId, email, phone)
+  if (!id) id = await createContactId(locationId, input.name ?? '', email, phone, input.source ?? 'Cal.com')
+  return id
+}
+
+// Add tags to a contact — GHL: POST /contacts/{id}/tags { tags: [...] }.
+// Idempotent on GHL's side (re-adding an existing tag is a no-op).
+export async function addContactTags(contactId: string, tags: string[]): Promise<boolean> {
+  if (!ghlEnabled() || !contactId || !tags.length) return false
+  const res = await ghlFetch(`/contacts/${encodeURIComponent(contactId)}/tags`, {
+    method: 'POST',
+    body: JSON.stringify({ tags }),
+  })
+  return Boolean(res?.ok)
 }
