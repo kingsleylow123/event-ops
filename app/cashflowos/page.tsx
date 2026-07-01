@@ -28,6 +28,10 @@ export default async function CashflowOsPage() {
 
   return (
     <Shell>
+      <div className="mb-5 flex gap-1.5" aria-label="Step 1 of 2">
+        <div className="h-1.5 flex-1 rounded-full bg-amber-500" />
+        <div className="h-1.5 flex-1 rounded-full bg-zinc-800" />
+      </div>
       <div className="mb-5">
         <p className="text-xs uppercase tracking-wide text-amber-400">2-Day Challenge · Step 1 of 2</p>
         <h1 className="mt-1 text-xl font-bold text-white">{name}</h1>
