@@ -76,6 +76,14 @@ function dateParts(iso: string | null) {
   }
 }
 
+// Local (Asia/Kuala_Lumpur) calendar-day key, e.g. "2026-07-19", for grouping on the month grid.
+function klYMD(iso: string | null): string | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return null
+  return new Intl.DateTimeFormat('en-CA', { timeZone: KL, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d)
+}
+
 function phasePrice(ev: PublicEvent): string | null {
   const p = ev.current_phase
   const L = ev.public_listing || {}
@@ -472,10 +480,104 @@ function Spotlight({ ev, onWaitlist }: { ev: PublicEvent; onWaitlist: (ev: Publi
 }
 
 /* ── page ────────────────────────────────────────────────────────────────── */
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+
+/* ── month calendar (Google-Calendar-style, Claude-themed) ───────────────── */
+function MonthCalendar({ events, onWaitlist }: { events: PublicEvent[]; onWaitlist: (ev: PublicEvent) => void }) {
+  const byDay = useMemo(() => {
+    const m: Record<string, PublicEvent[]> = {}
+    for (const ev of events) {
+      const k = klYMD(eventISO(ev))
+      if (k) (m[k] ||= []).push(ev)
+    }
+    return m
+  }, [events])
+
+  const todayKey = useMemo(() => klYMD(new Date().toISOString()) || '', [])
+
+  // Open on the month of the soonest upcoming event (else the earliest, else today).
+  const initial = useMemo(() => {
+    const keys = Object.keys(byDay).sort()
+    const base = keys.find(k => k >= todayKey) || keys[0] || todayKey
+    return { y: Number(base.slice(0, 4)), m: Number(base.slice(5, 7)) - 1 }
+  }, [byDay, todayKey])
+
+  const [cur, setCur] = useState(initial)
+
+  const move = (delta: number) =>
+    setCur(c => {
+      const d = new Date(Date.UTC(c.y, c.m + delta, 1))
+      return { y: d.getUTCFullYear(), m: d.getUTCMonth() }
+    })
+
+  const pad2 = (n: number) => String(n).padStart(2, '0')
+  const daysInMonth = new Date(Date.UTC(cur.y, cur.m + 1, 0)).getUTCDate()
+  const firstDow = new Date(Date.UTC(cur.y, cur.m, 1)).getUTCDay()
+
+  const cells: ({ day: number; key: string } | null)[] = []
+  for (let i = 0; i < firstDow; i++) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d++) cells.push({ day: d, key: `${cur.y}-${pad2(cur.m + 1)}-${pad2(d)}` })
+  while (cells.length % 7 !== 0) cells.push(null)
+
+  const clickEv = (ev: PublicEvent) => {
+    const url = ev.public_listing?.register_url
+    if (isSale(ev) && url) window.open(url, '_blank', 'noopener')
+    else onWaitlist(ev)
+  }
+
+  return (
+    <div className="cm-cal">
+      <div className="cm-cal-head">
+        <button className="cm-cal-nav" onClick={() => move(-1)} aria-label="Previous month">‹</button>
+        <div className="cm-cal-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
+          {MONTHS[cur.m]} <span>{cur.y}</span>
+        </div>
+        <button className="cm-cal-nav" onClick={() => move(1)} aria-label="Next month">›</button>
+      </div>
+      <div className="cm-cal-grid cm-cal-dow">
+        {WEEKDAYS.map(w => (
+          <div key={w} className="cm-cal-dowcell"><span>{w[0]}</span><em>{w}</em></div>
+        ))}
+      </div>
+      <div className="cm-cal-grid">
+        {cells.map((c, i) => {
+          if (!c) return <div key={i} className="cm-cal-cell cm-cal-cell--pad" />
+          const evs = byDay[c.key] || []
+          const past = c.key < todayKey
+          const isToday = c.key === todayKey
+          return (
+            <div key={i} className={`cm-cal-cell${past ? ' cm-cal-cell--past' : ''}${evs.length ? ' cm-cal-cell--has' : ''}`}>
+              <span className={`cm-cal-daynum${isToday ? ' cm-cal-daynum--today' : ''}`}>{c.day}</span>
+              <div className="cm-cal-chips">
+                {evs.map(ev => {
+                  const tone = ev.current_phase ? PHASE_META[ev.current_phase].tone : 'clay'
+                  return (
+                    <button key={ev.id} className="cm-cal-chip" onClick={() => clickEv(ev)} title={ev.name}>
+                      <span className={`cm-cal-cdot cm-tone--${tone}`} />
+                      <span className="cm-cal-chip-t">{ev.name}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      <div className="cm-cal-legend">
+        <span>Tap an event to reserve your seat or join the waitlist.</span>
+        <button className="cm-cal-today" onClick={() => setCur(initial)}>Jump to next event ↺</button>
+      </div>
+    </div>
+  )
+}
+
 export default function EventsPage() {
   const [events, setEvents] = useState<PublicEvent[] | null>(null)
   const [error, setError] = useState(false)
   const [modal, setModal] = useState<PublicEvent | 'general' | null>(null)
+  const [view, setView] = useState<'calendar' | 'list'>('calendar')
   const nextRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
@@ -502,10 +604,9 @@ export default function EventsPage() {
   }, [events])
 
   const featured = sorted[0]
-  const rest = sorted.slice(1)
   const hasEvents = sorted.length > 0
 
-  useReveal(events)
+  useReveal(events === null ? 'loading' : `${view}:${sorted.length}`)
 
   const scrollNext = () =>
     nextRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -591,19 +692,33 @@ export default function EventsPage() {
                 <p className="cm-section-eyebrow" data-reveal>The next room</p>
                 <Spotlight ev={featured} onWaitlist={ev => setModal(ev)} />
 
-                {rest.length > 0 && (
-                  <section className="cm-upcoming">
-                    <div className="cm-up-head" data-reveal>
-                      <h2 className="cm-h2">More on the calendar</h2>
-                      <p className="cm-h2-sub">Lock in early-bird before each one climbs to public price.</p>
+                <section className="cm-browse">
+                  <div className="cm-browse-head" data-reveal>
+                    <div>
+                      <h2 className="cm-h2">All upcoming workshops</h2>
+                      <p className="cm-h2-sub">Browse by date, or lock in early-bird before each climbs to public price.</p>
                     </div>
+                    <div className="cm-viewtoggle" role="tablist" aria-label="Choose view">
+                      <button className={view === 'calendar' ? 'is-on' : ''} aria-pressed={view === 'calendar'} onClick={() => setView('calendar')}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
+                        Calendar
+                      </button>
+                      <button className={view === 'list' ? 'is-on' : ''} aria-pressed={view === 'list'} onClick={() => setView('list')}>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg>
+                        List
+                      </button>
+                    </div>
+                  </div>
+                  {view === 'calendar' ? (
+                    <MonthCalendar events={sorted} onWaitlist={e => setModal(e)} />
+                  ) : (
                     <div className="cm-grid">
-                      {rest.map(ev => (
+                      {sorted.map(ev => (
                         <EventCard key={ev.id} ev={ev} onWaitlist={e => setModal(e)} />
                       ))}
                     </div>
-                  </section>
-                )}
+                  )}
+                </section>
               </>
             ) : (
               <EmptyState onWaitlist={() => setModal('general')} />
@@ -841,6 +956,51 @@ const CSS = `
 .cm-h2-sub{margin:6px 0 0;color:var(--ink-soft);font-size:15.5px}
 .cm-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:18px}
 
+/* view toggle */
+.cm-browse{margin-top:clamp(40px,6vw,72px)}
+.cm-browse-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:22px}
+.cm-viewtoggle{display:inline-flex;background:var(--paper-2);border:1px solid var(--line);border-radius:999px;padding:4px;flex:0 0 auto}
+.cm-viewtoggle button{display:inline-flex;align-items:center;gap:7px;font-family:var(--sans);font-size:13.5px;font-weight:600;
+  color:var(--ink-soft);background:transparent;border:0;border-radius:999px;padding:8px 16px;cursor:pointer;transition:color .18s ease,background .18s ease,box-shadow .18s ease}
+.cm-viewtoggle button svg{width:15px;height:15px}
+.cm-viewtoggle button.is-on{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(33,28,22,.14)}
+
+/* month calendar */
+.cm-cal{border:1px solid var(--line-2);border-radius:22px;background:var(--card);overflow:hidden;
+  box-shadow:0 24px 50px -42px rgba(33,28,22,.4)}
+.cm-cal-head{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--line)}
+.cm-cal-title{display:flex;align-items:center;gap:10px;font-family:var(--serif);font-weight:600;font-size:23px;color:var(--ink);letter-spacing:-.01em}
+.cm-cal-title svg{width:19px;height:19px;color:var(--clay)}
+.cm-cal-title span{color:var(--clay-deep)}
+.cm-cal-nav{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;
+  border:1px solid var(--line-2);background:var(--paper);font-size:20px;line-height:1;color:var(--ink);cursor:pointer;transition:all .15s ease}
+.cm-cal-nav:hover{border-color:var(--clay);color:var(--clay-deep);background:var(--clay-tint)}
+.cm-cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr))}
+.cm-cal-dow{border-bottom:1px solid var(--line);background:var(--paper)}
+.cm-cal-dowcell{padding:9px 6px;text-align:center;font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint)}
+.cm-cal-dowcell span{display:none}
+.cm-cal-cell{position:relative;min-height:112px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:8px;display:flex;flex-direction:column;gap:5px}
+.cm-cal-cell:nth-child(7n){border-right:0}
+.cm-cal-cell--pad{background:repeating-linear-gradient(-45deg,transparent,transparent 7px,rgba(33,28,22,.022) 7px,rgba(33,28,22,.022) 14px)}
+.cm-cal-cell--past{opacity:.5}
+.cm-cal-cell--has{background:var(--clay-tint)}
+.cm-cal-daynum{font-size:13px;font-weight:600;color:var(--ink-soft);width:25px;height:25px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+.cm-cal-daynum--today{background:var(--clay);color:#fff;border-radius:50%}
+.cm-cal-chips{display:flex;flex-direction:column;gap:4px;min-width:0}
+.cm-cal-chip{display:flex;align-items:center;gap:6px;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);
+  border-radius:8px;padding:4px 7px;cursor:pointer;transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease;min-width:0}
+.cm-cal-chip:hover{border-color:var(--clay);box-shadow:0 5px 14px -8px rgba(190,92,59,.6);transform:translateY(-1px)}
+.cm-cal-cdot{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
+.cm-cal-chip-t{font-size:11.5px;font-weight:600;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cm-cal-legend{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px 22px;border-top:1px solid var(--line);font-size:12.5px;color:var(--ink-faint)}
+.cm-cal-today{font-family:var(--sans);font-size:12.5px;font-weight:600;color:var(--clay-deep);background:transparent;border:0;cursor:pointer;padding:0}
+.cm-cal-today:hover{text-decoration:underline}
+.cm-tone--clay{background:var(--clay)}
+.cm-tone--honey{background:var(--honey)}
+.cm-tone--sage{background:var(--sage)}
+.cm-tone--rust{background:var(--rust)}
+.cm-tone--stone{background:var(--stone)}
+
 /* card */
 .cm-card{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:20px;background:var(--card);
   padding:20px;transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
@@ -966,6 +1126,7 @@ const CSS = `
   .cm-cta-inner{grid-template-columns:1fr}
   .cm-ladder{grid-template-columns:repeat(5,minmax(74px,1fr));overflow-x:auto;scrollbar-width:none}
   .cm-ladder::-webkit-scrollbar{display:none}
+  .cm-cal-cell{min-height:92px;padding:6px}
 }
 @media(max-width:560px){
   .cm-brand-name{font-size:14px}
@@ -977,6 +1138,16 @@ const CSS = `
   .cm-footer-inner{flex-direction:column;align-items:flex-start}
   .cm-card-foot{flex-direction:column;align-items:stretch}
   .cm-card-foot .cm-btn{width:100%}
+  .cm-browse-head{flex-direction:column;align-items:flex-start}
+  .cm-cal-dowcell em{display:none}
+  .cm-cal-dowcell span{display:inline}
+  .cm-cal-cell{min-height:70px;padding:4px 3px;gap:3px}
+  .cm-cal-daynum{width:20px;height:20px;font-size:11px}
+  .cm-cal-chip{padding:3px 4px;gap:4px;border-radius:6px}
+  .cm-cal-chip-t{font-size:9px}
+  .cm-cal-title{font-size:18px}
+  .cm-cal-head{padding:14px}
+  .cm-cal-legend{padding:12px 14px;font-size:11.5px}
 }
 @media(prefers-reduced-motion:reduce){
   .cm-fade,[data-reveal]{opacity:1!important;transform:none!important;animation:none!important;transition:none!important}
