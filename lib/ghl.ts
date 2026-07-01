@@ -3,6 +3,16 @@
 // Finds-or-creates the contact, then finds-or-creates an opportunity in the
 // configured pipeline/stage. Fully no-op (returns nulls) when GHL_API_TOKEN /
 // GHL_LOCATION_ID aren't set, so the EventOps sync never fails on GHL being off.
+//
+// RELIABILITY: GHL recommends rotating Private Integration Tokens ~every 90 days,
+// with only a 7-day window where the old + new token both work — after that the
+// old token 401s. Historically those failures were swallowed silently, so the
+// sync would just stop for days unnoticed. Now every non-OK response is logged,
+// and a 401/403 (dead/rotated token) pings the Telegram admins so the env var can
+// be rotated inside the grace window. A daily healthcheck (app/api/ghl/health)
+// is the backstop signal.
+
+import { notifyAdmins, esc, b } from '@/lib/telegram'
 
 const BASE = 'https://services.leadconnectorhq.com'
 const VERSION = '2021-07-28'
@@ -16,12 +26,56 @@ export function ghlEnabled(): boolean {
   return Boolean(process.env.GHL_API_TOKEN && process.env.GHL_LOCATION_ID)
 }
 
-function headers(token: string): Record<string, string> {
+function headers(): Record<string, string> {
   return {
-    Authorization: `Bearer ${token}`,
+    Authorization: `Bearer ${process.env.GHL_API_TOKEN ?? ''}`,
     Version: VERSION,
     Accept: 'application/json',
     'Content-Type': 'application/json',
+  }
+}
+
+// ── loud-failure alerting ────────────────────────────────────────────────────
+// Ping admins the first time a dead/rotated token is seen, rate-limited so a
+// broken token can't spam Telegram on every request. (Per-instance in-memory —
+// good enough: the daily healthcheck cron runs in a fresh instance and re-alerts.)
+let lastAuthAlert = 0
+const AUTH_ALERT_COOLDOWN_MS = 60 * 60 * 1000 // 1h
+
+async function alertAuthFailure(status: number, path: string) {
+  const now = Date.now()
+  if (now - lastAuthAlert < AUTH_ALERT_COOLDOWN_MS) return
+  lastAuthAlert = now
+  try {
+    await notifyAdmins(
+      `⚠️ ${b('GHL token rejected')} (HTTP ${status}) — the Private Integration Token looks rotated/revoked.\n` +
+      `GHL sync is DOWN until it's replaced.\n` +
+      `Fix: Vercel → event-ops → Settings → Environment Variables → update ${b('GHL_API_TOKEN')} → redeploy.\n` +
+      `<i>path: ${esc(path)}</i>`,
+    )
+  } catch { /* alert best-effort — never throw from the fetch path */ }
+}
+
+// Central GHL fetch: injects auth headers, logs real failures (401/403/429/5xx),
+// and alerts on auth failures. 400/404 are left quiet — callers treat those as
+// "duplicate" / "not found" (e.g. GHL returns 400 on a duplicate contact but
+// echoes the existing id in meta). Returns null only on a network throw.
+async function ghlFetch(path: string, init?: RequestInit): Promise<Response | null> {
+  const method = init?.method ?? 'GET'
+  try {
+    const res = await fetch(`${BASE}${path}`, {
+      ...init,
+      headers: { ...headers(), ...(init?.headers as Record<string, string> | undefined) },
+    })
+    if (!res.ok && (res.status === 401 || res.status === 403 || res.status === 429 || res.status >= 500)) {
+      const body = await res.clone().text().catch(() => '')
+      console.error(`[ghl] ${method} ${path} → ${res.status} ${body.slice(0, 500)}`)
+      if (res.status === 401 || res.status === 403) await alertAuthFailure(res.status, path)
+    }
+    return res
+  } catch (e) {
+    console.error(`[ghl] ${method} ${path} threw`, e)
+    return null
   }
 }
 
@@ -39,12 +93,12 @@ async function safeJson(res: Response): Promise<Record<string, unknown>> {
   return asRecord(await res.json().catch(() => ({})))
 }
 
-async function findContactId(token: string, locationId: string, email: string, phone: string): Promise<string | null> {
+async function findContactId(locationId: string, email: string, phone: string): Promise<string | null> {
   const query = email || phone
   if (!query) return null
-  const url = `${BASE}/contacts/?locationId=${encodeURIComponent(locationId)}&query=${encodeURIComponent(query)}&limit=10`
-  const res = await fetch(url, { headers: headers(token) })
-  if (!res.ok) return null
+  const url = `/contacts/?locationId=${encodeURIComponent(locationId)}&query=${encodeURIComponent(query)}&limit=10`
+  const res = await ghlFetch(url)
+  if (!res || !res.ok) return null
   const contacts = asArray((await safeJson(res)).contacts).map(asRecord)
   if (!contacts.length) return null
   const lc = email.toLowerCase()
@@ -52,10 +106,9 @@ async function findContactId(token: string, locationId: string, email: string, p
   return str((exact ?? contacts[0]).id) || null
 }
 
-async function createContactId(token: string, locationId: string, name: string, email: string, phone: string): Promise<string | null> {
-  const res = await fetch(`${BASE}/contacts/`, {
+async function createContactId(locationId: string, name: string, email: string, phone: string): Promise<string | null> {
+  const res = await ghlFetch('/contacts/', {
     method: 'POST',
-    headers: headers(token),
     body: JSON.stringify({
       locationId,
       name: name || undefined,
@@ -64,6 +117,7 @@ async function createContactId(token: string, locationId: string, name: string, 
       source: 'Cal.com',
     }),
   })
+  if (!res) return null
   const data = await safeJson(res)
   // On a duplicate, GHL returns 400 but echoes the existing id in meta.
   const direct = str(asRecord(data.contact).id)
@@ -72,19 +126,18 @@ async function createContactId(token: string, locationId: string, name: string, 
   return metaId || null
 }
 
-async function findOpportunityId(token: string, locationId: string, contactId: string): Promise<string | null> {
-  const url = `${BASE}/opportunities/search?location_id=${encodeURIComponent(locationId)}&contact_id=${encodeURIComponent(contactId)}`
-  const res = await fetch(url, { headers: headers(token) })
-  if (!res.ok) return null
+async function findOpportunityId(locationId: string, contactId: string): Promise<string | null> {
+  const url = `/opportunities/search?location_id=${encodeURIComponent(locationId)}&contact_id=${encodeURIComponent(contactId)}`
+  const res = await ghlFetch(url)
+  if (!res || !res.ok) return null
   const opps = asArray((await safeJson(res)).opportunities).map(asRecord)
   const inPipe = opps.find(o => str(o.pipelineId) === PIPELINE_ID)
   return str((inPipe ?? {}).id) || null
 }
 
-async function createOpportunityId(token: string, locationId: string, contactId: string, name: string): Promise<string | null> {
-  const res = await fetch(`${BASE}/opportunities/`, {
+async function createOpportunityId(locationId: string, contactId: string, name: string): Promise<string | null> {
+  const res = await ghlFetch('/opportunities/', {
     method: 'POST',
-    headers: headers(token),
     body: JSON.stringify({
       pipelineId: PIPELINE_ID,
       pipelineStageId: STAGE_ID,
@@ -94,7 +147,7 @@ async function createOpportunityId(token: string, locationId: string, contactId:
       status: 'open',
     }),
   })
-  if (!res.ok) return null
+  if (!res || !res.ok) return null
   const data = await safeJson(res)
   return str(asRecord(data.opportunity).id) || str(data.id) || null
 }
@@ -113,19 +166,27 @@ export async function upsertGhlBookedCall(input: {
   phone: string
   opportunityName: string
 }): Promise<GhlUpsertResult> {
-  const token = process.env.GHL_API_TOKEN
   const locationId = process.env.GHL_LOCATION_ID
-  if (!token || !locationId) return { contactId: null, opportunityId: null, createdOpportunity: false }
+  if (!ghlEnabled() || !locationId) return { contactId: null, opportunityId: null, createdOpportunity: false }
 
-  let contactId = await findContactId(token, locationId, input.email, input.phone)
-  if (!contactId) contactId = await createContactId(token, locationId, input.name, input.email, input.phone)
+  let contactId = await findContactId(locationId, input.email, input.phone)
+  if (!contactId) contactId = await createContactId(locationId, input.name, input.email, input.phone)
   if (!contactId) return { contactId: null, opportunityId: null, createdOpportunity: false }
 
-  let opportunityId = await findOpportunityId(token, locationId, contactId)
+  let opportunityId = await findOpportunityId(locationId, contactId)
   let createdOpportunity = false
   if (!opportunityId) {
-    opportunityId = await createOpportunityId(token, locationId, contactId, input.opportunityName)
+    opportunityId = await createOpportunityId(locationId, contactId, input.opportunityName)
     createdOpportunity = Boolean(opportunityId)
   }
   return { contactId, opportunityId, createdOpportunity }
+}
+
+// Lightweight authed call used by the daily healthcheck cron. A dead/rotated
+// token surfaces here as ok:false (and ghlFetch has already pinged admins).
+export async function ghlHealthcheck(): Promise<{ ok: boolean; status: number; enabled: boolean }> {
+  const locationId = process.env.GHL_LOCATION_ID
+  if (!ghlEnabled() || !locationId) return { ok: false, status: 0, enabled: false }
+  const res = await ghlFetch(`/opportunities/pipelines?locationId=${encodeURIComponent(locationId)}`)
+  return { ok: Boolean(res?.ok), status: res?.status ?? 0, enabled: true }
 }

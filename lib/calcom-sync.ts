@@ -179,7 +179,11 @@ export async function syncBooking(nb: NormBooking): Promise<SyncOutcome> {
       opportunityName: `${nb.name || 'Lead'} — GLCC Coaching Call`,
     })
     ghl = { contactId: r.contactId, opportunityId: r.opportunityId }
-  } catch { /* GHL down → keep the EventOps write */ }
+  } catch (e) {
+    // GHL down → keep the EventOps write, but never swallow silently. Auth
+    // failures (rotated token) already ping admins from inside lib/ghl.
+    console.error(`[calcom-sync] GHL mirror failed for ${nb.uid}`, e)
+  }
 
   const common = {
     client_name: nb.name || 'Unknown',
