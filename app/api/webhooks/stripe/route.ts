@@ -5,6 +5,7 @@ import { notifyAdmins, esc, b } from '@/lib/telegram'
 import { normPhone, normEmail } from '@/lib/format'
 import { TICKET_LABELS } from '@/lib/supabase'
 import { resolveWebhookTarget, resolvePaidTicketType } from '@/lib/registration'
+import { findOrCreateContact, addContactTags } from '@/lib/ghl'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 30
@@ -132,6 +133,19 @@ export async function POST(req: NextRequest) {
       esc(`You're in! 🎉 Welcome to the Claude Malaysia workshop.\n\nBefore the big day, complete your 6 quick prep steps here (15 mins):\n${startLink}\n\nDo it early — it saves the whole class waiting on downloads. See you at 9:30am! ☕`),
     )
   } catch { /* ping failure must not 500 the webhook (Stripe would retry forever) */ }
+
+  // CashflowOS abandon-cart: tag the GHL contact 'cashflowos-paid' so the GHL
+  // recovery workflow stops chasing them. Best-effort — never blocks the webhook
+  // (a GHL auth failure already pings admins from inside lib/ghl).
+  if (session.metadata?.product === 'cashflowos-challenge') {
+    try {
+      const cid = session.metadata?.ghl_contact_id
+        || await findOrCreateContact({ name, email: email ?? '', phone: phone ?? '', source: 'CashflowOS Checkout' })
+      if (cid) await addContactTags(cid, ['cashflowos-paid'])
+    } catch (e) {
+      console.error('[stripe-webhook] cashflowos GHL tag failed', e)
+    }
+  }
 
   return NextResponse.json({ ok: true, attendee: existing ? 'updated' : 'created', event: target.name })
 }
