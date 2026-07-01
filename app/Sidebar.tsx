@@ -85,7 +85,7 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
     }] : []),
     {
       id: 'pre', title: 'Pre-Event', items: [
-        { href: '/events', label: 'Events', icon: icons.events },
+        { href: '/manage/events', label: 'Manage Events', icon: icons.events },
         { href: '/venues', label: 'Venues', icon: icons.venue },
         ...(isAdmin ? [{ href: '/leads', label: 'Leads', icon: icons.leads }] : []),
         { href: '/insights', label: 'Insights', icon: icons.insights },

@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { isAdminEmail } from '@/lib/auth/admin'
-import Sidebar from './Sidebar'
+import AppChrome from './AppChrome'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -48,12 +48,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </head>
       <body className="min-h-screen theme-bg theme-text">
         {user ? (
-          <>
-            <Sidebar userEmail={user.email} isAdmin={admin} pendingCount={pendingCount} />
-            <main className="lg:pl-64">
-              <div className="p-3 sm:p-6 max-w-7xl mx-auto">{children}</div>
-            </main>
-          </>
+          <AppChrome userEmail={user.email} isAdmin={admin} pendingCount={pendingCount}>
+            {children}
+          </AppChrome>
         ) : (
           <main>{children}</main>
         )}
