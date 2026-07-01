@@ -44,14 +44,19 @@ type Tier =
   | 'early_bird_general' | 'early_bird_vip'
   | 'standard_general' | 'standard_vip'
 
-function ticketTypeFor(amountRm: number, vip: boolean): Tier {
+// See route.ts: prices rose for the 5th-July-onwards era, so the same amount
+// maps to a different tier per era. Branch on event date; past events keep
+// their original tiers. Mirror of app/api/stripe/sync/route.ts.
+const NEW_PRICING_FROM = Date.UTC(2026, 5, 5) // 2026-06-05
+function ticketTypeFor(amountRm: number, vip: boolean, eventDate: string | null): Tier {
+  const newEra = !!eventDate && new Date(eventDate).getTime() >= NEW_PRICING_FROM
   if (vip) {
-    if (amountRm <= 497) return 'super_early_bird_vip'
+    if (amountRm <= (newEra ? 547 : 497)) return 'super_early_bird_vip'
     if (amountRm <= 597) return 'early_bird_vip'
     return 'standard_vip'
   }
-  if (amountRm <= 249) return 'super_early_bird_general'
-  if (amountRm <= 297) return 'early_bird_general'
+  if (amountRm <= (newEra ? 297 : 249)) return 'super_early_bird_general'
+  if (amountRm <= (newEra ? 347 : 297)) return 'early_bird_general'
   return 'standard_general'
 }
 
@@ -101,7 +106,7 @@ async function main() {
       }
 
       const amountRm = (session.amount_total ?? 0) / 100
-      const tier = ticketTypeFor(amountRm, isVip(productName))
+      const tier = ticketTypeFor(amountRm, isVip(productName), resolved.date)
 
       const { data: existing } = await supabase
         .from('attendees')

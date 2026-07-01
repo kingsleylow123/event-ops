@@ -31,19 +31,26 @@ export interface SendEmailInput {
   subject: string
   html: string
   attachments?: EmailAttachment[]
+  // Stable key for a logical send. Resend dedupes identical keys for 24h, so a
+  // retried invoice/receipt (admin re-run, reconcile re-run, stamp-write
+  // failure, overlapping confirmations) never double-delivers to the client.
+  idempotencyKey?: string
 }
 
 export async function sendEmail(input: SendEmailInput): Promise<{ ok: boolean; error?: string }> {
   if (!emailEnabled()) return { ok: false, error: 'RESEND_API_KEY is not set' }
   try {
-    const { error } = await resendClient().emails.send({
-      from: EMAIL_FROM,
-      to: input.to,
-      bcc: FINANCE_EMAIL,
-      subject: input.subject,
-      html: input.html,
-      attachments: input.attachments?.map(a => ({ filename: a.filename, content: a.content })),
-    })
+    const { error } = await resendClient().emails.send(
+      {
+        from: EMAIL_FROM,
+        to: input.to,
+        bcc: FINANCE_EMAIL,
+        subject: input.subject,
+        html: input.html,
+        attachments: input.attachments?.map(a => ({ filename: a.filename, content: a.content })),
+      },
+      input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : undefined,
+    )
     if (error) {
       console.error('[email] send failed', error)
       return { ok: false, error: error.message }

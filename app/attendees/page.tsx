@@ -44,7 +44,7 @@ export default function AttendeesPage() {
   const searchParams = useSearchParams()
   const facilitatorMode = searchParams.get('type') === 'facilitator'
   const { data: eventsData } = useCachedFetch<Event[]>('events', '/api/events')
-  const { data: facilStatsData } = useCachedFetch<FacilitatorStat[]>(
+  const { data: facilStatsData, refetch: refetchFacilStats } = useCachedFetch<FacilitatorStat[]>(
     facilitatorMode ? 'facilitator-stats' : null,
     facilitatorMode ? '/api/facilitator-stats' : null,
     facilitatorMode,
@@ -125,6 +125,22 @@ export default function AttendeesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEventId])
 
+  // Live auto-refresh: while the page is open, poll the roster and the facilitator
+  // leaderboard so QR check-ins (made from someone else's phone) show up by
+  // themselves — Attended ticks and the 🔥 count update without a manual reload.
+  // Skips polling while the tab is hidden to avoid needless requests.
+  useEffect(() => {
+    if (!selectedEventId) return
+    const tick = () => {
+      if (typeof document !== 'undefined' && document.hidden) return
+      loadAttendees(selectedEventId)
+      refetchFacilStats()
+    }
+    const id = setInterval(tick, 10_000)
+    return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEventId])
+
   async function syncStripe() {
     setSyncing(true)
     setSyncMsg('')
@@ -188,16 +204,23 @@ export default function AttendeesPage() {
       updated.attendance_confirmed = updated.day1_attended || updated.day2_attended
       return updated
     }))
+    // Attendance changed → the 🔥 facilitator leaderboard may have moved; refresh it.
+    refetchFacilStats()
   }
 
+  // Single-day "Attended" toggle. day1_attended is the source of truth for a one-day
+  // event; the DB trigger derives attendance_confirmed = day1 || day2. We drive
+  // day1_attended (not attendance_confirmed directly) so a tick/untick here is
+  // reflected in the 🔥 leaderboard, which counts events actually attended.
   async function toggleAttendance(a: Attendee) {
     const confirmed = !a.attendance_confirmed
     await fetch('/api/attendees', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: a.id, attendance_confirmed: confirmed }),
+      body: JSON.stringify({ id: a.id, day1_attended: confirmed }),
     })
-    setAttendees(prev => prev.map(x => x.id === a.id ? { ...x, attendance_confirmed: confirmed } : x))
+    setAttendees(prev => prev.map(x => x.id === a.id ? { ...x, day1_attended: confirmed, attendance_confirmed: confirmed } : x))
+    refetchFacilStats()
   }
 
   async function deleteAttendee(id: string) {
@@ -601,11 +624,12 @@ export default function AttendeesPage() {
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-[#111] border border-zinc-800 rounded-xl p-6 w-full max-w-sm text-center">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold">QR Check-in</h2>
+              <h2 className="text-lg font-bold">{facilitatorMode ? 'Facilitator QR Check-in' : 'QR Check-in'}</h2>
               <button onClick={() => setShowQRModal(false)} className="text-zinc-500 hover:text-white text-xl leading-none">✕</button>
             </div>
             {(() => {
-              const url = `https://event-ops-six.vercel.app/checkin/${selectedEventId}`
+              const path = facilitatorMode ? `checkin-facilitator/${selectedEventId}` : `checkin/${selectedEventId}`
+              const url = `https://event-ops-six.vercel.app/${path}`
               const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}`
               return (
                 <>

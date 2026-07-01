@@ -77,7 +77,9 @@ const ANALYZE_PRICING_SCHEMA: Anthropic.Tool = {
 
 async function analyzePricing(args: Record<string, unknown>, ctx: AgentContext) {
   const scope = String(args.scope ?? 'single') === 'all_time' ? 'all_time' : 'single'
+  // Exclude facilitators (is_facilitator) so counts/revenue match the Attendees page.
   let sb = supabase.from('attendees').select('ticket_type,payment_status,payment_amount,payment_method,event_id')
+    .not('is_facilitator', 'is', true)
   let label = 'all events'
   if (scope === 'single') {
     const eid = resolveEventId(args.event_id, ctx)

@@ -62,12 +62,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, skipped: 'outside window' })
   }
 
-  // Roster: paid/free attendees for this event. Refunded excluded.
+  // Roster: paid/free attendees for this event. Refunded + facilitators excluded
+  // (facilitators are staff, not participants — matches the Attendees page).
   const { data: attendees } = await supabase
     .from('attendees')
     .select('name, phone, payment_status, day1_attended, day2_attended')
     .eq('event_id', ev.id)
     .in('payment_status', ['paid', 'free'])
+    .not('is_facilitator', 'is', true)
   const roster = attendees ?? []
   const dayField = activeDay === 1 ? 'day1_attended' : 'day2_attended'
   const arrived = roster.filter(a => a[dayField as 'day1_attended' | 'day2_attended'])

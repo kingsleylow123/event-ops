@@ -75,7 +75,9 @@ export async function GET(req: NextRequest) {
 
   // ── Load attendees, checklist, survey in parallel ─────────────────────────
   const [attRes, checkRes, surveyRes, claimsRes] = await Promise.all([
-    supabase.from('attendees').select('id, name, phone, email, payment_status').eq('event_id', eventId),
+    // Facilitators (is_facilitator) excluded — staff aren't seats, so capacity/fill%
+    // (and dup detection) match the Attendees page (which counts only !is_facilitator).
+    supabase.from('attendees').select('id, name, phone, email, payment_status').eq('event_id', eventId).not('is_facilitator', 'is', true),
     supabase.from('checklist_items').select('id, item, category, due_date, status').eq('event_id', eventId),
     supabase.from('pre_event_survey_responses').select('id').eq('event_id', eventId),
     supabase.from('claims').select('id, claimant_name, amount, status, submitted_at').eq('event_id', eventId),

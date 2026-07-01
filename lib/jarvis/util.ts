@@ -7,6 +7,18 @@ export const RM = (n: unknown) =>
 
 export const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100
 
+// Mask a bank account number to the last 4 digits for display, e.g.
+// "1234567890" → "••••7890". Security: full account numbers should never be
+// surfaced to the Telegram chat — only the last 4 for identification.
+// Returns null for null/empty so callers can keep their `?? null` shape.
+export function maskAccountNo(s: unknown): string | null {
+  const raw = String(s ?? '').trim()
+  if (!raw) return null
+  const digits = raw.replace(/\s+/g, '')
+  if (digits.length <= 4) return '••••' + digits
+  return '••••' + digits.slice(-4)
+}
+
 // Resolve a tool's optional event_id arg to a concrete id. Accepts an exact id,
 // 'active'/'' (→ active event), or a loose name/date fragment matched against
 // allEvents. Falls back to the active event so a tool never errors on a bad hint.

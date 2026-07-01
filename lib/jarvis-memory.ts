@@ -14,7 +14,7 @@ export interface Turn {
 
 /** Small JSON blob describing an action that needs user confirmation. */
 export interface PendingAction {
-  kind: 'invoice' | 'payout' | 'confirm' | 'reconcile' | 'mark_paid' | 'update_pipeline'
+  kind: 'invoice' | 'payout' | 'confirm' | 'reconcile' | 'mark_paid' | 'update_pipeline' | 'book_receipt'
   attendee_name?: string
   amount?: number
   mode?: string // e.g. 'cash' | 'transfer'

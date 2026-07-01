@@ -19,7 +19,9 @@ async function financeSummary(args: Record<string, unknown>, ctx: AgentContext) 
   const all = arg.toLowerCase() === 'all'
   const eid = all ? '' : resolveEventId(args.event_id, ctx)
 
+  // Facilitators (is_facilitator) excluded so paid_count / revenue match the Attendees page.
   const attQ = supabase.from('attendees').select('ticket_type,payment_status,payment_amount,payment_method,event_id')
+    .not('is_facilitator', 'is', true)
   const expQ = supabase.from('expenses').select('amount,category,event_id')
   const finQ = supabase.from('finance_entries').select('type,amount,category,event_id')
   const payQ = supabase.from('affiliate_payouts').select('amount,event_id')

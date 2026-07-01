@@ -11,13 +11,13 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const HAIKU = 'claude-haiku-4-5'
 const SONNET = 'claude-sonnet-4-6'
-const MAX_ITERATIONS = 5
+const MAX_ITERATIONS = 8
 
 // Escalate to Sonnet for analytical, money, or person-lookup questions — the
 // multi-hop / disambiguation cases where Haiku is least reliable. Trivial counts
 // and status checks stay on cheaper Haiku.
 const SONNET_RE =
-  /\b(compare|comparison|vs|trend|across|each event|all events|breakdown|why|most|least|average|top|conversion|which|better|worse|price|pricing|stripe|revenue|profit|net|margin|contact|phone|email|whatsapp|number|find|who|bank|account|submitted|paid|pay|owe|payout|reconcile|analy|survey|industr|pain|insight|theme|summar|communit|member|trend|pace|accelerat|momentum|project|lifecycle|readiness|facilitator|checklist|bukku|crew|tab|flow|stage|funnel|bottleneck|leak|constraint|weak)\b/i
+  /\b(compare|comparison|vs|trend|across|each event|all events|breakdown|why|most|least|average|top|conversion|which|better|worse|price|pricing|stripe|revenue|profit|net|margin|contact|phone|email|whatsapp|number|find|who|bank|account|submitted|paid|pay|owe|payout|reconcile|analy|survey|industr|pain|insight|theme|summar|communit|member|trend|pace|accelerat|momentum|project|lifecycle|readiness|facilitator|checklist|bukku|crew|tab|flow|stage|ratio|historical|vip|funnel|bottleneck|leak|constraint|weak)\b/i
 
 function pickModel(question: string): { model: string; maxTokens: number } {
   return SONNET_RE.test(question)

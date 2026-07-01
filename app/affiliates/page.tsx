@@ -16,7 +16,6 @@ interface BuyerRow {
 interface SummaryRow {
   affiliate_id: string; handle: string; buyers: number; revenue: number; commission: number
   bank_name: string | null; bank_account: string | null; bank_holder: string | null
-  paid_at: string | null; paid_amount: number | null
 }
 interface Report {
   buyers: BuyerRow[]
@@ -26,10 +25,6 @@ interface Report {
 }
 
 const rm = (n: number) => `RM ${n.toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-function fmtDateShort(iso: string | null) {
-  if (!iso) return ''
-  return new Date(iso).toLocaleDateString('en-MY', { day: 'numeric', month: 'short' })
-}
 
 export default function AffiliatesPage() {
   const [events, setEvents] = useState<Event[]>([])
@@ -39,7 +34,6 @@ export default function AffiliatesPage() {
   const [loadingReport, setLoadingReport] = useState(false)
   const [importing, setImporting] = useState(false)
   const [msg, setMsg] = useState('')
-  const [markingPaid, setMarkingPaid] = useState<string | null>(null)
   const [revenueHidden] = useRevenueHidden()
   const display = (n: number) => revenueHidden ? 'RM ••••••' : rm(n)
 
@@ -105,28 +99,6 @@ export default function AffiliatesPage() {
     loadReport() // resync summary
   }
 
-  // Mark a creator paid (or unpaid) for this event. Paid status is per-creator+event,
-  // so `amount` is the creator's FULL event commission from summary — not one row.
-  async function togglePaid(affiliate_id: string, amount: number, isPaid: boolean) {
-    setMarkingPaid(affiliate_id)
-    try {
-      const action = isPaid ? 'unmark_paid' : 'mark_paid'
-      const res = await fetch(`/api/affiliates?action=${action}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event_id: eventId, affiliate_id, amount }),
-      })
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}))
-        setMsg(`⚠️ ${j.error || res.status}`)
-        return
-      }
-      loadReport() // resync paid state across all of this creator's rows
-    } finally {
-      setMarkingPaid(null)
-    }
-  }
-
   function copyCsv() {
     if (!report) return
     const lines = [['Buyer', 'Affiliate', 'Revenue (RM)', 'Commission (RM)'].join(',')]
@@ -138,9 +110,6 @@ export default function AffiliatesPage() {
     navigator.clipboard.writeText(lines.join('\n'))
     setMsg('📋 Payout CSV copied to clipboard.')
   }
-
-  // Per-creator paid state + full-event commission, keyed by affiliate_id.
-  const summaryByAff = new Map((report?.summary ?? []).map(s => [s.affiliate_id, s] as const))
 
   if (loading) return <div className="text-zinc-500 mt-20 text-center">Loading...</div>
 
@@ -196,9 +165,6 @@ export default function AffiliatesPage() {
                   {report.buyers.map(b => {
                     const aff = report.affiliates.find(a => a.id === b.affiliate_id)
                     const comm = aff && aff.active ? b.total * aff.rate : 0
-                    const s = comm > 0 ? summaryByAff.get(b.affiliate_id!) : undefined
-                    const isPaid = !!s?.paid_at
-                    const saving = markingPaid === b.affiliate_id
                     return (
                       <tr key={b.attendee_id} className="border-b border-zinc-900 hover:bg-zinc-900/30">
                         <td className="px-4 py-3 font-medium text-white whitespace-nowrap">
@@ -218,32 +184,7 @@ export default function AffiliatesPage() {
                           </select>
                         </td>
                         <td className="px-4 py-3 font-semibold whitespace-nowrap">
-                          {comm > 0 ? (
-                            <div className="flex flex-col gap-1 items-start">
-                              <span className="text-amber-400">{display(comm)}</span>
-                              {isPaid ? (
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-[10px] bg-emerald-900/50 text-emerald-300 px-1.5 py-0.5 rounded whitespace-nowrap">
-                                    ✓ PAID {fmtDateShort(s!.paid_at)}
-                                  </span>
-                                  <button
-                                    onClick={() => togglePaid(b.affiliate_id!, s!.commission, true)}
-                                    disabled={saving}
-                                    title="Unmark as paid"
-                                    className="text-[10px] text-zinc-500 hover:text-amber-400 disabled:opacity-50">
-                                    {saving ? '…' : '↩'}
-                                  </button>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => togglePaid(b.affiliate_id!, s?.commission ?? comm, false)}
-                                  disabled={saving}
-                                  className="text-[10px] font-semibold px-2 py-0.5 rounded bg-emerald-600/80 hover:bg-emerald-500 text-white disabled:opacity-50 whitespace-nowrap">
-                                  {saving ? 'Saving…' : '✓ Mark paid'}
-                                </button>
-                              )}
-                            </div>
-                          ) : <span className="text-zinc-600">—</span>}
+                          {comm > 0 ? <span className="text-amber-400">{display(comm)}</span> : <span className="text-zinc-600">—</span>}
                         </td>
                       </tr>
                     )

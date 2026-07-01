@@ -63,7 +63,9 @@ export async function GET(req: NextRequest) {
   // ── Load attendees, checklist, survey in parallel ─────────────────────────
   const agedCutoff = new Date(Date.now() - 48 * 3600_000).toISOString()
   const [attRes, checkRes, surveyRes, prepRes, agedLeadsRes, claimsRes, dealsRes] = await Promise.all([
-    supabase.from('attendees').select('name, phone, payment_status, payment_amount, attendance_confirmed').eq('event_id', eventId),
+    // Facilitators (is_facilitator) excluded so registered/paid/pending and prep
+    // laggards match the Attendees page (participants only, not staff).
+    supabase.from('attendees').select('name, phone, payment_status, payment_amount, attendance_confirmed').eq('event_id', eventId).not('is_facilitator', 'is', true),
     supabase.from('checklist_items').select('item, category, due_date, status').eq('event_id', eventId),
     supabase.from('pre_event_survey_responses').select('id, phone').eq('event_id', eventId),
     supabase.from('prep_progress').select('phone_norm, name, completed').eq('event_id', eventId),
@@ -262,6 +264,7 @@ export async function GET(req: NextRequest) {
     const { count: priorPaid } = await supabase
       .from('attendees').select('id', { count: 'exact', head: true })
       .eq('event_id', pe.id as string).eq('payment_status', 'paid').lte('created_at', peCutoff)
+      .not('is_facilitator', 'is', true)
     if (priorPaid != null && priorPaid > 0) {
       const diffPct = Math.round(((paid.length - priorPaid) / priorPaid) * 100)
       if (diffPct < 0) paceBehindPct = -diffPct
