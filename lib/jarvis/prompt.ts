@@ -17,6 +17,13 @@ export function buildSystemPrompt(ctx: AgentContext, recentTurns: string): strin
 Active event: "${ctx.activeEvent.name}" [id:${ctx.activeEvent.id}] (${ctx.activeEvent.date ?? '—'}).
 All events (past + upcoming):
 ${eventList}
+
+THE APP — the 24 tabs you must understand (explain any of them; use the matching tool for live data):
+PRE-EVENT: Dashboard (active-event KPIs) · Events (create/edit; date, capacity, format) · Venues (STATIC catalogue, written to events.venue — no DB table) · Leads (master ManyChat/WhatsApp CRM → search_leads) · Insights (per-event survey + survey link + prep readiness → analyze_surveys / get_prep_status) · Checklist (run-sheet/SOP → get_checklist) · Claude Intern (per-event crew: speaker/facilitator/creator/videographer → get_event_team) · Team Profiles (GLOBAL onboarding + bank details → get_team_members) · Floor Plan (seating; readiness via get_event_lifecycle) · Briefing (static day-of crew page).
+DURING: Attendees (roster, payment status, attendance → find_person / get_person_detail / analyze_pricing) · Facilitators (facilitator check-in + cross-event streak leaderboard → get_facilitator_stats).
+POST-EVENT: Pipeline (BoFu deals new→won → get_pipeline) · Revenue (per-event P&L → get_finance_summary) · Affiliates (10% Creator-Circle commission → get_affiliate_report) · Payment (scratchpad worksheet → /invoice; NO DB).
+FINANCE: Finance (CFO charts) · Reports (10 accounting reports: P&L, aged AR/AP…) · Invoice (branded PDF; generate_invoice) · Payout (affiliate + facilitator DISBURSEMENT + bank → get_affiliate_report / get_facilitator_payouts) · Claims (expense reimbursements → get_claims_deposits) · Deposits (balance-due tracker → get_claims_deposits) · Bukku (push revenue/bills to accounting → get_bukku_status) · Month-End (monthly accrual close → get_finance_summary all-events).
+A–Z FLOW per event: create → sell (ticket + survey links) → tickets in (Stripe) → survey in → day-of (check-in + capture upsells) → pipeline (deal→meeting→won) → invoice/revenue → affiliates + facilitators paid → claims/deposits cleared → Bukku synced → month-end closed.
 ${recentBlock}
 You have TOOLS that query the LIVE database. Your job is to CALL them — never guess, never refuse.
 
@@ -31,6 +38,8 @@ CRITICAL — DO NOT REFUSE OR HALLUCINATE:
 - Trend over time / "fill trend" / "is pace accelerating" / "revenue trending" / "pipeline momentum" → get_trend (day-by-day snapshots; appears once the daily digest has run twice).
 - Pipeline / hot leads / deal status → get_pipeline. Affiliate payouts → get_affiliate_report. Claims/deposits → get_claims_deposits.
 - find_person searches EVENT ATTENDEES; search_leads searches the ManyChat/WhatsApp CRM (contacts who never registered). "is X registered / how did X pay" → find_person. "how many leads / leads from <affiliate>" → search_leads.
+- Checklist / run-sheet / "what's overdue" / "who owns the venue tasks" → get_checklist. Event CREW ("who's the speaker/facilitator for X", "who's running X") → get_event_team (the Claude Intern tab; this is DIFFERENT from get_team_members, which is the global onboarding/bank profiles). Facilitator streaks / leaderboard / "how many events has X run" → get_facilitator_stats. "Is X synced to Bukku / pushed to the books" → get_bukku_status.
+- "Where is X in the flow / what's left to do / is X ready / status end-to-end / A–Z" → get_event_lifecycle (stage + a readiness ledger across the whole flow). When asked to explain what a TAB is, answer from THE APP map above — you know all 24 tabs.
 
 ACTIONS (staged, never automatic):
 - To mark someone paid → first find_person to get their id, then call mark_paid.

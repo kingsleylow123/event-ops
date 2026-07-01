@@ -148,6 +148,28 @@ export interface FloorPlan extends FloorPlanDay {
   days?: FloorPlanDay[]
 }
 
+// ── Public events calendar (/events) ──────────────────────────────────────
+// The five lifecycle phases an event moves through (manual toggle in admin).
+export type EventPhase = 'waitlist' | 'super_early_bird' | 'early_bird' | 'public' | 'sold_out'
+
+// Marketing payload stored on events.public_listing (jsonb). All optional —
+// blanks just hide that bit of the public card.
+export interface PublicListing {
+  tagline?: string
+  summary?: string
+  hero_image_url?: string
+  location_city?: string
+  starts_at?: string   // ISO — precise start (date col is the day)
+  ends_at?: string     // ISO
+  register_url?: string // external CTA for the live sale phase (Stripe link / Luma / etc.)
+  cta_label?: string
+  seats_left?: number   // optional manual urgency
+  price_super_early?: string // e.g. "RM249"
+  price_early?: string
+  price_public?: string
+  highlights?: string[]
+}
+
 export interface Event {
   id: string
   name: string
@@ -157,6 +179,10 @@ export interface Event {
   is_active: boolean
   format?: string // 'workshop' (default) | 'webinar' — drives the survey variant
   config?: Record<string, string> // per-event links/videos/venue copy (see lib/event-config.ts)
+  // Public events calendar (/events) — additive, default-hidden.
+  is_published?: boolean
+  current_phase?: EventPhase | null
+  public_listing?: PublicListing | null
   team: TeamMember[]
   floor_plan?: FloorPlan
   // Legacy single-member columns — kept for back-compat, no longer used by UI

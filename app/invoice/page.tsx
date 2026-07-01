@@ -17,6 +17,7 @@ type AttendeeLite = {
 
 type LineItem = { desc: string; qty: string; unit: string }
 type QuickItem = { desc: string; note: string; qty: string; price: string }
+type RefundItem = { desc: string; ori: string; refund: string }
 type Payment = { label: string; amount: string }
 
 // ── Helpers ─────────────────────────────────────────────────────────────
@@ -61,19 +62,26 @@ function cleanInvoiceText(s: string | null | undefined): string {
 // ── Main page ───────────────────────────────────────────────────────────
 function InvoiceContent() {
   const params = useSearchParams()
-  const initialMode = (params.get('mode') === 'balance' ? 'balance' : 'quick') as 'quick' | 'balance'
-  const [mode, setMode] = useState<'quick' | 'balance'>(initialMode)
+  const modeParam = params.get('mode')
+  const initialMode = (modeParam === 'balance' ? 'balance' : modeParam === 'refund' ? 'refund' : 'quick') as 'quick' | 'balance' | 'refund'
+  const [mode, setMode] = useState<'quick' | 'balance' | 'refund'>(initialMode)
 
   // ── Shared
   const [name, setName] = useState(params.get('name') || 'CLIENT NAME')
   const [date, setDate] = useState(params.get('date') || todayIso())
   const dateParts = useMemo(() => formatDateParts(date), [date])
-  const [companyName, setCompanyName] = useState('Oppa-Media')
-  const [companyEmail, setCompanyEmail] = useState('kingsley@oppa-media.com')
-  const [companyPhone, setCompanyPhone] = useState('6012 285 0125')
+  const [companyName, setCompanyName] = useState('CMO Consulting Sdn. Bhd.')
+  const [companyReg, setCompanyReg] = useState('202601024007 (1686104-X)')
+  const [companyEmail, setCompanyEmail] = useState('claudemalaysiaofficial@gmail.com')
+  const [companyPhone, setCompanyPhone] = useState('012-285 0125')
   const [bankName, setBankName] = useState('Maybank SME Biz')
   const [bankAccount, setBankAccount] = useState('5142 8090 1848')
   const [bankHolder, setBankHolder] = useState('Kingsley Low Yean Wee')
+  // Invoice number — editable, remembered in the browser. Test-saving never changes it.
+  const [invoiceNo, setInvoiceNo] = useState(
+    () => (typeof window !== 'undefined' && localStorage.getItem('cmo_invoice_no')) || 'CMO-2026-0021',
+  )
+  const [issued, setIssued] = useState(false)
 
   // ── Quick mode — one row per ticket
   const [quickItems, setQuickItems] = useState<QuickItem[]>([
@@ -104,9 +112,33 @@ function InvoiceContent() {
   )
   const balanceDue = subtotal - totalPaid
 
+  // ── Refund mode — each line shows the original price and the refund amount;
+  // TOTAL REFUND sums the refund column (money returned to the client).
+  const [refundItems, setRefundItems] = useState<RefundItem[]>([
+    { desc: 'Partial refund — Claude Workshop', ori: '0', refund: '0' },
+  ])
+  const refundTotal = useMemo(
+    () => refundItems.reduce((s, it) => s + num(it.refund), 0),
+    [refundItems],
+  )
+
   useEffect(() => {
     document.title = `Invoice - ${name}`
   }, [name])
+
+  // Remember the invoice number across page reloads (browser-local)
+  useEffect(() => {
+    localStorage.setItem('cmo_invoice_no', invoiceNo)
+  }, [invoiceNo])
+
+  // Peek the next number from the database (draft, not consumed). Falls back
+  // silently to the browser value if the DB isn't set up yet — nothing breaks.
+  useEffect(() => {
+    fetch('/api/invoice/number', { cache: 'no-store' })
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (d?.next) { setInvoiceNo(d.next); setIssued(false) } })
+      .catch(() => {})
+  }, [])
 
   // ── PDF export
   const [exporting, setExporting] = useState(false)
@@ -295,12 +327,24 @@ function InvoiceContent() {
   }
 
   async function exportPDF() {
+    // Quick Invoice → atomically issue & lock the CMO number before capturing
+    // the PDF, so saving (and sharing the file via WhatsApp / screenshot)
+    // advances the DB counter just like Email does. Falls back to the peeked
+    // draft if the DB call fails — never blocks the save.
+    if (mode === 'quick' && !issued && quickTotal > 0) {
+      const issuedNo = await issueNumber(quickTotal)
+      if (issuedNo) {
+        flushSync(() => {
+          setInvoiceNo(issuedNo)
+          setIssued(true)
+        })
+      }
+    }
     await renderPdf('save')
   }
 
   async function emailInvoice() {
-    const isBalance = mode === 'balance'
-    const total = isBalance ? subtotal : quickTotal
+    const total = mode === 'balance' ? subtotal : mode === 'refund' ? refundTotal : quickTotal
     if (!name || name.trim().toUpperCase() === 'CLIENT NAME') {
       setEmailMsg({ ok: false, text: 'Enter the client name first.' })
       return
@@ -319,6 +363,15 @@ function InvoiceContent() {
     setEmailing(true)
     setEmailMsg(null)
     try {
+      // This is the real send — lock & log the invoice number now (once).
+      // Test-saving (Save as PDF) never reaches here, so it never burns a number.
+      if (!issued) {
+        const issuedNo = await issueNumber(total)
+        if (issuedNo) {
+          flushSync(() => setInvoiceNo(issuedNo))
+          setIssued(true)
+        }
+      }
       const dataUri = await renderPdf('datauri')
       if (!dataUri) {
         setEmailMsg({ ok: false, text: 'Could not generate the PDF.' })
@@ -410,7 +463,7 @@ function InvoiceContent() {
       // Add as a ticket row, dropping the empty placeholder row if present.
       // Stripe product name already contains "(non-refundable)" — skip the note line
       setQuickItems(items => [
-        ...items.filter(it => it.desc.trim() || num(it.price) !== 0),
+        ...items.filter(it => num(it.price) !== 0),
         {
           desc: finalDesc,
           // Never pull the attendee's notes onto the invoice — they hold internal
@@ -419,6 +472,14 @@ function InvoiceContent() {
           qty: '1',
           price: String(a.payment_amount ?? 0),
         },
+      ])
+    } else if (mode === 'refund') {
+      // Auto-fill a refund row: Original Price = what they paid, Refund defaults
+      // to the same (full refund) — edit it down for a partial. Drop placeholder rows.
+      const paid = String(a.payment_amount ?? 0)
+      setRefundItems(items => [
+        ...items.filter(it => num(it.ori) !== 0 || num(it.refund) !== 0),
+        { desc: finalDesc, ori: paid, refund: paid },
       ])
     } else {
       // Add as a line item in balance mode
@@ -439,6 +500,33 @@ function InvoiceContent() {
   }
   function addQuickItem() {
     setQuickItems(items => [...items, { desc: '', note: '', qty: '1', price: '0' }])
+  }
+
+  // ── Refund line helpers
+  function updateRefund(i: number, patch: Partial<RefundItem>) {
+    setRefundItems(items => items.map((it, idx) => (idx === i ? { ...it, ...patch } : it)))
+  }
+  function removeRefund(i: number) {
+    setRefundItems(items => (items.length === 1 ? items : items.filter((_, idx) => idx !== i)))
+  }
+  function addRefund() {
+    setRefundItems(items => [...items, { desc: '', ori: '0', refund: '0' }])
+  }
+
+  // Lock & log the invoice number (issue). Returns the official number, or null
+  // if the DB isn't set up yet — the caller proceeds gracefully with the draft.
+  async function issueNumber(total: number): Promise<string | null> {
+    try {
+      const res = await fetch('/api/invoice/number', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ client_name: name, amount: total, date }),
+      })
+      const d = await res.json().catch(() => ({}))
+      return res.ok && d.invoice_no ? (d.invoice_no as string) : null
+    } catch {
+      return null
+    }
   }
 
   // ── Line items + payments helpers
@@ -506,12 +594,20 @@ function InvoiceContent() {
             >
               2 · Balance Invoice
             </button>
+            <button
+              className={`mode-tab ${mode === 'refund' ? 'active' : ''}`}
+              onClick={() => setMode('refund')}
+            >
+              3 · Refund
+            </button>
           </div>
 
           <button onClick={exportPDF}>📄 Save as PDF</button>
-          <button onClick={pushToBukku} disabled={pushing}>
-            {pushing ? '⏳ Pushing…' : '📒 Push to Bukku'}
-          </button>
+          {mode !== 'refund' && (
+            <button onClick={pushToBukku} disabled={pushing}>
+              {pushing ? '⏳ Pushing…' : '📒 Push to Bukku'}
+            </button>
+          )}
           <button className="secondary" onClick={() => window.close()}>Close</button>
 
           {/* ── Email invoice to client ── */}
@@ -568,11 +664,20 @@ function InvoiceContent() {
 
           <div className="invoice-content">
             <div className="inv-header">
-              <div className="inv-logo">
-                <span className="inv-logo-oppa">OPPA-</span>
-                <span className="inv-logo-media">MEDIA</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/cmo-logo-orange.png" alt="CMO Consulting Sdn. Bhd." className="inv-logo-img" />
+              <div style={{ textAlign: 'right' }}>
+                <div className="inv-title">INVOICE</div>
+                <div style={{ marginTop: 14 }}>
+                  <input
+                    className="inv-edit"
+                    value={invoiceNo}
+                    onChange={e => setInvoiceNo(e.target.value)}
+                    readOnly={issued}
+                    style={{ textAlign: 'right', fontSize: 13, fontWeight: 600, letterSpacing: 1, color: '#F26522', display: 'block', marginLeft: 'auto', minWidth: 150 }}
+                  />
+                </div>
               </div>
-              <div className="inv-title">INVOICE</div>
             </div>
 
             <div className="inv-divider" />
@@ -596,12 +701,18 @@ function InvoiceContent() {
                   onChange={e => setCompanyName(e.target.value)}
                   style={{ textAlign: 'right', minWidth: 180 }}
                 />
+                <input
+                  className="inv-edit inv-company-reg"
+                  value={companyReg}
+                  onChange={e => setCompanyReg(e.target.value)}
+                  style={{ textAlign: 'right', minWidth: 160, display: 'block', marginLeft: 'auto', fontSize: 12, color: '#777' }}
+                />
                 <div className="inv-company-contact">
                   <input
                     className="inv-edit"
                     value={companyEmail}
                     onChange={e => setCompanyEmail(e.target.value)}
-                    style={{ textAlign: 'right', minWidth: 200, display: 'block', marginLeft: 'auto' }}
+                    style={{ textAlign: 'right', width: 290, display: 'block', marginLeft: 'auto' }}
                   />
                   <input
                     className="inv-edit"
@@ -866,6 +977,100 @@ function InvoiceContent() {
                 </div>
               </>
             )}
+
+            {/* ── MODE: REFUND ────────────────────────────── */}
+            {mode === 'refund' && (
+              <>
+                <table className="inv-table">
+                  <thead>
+                    <tr>
+                      <th className="col-desc">Description</th>
+                      <th className="col-amount">Original Price</th>
+                      <th className="col-amount">Refund</th>
+                      <th className="col-x"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {refundItems.map((it, i) => (
+                      <tr key={i}>
+                        <td className="col-desc">
+                          <textarea
+                            className="inv-edit inv-desc-edit"
+                            value={it.desc}
+                            onChange={e => updateRefund(i, { desc: e.target.value })}
+                          />
+                        </td>
+                        <td className="col-amount">
+                          <input
+                            className="inv-edit"
+                            value={it.ori}
+                            onChange={e => updateRefund(i, { ori: e.target.value })}
+                            style={{ textAlign: 'right', width: 90 }}
+                          />
+                        </td>
+                        <td className="col-amount">
+                          <input
+                            className="inv-edit"
+                            value={it.refund}
+                            onChange={e => updateRefund(i, { refund: e.target.value })}
+                            style={{ textAlign: 'right', width: 90 }}
+                          />
+                        </td>
+                        <td className="col-x">
+                          {refundItems.length > 1 && (
+                            <button onClick={() => removeRefund(i)} className="x-btn">✕</button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="add-row">
+                      <td colSpan={4}>
+                        <button onClick={addRefund} className="add-btn">+ Add line</button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+
+                <div className="inv-total-row">
+                  <div className="inv-total">
+                    <span className="inv-total-lbl">TOTAL REFUNDED</span>
+                    <span className="inv-total-amt">{rm(refundTotal)}</span>
+                  </div>
+                </div>
+
+                <div className="inv-footer" style={{ marginTop: 48 }}>
+                  <div className="inv-payment">
+                    <div className="inv-pay-title">PAYMENT METHOD</div>
+                    <div className="inv-pay-details">
+                      Bank Name:{' '}
+                      <input
+                        className="inv-edit"
+                        value={bankName}
+                        onChange={e => setBankName(e.target.value)}
+                        style={{ minWidth: 140 }}
+                      /><br />
+                      Bank Account:{' '}
+                      <input
+                        className="inv-edit"
+                        value={bankAccount}
+                        onChange={e => setBankAccount(e.target.value)}
+                        style={{ minWidth: 140 }}
+                      /><br />
+                      Name:{' '}
+                      <input
+                        className="inv-edit"
+                        value={bankHolder}
+                        onChange={e => setBankHolder(e.target.value)}
+                        style={{ minWidth: 180 }}
+                      />
+                    </div>
+                    <div className="inv-pay-note">
+                      Refund will be processed to your bank account within 7 working days of this notice.
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -987,7 +1192,7 @@ const INVOICE_CSS = `
     cursor: pointer;
   }
   .mode-tab.active {
-    background: #ed1c24 !important;
+    background: #F26522 !important;
     color: #fff !important;
   }
 
@@ -1001,30 +1206,12 @@ const INVOICE_CSS = `
     overflow: hidden;
     color: #111;
   }
-  .red-stripe {
-    width: 14px;
-    flex-shrink: 0;
-    height: 100%;
-    align-self: stretch;
-    background:
-      linear-gradient(
-        to bottom,
-        #ed1c24 0,
-        #ed1c24 90px,
-        #ffffff 90px,
-        #ffffff 108px,
-        #ed1c24 108px,
-        #ed1c24 100%
-      );
-  }
-  /* legacy children retained but invisible — gradient draws the stripe */
-  .red-stripe .seg-top,
-  .red-stripe .seg-gap,
-  .red-stripe .seg-bottom { display: none; }
+  /* Minimal template: no left stripe — clean white sheet */
+  .red-stripe { display: none; }
 
   .invoice-content {
     flex: 1;
-    padding: 40px 52px 40px 32px;
+    padding: 46px 50px;
     display: flex;
     flex-direction: column;
   }
@@ -1035,6 +1222,14 @@ const INVOICE_CSS = `
     align-items: center;
     margin-bottom: 14px;
   }
+  .inv-logo-img {
+    height: 64px;
+    width: auto;
+    border-radius: 10px;
+    display: block;
+    flex: 0 0 auto;
+  }
+  .inv-company-reg { font-size: 12px; color: #777; margin-bottom: 6px; }
   .inv-logo {
     display: inline-flex;
     align-items: stretch;
@@ -1043,7 +1238,7 @@ const INVOICE_CSS = `
     flex: 0 0 auto;
   }
   .inv-logo-oppa {
-    background: #ed1c24;
+    background: #F26522;
     color: #fff;
     font-weight: 900;
     font-size: 18px;
@@ -1069,7 +1264,7 @@ const INVOICE_CSS = `
     line-height: 1;
     margin-top: -10px;
   }
-  .inv-divider { height: 1px; background: #d8d8d8; margin-bottom: 22px; }
+  .inv-divider { height: 2px; background: #F26522; margin-bottom: 22px; }
 
   .inv-billing {
     display: flex;
@@ -1108,13 +1303,15 @@ const INVOICE_CSS = `
 
   /* Quick mode table */
   .inv-table { width: 100%; border-collapse: collapse; }
-  .inv-table thead tr { background: #ed1c24; }
+  .inv-table thead tr { background: transparent; }
   .inv-table thead th {
-    color: #fff;
+    color: #F26522;
     font-weight: 700;
-    font-size: 14px;
-    letter-spacing: 0.5px;
-    padding: 12px 14px;
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 8px 14px;
+    border-bottom: 1.5px solid #F26522;
   }
   .inv-table thead th.col-desc { text-align: left; }
   .inv-table thead th.col-qty { text-align: center; width: 50px; }
@@ -1137,10 +1334,12 @@ const INVOICE_CSS = `
 
   /* Balance mode table */
   .items-table { width: 100%; border-collapse: collapse; }
-  .items-table thead tr { background: #ed1c24; }
+  .items-table thead tr { background: transparent; }
   .items-table thead th {
-    color: #fff; font-weight: 700; font-size: 13px; letter-spacing: 0.5px;
-    padding: 11px 12px;
+    color: #F26522; font-weight: 700; font-size: 10px; letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 8px 12px;
+    border-bottom: 1.5px solid #F26522;
   }
   .items-table thead th.col-desc { text-align: left; }
   .items-table thead th.col-qty { text-align: center; width: 60px; }
@@ -1165,7 +1364,7 @@ const INVOICE_CSS = `
     cursor: pointer;
     margin: 6px 0;
   }
-  .add-btn:hover { color: #ed1c24 !important; border-color: #ed1c24 !important; }
+  .add-btn:hover { color: #F26522 !important; border-color: #F26522 !important; }
   .add-btn-small {
     background: transparent !important;
     color: #888 !important;
@@ -1174,7 +1373,7 @@ const INVOICE_CSS = `
     padding: 0 !important;
     cursor: pointer;
   }
-  .add-btn-small:hover { color: #ed1c24 !important; }
+  .add-btn-small:hover { color: #F26522 !important; }
   .x-btn {
     background: transparent !important;
     color: #ccc !important;
@@ -1183,7 +1382,7 @@ const INVOICE_CSS = `
     padding: 2px 6px !important;
     cursor: pointer;
   }
-  .x-btn:hover { color: #ed1c24 !important; }
+  .x-btn:hover { color: #F26522 !important; }
 
   .totals-stack {
     margin-left: auto;
@@ -1230,7 +1429,7 @@ const INVOICE_CSS = `
   .balance-line.zero { background: #e7f4e8; }
   .balance-lbl {
     font-size: 13px; font-weight: 700; letter-spacing: 1.2px;
-    color: #ed1c24;
+    color: #F26522;
   }
   .balance-lbl.zero { color: #2c7a2f; }
   .balance-amt { font-size: 18px; font-weight: 800; color: #111; }
@@ -1255,16 +1454,17 @@ const INVOICE_CSS = `
   }
   .inv-total-row { display: flex; justify-content: flex-end; margin-top: 18px; }
   .inv-total {
-    background: #efeeec;
-    padding: 16px 14px;
+    background: #fdebe0;
+    padding: 14px 18px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 28px;
     min-width: 280px;
   }
-  .inv-total-lbl { font-size: 14px; font-weight: 700; letter-spacing: 1px; color: #111; }
-  .inv-total-amt { font-size: 16px; font-weight: 700; color: #111; }
+  .inv-total-lbl { font-size: 13px; font-weight: 700; letter-spacing: 1px; color: #F26522; }
+  .inv-total-amt { font-size: 18px; font-weight: 700; color: #111; }
 
   /* Inline edit fields */
   .inv-edit {

@@ -6,6 +6,10 @@
     { "path": "/api/calcom/sync",                "schedule": "0 1 * * *"  },
     { "path": "/api/jarvis/sst-check",           "schedule": "0 2 1 * *"  },
     { "path": "/api/leads/import",               "schedule": "30 21 * * *" },
-    { "path": "/api/jarvis/pipeline-nudge",      "schedule": "0 6 * * 1,3,5" }
+    { "path": "/api/jarvis/pipeline-nudge",      "schedule": "0 6 * * 1,3,5" },
+    { "path": "/api/ads-council/run",            "schedule": "0 1 * * *"  },
+    { "path": "/api/ghl/health",                 "schedule": "0 3 * * *"  },
+    { "path": "/api/c-suite/run",                "schedule": "0 23 * * *" },
+    { "path": "/api/c-suite/weekly",             "schedule": "30 23 * * 0" }
   ]
 }

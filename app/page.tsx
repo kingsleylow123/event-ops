@@ -102,12 +102,12 @@ export default function Dashboard() {
               {event.capacity && <span>👥 Capacity: {event.capacity}</span>}
             </div>
           </div>
-          <Link href="/events" className="theme-faint theme-border text-xs hover:text-amber-500 border rounded px-3 py-1.5 flex-shrink-0">Manage Events</Link>
+          <Link href="/manage/events" className="theme-faint theme-border text-xs hover:text-amber-500 border rounded px-3 py-1.5 flex-shrink-0">Manage Events</Link>
         </div>
       ) : (
         <div className="theme-surface theme-border border rounded-xl p-5 text-center">
           <p className="theme-muted mb-3">No active event. Create one to get started.</p>
-          <Link href="/events" className="bg-amber-500 hover:bg-amber-400 text-black font-semibold px-4 py-2 rounded-lg text-sm">Create Event</Link>
+          <Link href="/manage/events" className="bg-amber-500 hover:bg-amber-400 text-black font-semibold px-4 py-2 rounded-lg text-sm">Create Event</Link>
         </div>
       )}
 

@@ -20,6 +20,7 @@ import { GET_BUKKU_STATUS_TOOL } from './bukku-status'
 import { GET_FACILITATOR_STATS_TOOL } from './facilitator-stats'
 import { GET_EVENT_LIFECYCLE_TOOL } from './lifecycle'
 import { GET_FUNNEL_TOOL, GET_WEAK_LINK_TOOL } from './funnel'
+import { CONVENE_BOARD_TOOL } from './convene-board'
 
 // Write-tool executors run from the route's YES handler (after confirmation).
 export { executeMarkPaid, executeUpdatePipeline }
@@ -50,6 +51,7 @@ const TOOLS: ToolDef[] = [
   GET_EVENT_LIFECYCLE_TOOL,
   GET_FUNNEL_TOOL,
   GET_WEAK_LINK_TOOL,
+  CONVENE_BOARD_TOOL,
   MARK_PAID_TOOL,
 ]
 

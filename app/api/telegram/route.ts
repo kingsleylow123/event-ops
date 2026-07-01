@@ -16,6 +16,8 @@ import { runAgent } from '@/lib/jarvis/agent'
 import type { AgentContext } from '@/lib/jarvis/types'
 import { isDuplicateUpdate } from '@/lib/jarvis/observability'
 import { executeMarkPaid, executeUpdatePipeline } from '@/lib/jarvis/tools'
+import { handleAdsCallback } from '@/lib/ads-council'
+import { answerCallbackQuery } from '@/lib/telegram'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -293,7 +295,7 @@ async function affiliateBuyersForEvent(eventId: string) {
 }
 
 // ── Prep readiness aggregate (active event only) — mirrors GET /api/prep ──────
-const PREP_STEP_LABELS = { '1': 'Install', '2': 'Pro', '3': 'Dev tools', '4': 'Survey', '5': 'Data', '6': '9:30am' } as const
+const PREP_STEP_LABELS = { '1': 'Install', '2': 'Pro', '3': 'Dev tools', 'mcp': 'MCP', 'chrome': 'Chrome', '4': 'Survey', '5': 'Data', '6': '9:30am' } as const
 async function prepAggregate(eventId: string) {
   const { data } = await supabase
     .from('prep_progress').select('name, phone, steps, completed').eq('event_id', eventId)
@@ -1607,12 +1609,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false }, { status: 401 })
   }
 
-  let update: { update_id?: number; message?: Record<string, unknown> }
+  let update: { update_id?: number; message?: Record<string, unknown>; callback_query?: Record<string, unknown> }
   try {
     update = await req.json()
   } catch {
     return NextResponse.json({ ok: true })
   }
+
+  // Inline-button taps (ads-council approval cards) arrive as callback_query, not
+  // message. Dedupe + dispatch to the ads-council handler, then ack.
+  if (update.callback_query) {
+    if (typeof update.update_id === 'number') {
+      const cq = update.callback_query as { message?: { chat?: { id?: number } } }
+      if (await isDuplicateUpdate(update.update_id, cq.message?.chat?.id ?? null)) {
+        return NextResponse.json({ ok: true, deduped: true })
+      }
+    }
+    const cq = update.callback_query as unknown as Parameters<typeof handleAdsCallback>[0]
+    after(async () => {
+      try {
+        const handled = await handleAdsCallback(cq)
+        if (!handled) await answerCallbackQuery((cq as { id: string }).id)
+      } catch (e) {
+        console.error('[telegram] ads callback', e)
+        try { await answerCallbackQuery((cq as { id: string }).id, 'Something went wrong.') } catch { /* ignore */ }
+      }
+    })
+    return NextResponse.json({ ok: true })
+  }
+
   const message = update.message // ignore edited_message to avoid duplicate replies
   if (!message) return NextResponse.json({ ok: true })
 

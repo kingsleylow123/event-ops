@@ -330,6 +330,49 @@ export async function getProfitLoss(_date_from: string, _date_to: string): Promi
   throw new BukkuError('Bukku Open API exposes no /reports endpoint — compute P&L from transaction lists instead (flow #5, TODO).')
 }
 
+// Best-effort sum of sales-invoice totals on/after `fromISO` (YYYY-MM-DD), read
+// from the Bukku Open API. Used by the SST-threshold monitor as the "official
+// books" cross-check against the Supabase ticket-revenue figure.
+//
+// The Open API's list-endpoint shape isn't documented, so this is deliberately
+// DEFENSIVE: it pages through /sales/invoices, sums the first recognizable total
+// field per row, client-side filters by date, and returns `null` if the response
+// can't be confidently parsed — so callers NEVER act on a wrong figure. Cannot be
+// tested locally (the token lives only in the Vercel env); verified on first run.
+export async function salesTotalSince(fromISO: string): Promise<number | null> {
+  if (!bukkuEnabled()) return null
+  try {
+    let total = 0
+    let sawRows = false
+    for (let page = 1; page <= 50; page++) {
+      const resp = await call('GET', `/sales/invoices?page=${page}&limit=100&date_from=${fromISO}`)
+      const list = (resp.transactions ?? resp.data ?? resp.invoices ?? []) as Array<Record<string, unknown>>
+      if (!Array.isArray(list) || list.length === 0) break
+      for (const row of list) {
+        const amt = pickAmount(row)
+        if (amt == null) return null // unrecognized shape → refuse to guess
+        const d = String(row.date ?? row.issued_on ?? row.transaction_date ?? '').slice(0, 10)
+        if (d && d < fromISO) continue
+        total += amt
+        sawRows = true
+      }
+      if (list.length < 100) break
+    }
+    return sawRows ? Math.round(total * 100) / 100 : 0
+  } catch (e) {
+    console.error('[bukku] salesTotalSince failed', e)
+    return null
+  }
+}
+
+function pickAmount(row: Record<string, unknown>): number | null {
+  for (const k of ['amount', 'total', 'grand_total', 'net_amount', 'net_total', 'total_amount']) {
+    const v = row[k]
+    if (v != null && v !== '' && Number.isFinite(Number(v))) return Number(v)
+  }
+  return null
+}
+
 // ── Compatibility shims (used by app/api/bukku/sync — ticket-revenue flow) ─────────
 // Kept so existing callers compile; both now hit the real API.
 export async function upsertContact(c: { name: string; phone?: string; email?: string; bank_account?: string }): Promise<string> {

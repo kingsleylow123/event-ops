@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --import tsx --test lib/jarvis/__tests__/*.test.ts"
+    "test": "node --import tsx --test lib/jarvis/__tests__/*.test.ts lib/ads-council/__tests__/*.test.ts lib/c-suite/__tests__/*.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.100.1",

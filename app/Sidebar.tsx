@@ -46,10 +46,13 @@ const icons = {
   admin: I(<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />),
   pipeline: I(<path d="M3 4h18l-7 8v6l-4 2v-8z" />),
   finance: I(<><path d="M21.21 15.89A10 10 0 1 1 8 2.83" /><path d="M22 12A10 10 0 0 0 12 2v10z" /></>),
+  cashflow: I(<><path d="M3 17l5-5 4 3 5-7" /><path d="M17 8h4v4" /><path d="M3 21h18" /></>),
+  valuation: I(<><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4z" /><path d="M5 6H3v2a3 3 0 0 0 3 3M19 6h2v2a3 3 0 0 1-3 3" /></>),
   claims: I(<><path d="M5 3v18l2-1 2 1 2-1 2 1 2-1 2 1V3l-2 1-2-1-2 1-2-1-2 1z" /><path d="M9 8h6M9 12h5" /></>),
   deposits: I(<><rect x="2" y="6" width="20" height="13" rx="2" /><circle cx="12" cy="12.5" r="3" /><path d="M6 6V4h14a2 2 0 0 1 2 2v9" /></>),
   reports: I(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><path d="M14 2v6h6" /><path d="M8 13h2M8 17h2M14 13h2M14 17h2" /></>),
   commandcenter: I(<><path d="M3 5h18l-7 8.5V19l-4 2v-7.5z" /></>),
+  csuite: I(<><path d="M3 21h18" /><path d="M5 21V10M9 21V10M15 21V10M19 21V10" /><path d="M4 10l8-6 8 6" /></>),
 }
 
 export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarProps) {
@@ -74,10 +77,17 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
 
   const dashboard: Item = { href: '/', label: 'Dashboard', icon: icons.dashboard }
   const commandCenter: Item = { href: '/command-center', label: 'Command Center', icon: icons.commandcenter }
+  const cSuite: Item = { href: '/c-suite', label: 'AI C-Suite', icon: icons.csuite }
   const groups: { id: string; title: string; items: Item[] }[] = [
+    ...(isAdmin ? [{
+      id: 'creators', title: 'Creators', items: [
+        { href: '/creators', label: 'Scorecard', icon: icons.creators },
+        { href: '/creators/insights', label: 'Insights', icon: icons.insights },
+      ],
+    }] : []),
     {
       id: 'pre', title: 'Pre-Event', items: [
-        { href: '/events', label: 'Events', icon: icons.events },
+        { href: '/manage/events', label: 'Manage Events', icon: icons.events },
         { href: '/venues', label: 'Venues', icon: icons.venue },
         ...(isAdmin ? [{ href: '/leads', label: 'Leads', icon: icons.leads }] : []),
         { href: '/insights', label: 'Insights', icon: icons.insights },
@@ -99,7 +109,6 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
         { href: '/pipeline', label: 'Pipeline', icon: icons.pipeline },
         { href: '/revenue', label: 'Revenue', icon: icons.revenue },
         { href: '/affiliates', label: 'Affiliates', icon: icons.affiliates },
-        { href: '/creators', label: 'Creators', icon: icons.creators },
         { href: '/payment-template', label: 'Payment', icon: icons.payment },
       ],
     }] : []),
@@ -107,6 +116,8 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
       id: 'finance', title: 'Finance', items: [
         { href: '/finance', label: 'Finance', icon: icons.finance },
         { href: '/finance/reports', label: 'Reports', icon: icons.reports },
+        { href: '/cashflow', label: 'Cashflow', icon: icons.cashflow },
+        { href: '/valuation', label: 'Startup Valuation', icon: icons.valuation },
         { href: '/invoice', label: 'Invoice', icon: icons.invoice },
         { href: '/payout', label: 'Payout', icon: icons.payout },
         { href: '/claims', label: 'Claims', icon: icons.claims },
@@ -184,6 +195,7 @@ export default function Sidebar({ userEmail, isAdmin, pendingCount }: SidebarPro
         [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {renderLink(dashboard)}
         {isAdmin && renderLink(commandCenter)}
+        {isAdmin && renderLink(cSuite)}
         {groups.map(g => (
           <div key={g.id} className="pt-3">
             <button

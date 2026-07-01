@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { peekCache, mutateCache } from '@/lib/useCachedFetch'
 import { useRevenueHidden } from '@/lib/useRevenueHidden'
+import { ComboBarLine, AreaLineChart, CashflowChart, Sparkline } from '@/components/finance/Charts'
 
 interface Row {
   ig_handle: string
@@ -17,10 +18,24 @@ interface Row {
   revenue: number | null
   commission: number | null
   override: number | null
+  weekly_collabs: number[]
+}
+interface TrendBucket {
+  key: string; label: string
+  posts: number; collab_posts: number; community_posts: number
+  reach: number; engagement: number; active_creators: number
+  leads: number; seats: number; revenue: number; commission: number
+}
+interface EventTicketRow {
+  id: string; name: string | null; date: string | null; capacity: number | null
+  total_seats: number; attributed_seats: number; revenue: number
 }
 interface Report {
   rows: Row[]
   settings: { commission_rate: number; override_rate: number }
+  trends: { weekly: TrendBucket[]; monthly: TrendBucket[] }
+  events: EventTicketRow[]
+  insights: { icon: string; text: string; priority: number }[]
   unmapped_affiliates: Array<{ id: string; handle: string; name: string | null; leads: number; commission: number }>
   affiliates: Array<{ id: string; handle: string; name: string | null; ig_handle: string | null }>
   totals: { total_posts: number; collab_posts: number; community_posts: number; reach: number; engagement: number; active_creators: number; revenue: number; commission: number; override: number; total_leads: number }
@@ -32,11 +47,25 @@ const rm = (n: number) => `RM ${n.toLocaleString('en-MY', { minimumFractionDigit
 const num = (n: number) => n.toLocaleString('en-MY')
 const SINCE = '2026-05-01T00:00:00Z'
 
-const MONTHS: Record<string, { from: string; to?: string; label: string }> = {
-  all: { from: SINCE, label: 'May–Now' },
-  may: { from: '2026-05-01T00:00:00Z', to: '2026-06-01T00:00:00Z', label: 'May' },
-  jun: { from: '2026-06-01T00:00:00Z', to: '2026-07-01T00:00:00Z', label: 'June' },
-  jul: { from: '2026-07-01T00:00:00Z', to: '2026-08-01T00:00:00Z', label: 'July' },
+// Leaderboard time windows. 7d/30d are rolling (computed at load); the rest are fixed.
+const WINDOWS: Record<string, { label: string }> = {
+  '7d': { label: '7d' },
+  '30d': { label: '30d' },
+  may: { label: 'May' },
+  jun: { label: 'June' },
+  jul: { label: 'July' },
+  all: { label: 'May–Now' },
+}
+const FIXED: Record<string, { from: string; to?: string }> = {
+  all: { from: SINCE },
+  may: { from: '2026-05-01T00:00:00Z', to: '2026-06-01T00:00:00Z' },
+  jun: { from: '2026-06-01T00:00:00Z', to: '2026-07-01T00:00:00Z' },
+  jul: { from: '2026-07-01T00:00:00Z', to: '2026-08-01T00:00:00Z' },
+}
+function rangeFor(key: string): { from: string; to?: string } {
+  if (key === '7d') return { from: new Date(Date.now() - 7 * 86400000).toISOString() }
+  if (key === '30d') return { from: new Date(Date.now() - 30 * 86400000).toISOString() }
+  return FIXED[key] ?? { from: SINCE }
 }
 
 type SortKey = 'collab_posts' | 'reach' | 'engagement' | 'leads' | 'seats' | 'revenue' | 'commission' | 'override'
@@ -44,20 +73,21 @@ type SortKey = 'collab_posts' | 'reach' | 'engagement' | 'leads' | 'seats' | 're
 export default function CreatorsPage() {
   const [report, setReport] = useState<Report | null>(null)
   const [loading, setLoading] = useState(true)
-  const [month, setMonth] = useState<keyof typeof MONTHS>('all')
+  const [month, setMonth] = useState<string>('all')
   const [syncing, setSyncing] = useState(false)
   const [msg, setMsg] = useState('')
   const [sortKey, setSortKey] = useState<SortKey>('collab_posts')
   const [sortDir, setSortDir] = useState<1 | -1>(-1)
+  const [gran, setGran] = useState<'week' | 'month'>('week')
   const [commPct, setCommPct] = useState(10)
   const [ovrPct, setOvrPct] = useState(5)
   const [revenueHidden] = useRevenueHidden()
   const money = (n: number | null) => n == null ? '—' : revenueHidden ? 'RM ••••' : rm(n)
 
   const load = useCallback(() => {
-    const m = MONTHS[month]
+    const m = rangeFor(month)
     const url = `/api/creators?from=${encodeURIComponent(m.from)}${m.to ? `&to=${encodeURIComponent(m.to)}` : ''}`
-    const cacheKey = `creators:${month}`
+    const cacheKey = `creators:v2:${month}` // v2 = trends/events shape; ignores stale pre-trends cache
     const cached = peekCache<Report>(cacheKey)
     if (cached) { setReport(cached); setLoading(false) } else setLoading(true)
     fetch(url)
@@ -68,6 +98,11 @@ export default function CreatorsPage() {
   }, [month])
 
   useEffect(() => { load() }, [load])
+  // Auto-refresh data + insights every 2 min while the tab is visible (live during the weekly creator call).
+  useEffect(() => {
+    const id = setInterval(() => { if (typeof document !== 'undefined' && !document.hidden) load() }, 120000)
+    return () => clearInterval(id)
+  }, [load])
   // Sync the rate inputs from saved settings when a report loads.
   useEffect(() => {
     if (report?.settings) { setCommPct(Math.round(report.settings.commission_rate * 100)); setOvrPct(Math.round(report.settings.override_rate * 100)) }
@@ -113,6 +148,33 @@ export default function CreatorsPage() {
   const totOvr = Math.round(totRevenue * ovrPct / 100)
   const tCollab = sumBy(r => r.collab_posts), tReach = sumBy(r => r.reach), tEng = sumBy(r => r.engagement), tLeads = sumBy(r => r.leads ?? 0), tSeats = sumBy(r => r.seats ?? 0)
 
+  // ── Momentum: week/month trend series + deltas ──
+  const mondayISO = (d: Date) => { const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())); const day = x.getUTCDay(); x.setUTCDate(x.getUTCDate() + (day === 0 ? -6 : 1 - day)); return x.toISOString().slice(0, 10) }
+  const series = (gran === 'week' ? report?.trends?.weekly : report?.trends?.monthly) ?? []
+  const now = new Date()
+  const curKey = gran === 'week' ? mondayISO(now) : `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`
+  const livePartial = series.length > 0 && series[series.length - 1].key === curKey
+  const complete = series.filter(s => s.key < curKey)   // completed periods only (exclude current + future)
+  const cur = complete[complete.length - 1], prv = complete[complete.length - 2]
+  const pct = (a: number, b: number) => b > 0 ? Math.round(((a - b) / b) * 100) : (a > 0 ? 100 : 0)
+  const kpis = cur ? [
+    { l: 'Collab posts', v: cur.collab_posts, d: prv ? pct(cur.collab_posts, prv.collab_posts) : null },
+    { l: 'Leads signed', v: cur.leads, d: prv ? pct(cur.leads, prv.leads) : null },
+    { l: 'Reach', v: cur.reach, d: prv ? pct(cur.reach, prv.reach) : null },
+    { l: 'Seats', v: cur.seats, d: prv ? pct(cur.seats, prv.seats) : null },
+  ] : []
+  const topMovers = report ? [...report.rows].filter(r => r.collab_posts > 0).sort((a, b) => b.collab_posts - a.collab_posts).slice(0, 3) : []
+
+  // ── Event tickets ──
+  const evShort = (d: string | null) => d ? new Date(d).toLocaleDateString('en-MY', { day: 'numeric', month: 'short', timeZone: 'UTC' }) : '—'
+  const eventsList = report?.events ?? []
+  const upcoming = eventsList.filter(e => e.date && new Date(e.date).getTime() >= now.getTime())
+  const daysTo = (d: string) => Math.max(0, Math.ceil((new Date(d).getTime() - now.getTime()) / 86400000))
+
+  // Coaching insights are computed server-side (single source of truth, shared with
+  // the dedicated /creators/insights page). Panel shows the top 3.
+  const insights = report?.insights ?? []
+
   const cols: Array<{ key: SortKey; label: string }> = [
     { key: 'collab_posts', label: 'Collab posts' },
     { key: 'reach', label: 'Reach' },
@@ -137,10 +199,10 @@ export default function CreatorsPage() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex rounded-lg border border-zinc-700 overflow-hidden">
-            {(Object.keys(MONTHS) as Array<keyof typeof MONTHS>).map(k => (
+            {Object.keys(WINDOWS).map(k => (
               <button key={k} onClick={() => setMonth(k)}
                 className={`px-3 py-2 text-xs ${month === k ? 'bg-amber-500 text-black font-semibold' : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-800'}`}>
-                {MONTHS[k].label}
+                {WINDOWS[k].label}
               </button>
             ))}
           </div>
@@ -182,6 +244,27 @@ export default function CreatorsPage() {
 
       {report && (
         <>
+          {/* 🧠 Auto-generated coaching insights for the creator lead */}
+          {insights.length > 0 && (
+            <div className="bg-gradient-to-br from-amber-500/10 to-[#111] border border-amber-500/30 rounded-xl p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-semibold text-sm flex items-center gap-2">🧠 Coach&apos;s insights <span className="text-[10px] text-zinc-500 font-normal normal-case">— what to tell your creator lead ({WINDOWS[month].label})</span></h2>
+                <span className="flex items-center gap-1.5 text-[10px] text-emerald-400"><span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" /> auto-updates</span>
+              </div>
+              <ul className="space-y-2.5">
+                {insights.slice(0, 3).map((it, i) => (
+                  <li key={i} className="flex gap-2.5 text-sm">
+                    <span className="text-base leading-none mt-0.5">{it.icon}</span>
+                    <span className="text-zinc-200">{it.text}</span>
+                  </li>
+                ))}
+              </ul>
+              {insights.length > 3 && (
+                <a href="/creators/insights" className="inline-block mt-3 text-xs text-amber-400 hover:text-amber-300">See all {insights.length} insights →</a>
+              )}
+            </div>
+          )}
+
           {/* IG totals */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {[
@@ -199,6 +282,150 @@ export default function CreatorsPage() {
             ))}
           </div>
 
+          {/* ── Momentum: week-by-week / month-by-month trends ── */}
+          {series.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <div>
+                  <h2 className="text-sm font-semibold">📈 Momentum</h2>
+                  <p className="text-xs text-zinc-500">{gran === 'week' ? 'Week by week' : 'Month by month'} — more posts → more reach → more leads → more seats{livePartial ? ` · latest ${gran} still in progress` : ''}</p>
+                </div>
+                <div className="flex rounded-lg border border-zinc-700 overflow-hidden">
+                  {(['week', 'month'] as const).map(g => (
+                    <button key={g} onClick={() => setGran(g)}
+                      className={`px-3 py-2 text-xs ${gran === g ? 'bg-amber-500 text-black font-semibold' : 'bg-zinc-900 text-zinc-300 hover:bg-zinc-800'}`}>
+                      {g === 'week' ? 'Weekly' : 'Monthly'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* KPI cards — Δ vs previous finished period */}
+              {kpis.length > 0 && (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  {kpis.map(k => (
+                    <div key={k.l} className="bg-[#111] border border-zinc-800 rounded-xl p-4">
+                      <p className="text-[11px] text-zinc-500 uppercase tracking-wider mb-1">{k.l}</p>
+                      <div className="flex items-baseline gap-2">
+                        <p className="text-2xl font-bold">{num(k.v)}</p>
+                        {k.d != null && (
+                          <span className={`text-xs font-semibold ${k.d > 0 ? 'text-emerald-400' : k.d < 0 ? 'text-red-400' : 'text-zinc-500'}`}>
+                            {k.d > 0 ? '▲' : k.d < 0 ? '▼' : '–'} {Math.abs(k.d)}%
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-zinc-600 mt-0.5">vs prev {gran}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Trend charts */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                <div className="bg-[#111] border border-zinc-800 rounded-xl p-4">
+                  <p className="text-sm text-zinc-300 mb-2">Collab posts <span className="text-zinc-500">+ active creators</span></p>
+                  <ComboBarLine points={series.map(s => ({ label: s.label, bar: s.collab_posts, line: s.active_creators }))} barColor="#f59e0b" lineColor="#818cf8" barLabel="Collab posts" lineLabel="Active creators" />
+                </div>
+                <div className="bg-[#111] border border-zinc-800 rounded-xl p-4">
+                  <p className="text-sm text-zinc-300 mb-2">Leads signed</p>
+                  <AreaLineChart points={series.map(s => ({ label: s.label, value: s.leads }))} color="#38bdf8" valueLabel="Leads signed" />
+                </div>
+              </div>
+              <div className="bg-[#111] border border-zinc-800 rounded-xl p-4">
+                <p className="text-sm text-zinc-300 mb-2">Seats sold via creators{revenueHidden ? '' : ' + revenue'} <span className="text-zinc-500">· seats left axis{revenueHidden ? '' : ', RM right axis'}</span></p>
+                <CashflowChart mode="history" hidden={revenueHidden} points={series.map(s => ({ label: s.label, flow: s.seats, balance: s.revenue }))} flowLabel="Seats" balanceLabel="Revenue" />
+              </div>
+
+              {/* 🎟️ Tickets sold per event — links the dashboard to actual ticket sales */}
+              {eventsList.length > 0 && (
+                <div className="bg-[#111] border border-zinc-800 rounded-xl p-4">
+                  <p className="text-sm text-zinc-300 mb-2">🎟️ Tickets sold per event <span className="text-zinc-500">· bar = total tickets · line = creator-driven</span></p>
+                  <ComboBarLine
+                    points={eventsList.map(e => ({ label: evShort(e.date), bar: e.total_seats, line: e.attributed_seats }))}
+                    barColor="#22c55e" lineColor="#f59e0b" barLabel="Tickets sold" lineLabel="Creator-driven"
+                  />
+                  <div className="overflow-x-auto mt-3">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-left text-zinc-500 text-xs border-b border-zinc-900">
+                          <th className="px-3 py-2">Event</th>
+                          <th className="px-3 py-2 text-right whitespace-nowrap">Date</th>
+                          <th className="px-3 py-2 text-right">Tickets</th>
+                          <th className="px-3 py-2 text-right">Creator-driven</th>
+                          <th className="px-3 py-2 text-right whitespace-nowrap">% creator</th>
+                          <th className="px-3 py-2 text-right">Revenue</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {eventsList.map(e => (
+                          <tr key={e.id} className="border-b border-zinc-900 hover:bg-zinc-900/30">
+                            <td className="px-3 py-2">{e.name ?? '—'}</td>
+                            <td className="px-3 py-2 text-right text-zinc-400 whitespace-nowrap">{evShort(e.date)}</td>
+                            <td className="px-3 py-2 text-right">{e.total_seats}</td>
+                            <td className="px-3 py-2 text-right text-amber-400">{e.attributed_seats}</td>
+                            <td className="px-3 py-2 text-right text-zinc-400">{e.total_seats ? Math.round(e.attributed_seats / e.total_seats * 100) : 0}%</td>
+                            <td className="px-3 py-2 text-right">{money(e.revenue)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* 🔥 Upcoming events to fill — what creators should push now */}
+              {upcoming.length > 0 && (
+                <div>
+                  <p className="text-[11px] text-zinc-500 uppercase tracking-wider mb-2">🔥 Events we&apos;re selling now — fill these seats</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {upcoming.map(e => {
+                      const cap = e.capacity ?? 0
+                      const pctFill = cap > 0 ? Math.min(100, Math.round(e.total_seats / cap * 100)) : null
+                      const dd = e.date ? daysTo(e.date) : 0
+                      return (
+                        <div key={e.id} className="bg-[#111] border border-zinc-800 rounded-xl p-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="font-semibold text-sm leading-tight">{e.name ?? 'Event'}</p>
+                            <span className={`shrink-0 text-[10px] px-2 py-0.5 rounded-full ${dd <= 7 ? 'bg-red-500/20 text-red-300' : 'bg-zinc-800 text-zinc-400'}`}>{dd}d to go</span>
+                          </div>
+                          <p className="text-xs text-zinc-500 mt-0.5">{evShort(e.date)}</p>
+                          <div className="mt-3 flex items-baseline gap-1">
+                            <span className="text-2xl font-bold">{e.total_seats}</span>
+                            <span className="text-zinc-500 text-sm">{cap > 0 ? `/ ${cap} seats` : 'tickets'}</span>
+                          </div>
+                          {pctFill != null && (
+                            <div className="mt-2 h-2 rounded-full bg-zinc-800 overflow-hidden">
+                              <div className={`h-full ${pctFill >= 80 ? 'bg-emerald-500' : pctFill >= 40 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${pctFill}%` }} />
+                            </div>
+                          )}
+                          <p className="text-[11px] text-zinc-500 mt-1.5">{e.attributed_seats} creator-driven{pctFill != null ? ` · ${pctFill}% full` : ''}</p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Top movers podium */}
+              {topMovers.length > 0 && (
+                <div>
+                  <p className="text-[11px] text-zinc-500 uppercase tracking-wider mb-2">Top creators ({WINDOWS[month].label})</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {topMovers.map((r, i) => (
+                      <div key={r.ig_handle} className={`bg-[#111] border rounded-xl p-4 flex items-center gap-3 ${i === 0 ? 'border-amber-500/50' : 'border-zinc-800'}`}>
+                        <span className="text-2xl">{['🥇', '🥈', '🥉'][i]}</span>
+                        <div className="min-w-0">
+                          <a href={`https://instagram.com/${r.ig_handle}`} target="_blank" rel="noreferrer" className="font-semibold text-white hover:text-amber-400 truncate block">@{r.ig_handle}</a>
+                          <p className="text-xs text-zinc-500">{r.collab_posts} collab posts · {num(r.reach)} reach</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Leaderboard */}
           <div className="bg-[#111] border border-zinc-800 rounded-xl overflow-hidden">
             <div className="px-5 py-3 border-b border-zinc-800 flex justify-between items-center">
@@ -210,6 +437,7 @@ export default function CreatorsPage() {
                 <thead>
                   <tr className="text-left text-zinc-500 text-xs border-b border-zinc-900">
                     <th className="px-4 py-2">Creator</th>
+                    <th className="px-4 py-2 text-right whitespace-nowrap">8-wk trend</th>
                     {cols.map(c => (
                       <th key={c.key} className="px-4 py-2 text-right cursor-pointer select-none whitespace-nowrap hover:text-zinc-300" onClick={() => toggleSort(c.key)}>
                         {c.label}{arrow(c.key)}
@@ -221,6 +449,7 @@ export default function CreatorsPage() {
                   {/* TOTAL row — leads shown vs full sheet for tally check */}
                   <tr className="border-b border-zinc-800 bg-zinc-900/50 font-semibold sticky top-0">
                     <td className="px-4 py-3">TOTAL</td>
+                    <td className="px-4 py-3"></td>
                     <td className="px-4 py-3 text-right text-amber-400">{tCollab}</td>
                     <td className="px-4 py-3 text-right">{num(tReach)}</td>
                     <td className="px-4 py-3 text-right">{num(tEng)}</td>
@@ -243,6 +472,7 @@ export default function CreatorsPage() {
                           </select>
                         )}
                       </td>
+                      <td className="px-4 py-3"><div className="flex justify-end"><Sparkline values={r.weekly_collabs ?? []} /></div></td>
                       <td className="px-4 py-3 text-right font-semibold text-amber-400">{r.collab_posts}</td>
                       <td className="px-4 py-3 text-right text-zinc-300">{num(r.reach)}</td>
                       <td className="px-4 py-3 text-right text-zinc-300">{num(r.engagement)}</td>
@@ -254,7 +484,7 @@ export default function CreatorsPage() {
                     </tr>
                   ))}
                   {!rows.length && (
-                    <tr><td colSpan={9} className="px-4 py-10 text-center text-zinc-500">No collab posts in range. Click <span className="text-amber-400">Sync Instagram</span> to pull data.</td></tr>
+                    <tr><td colSpan={10} className="px-4 py-10 text-center text-zinc-500">No collab posts in range. Click <span className="text-amber-400">Sync Instagram</span> to pull data.</td></tr>
                   )}
                 </tbody>
               </table>

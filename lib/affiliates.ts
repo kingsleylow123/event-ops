@@ -14,6 +14,21 @@ export interface Lead {
   email: string // normalized
   phone: string // normalized
   handle: string
+  date: string | null // ISO — when the affiliate signed this lead (sheet "Time" column)
+}
+
+// Lead sheet "Time" is day-first (Malaysian): DD/M/YYYY or DD/MM/YYYY.
+function parseSheetDate(s: string | undefined): string | null {
+  if (!s) return null
+  const t = s.trim()
+  const m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (m) {
+    const dd = +m[1], mm = +m[2], yyyy = +m[3]
+    if (mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31) return new Date(Date.UTC(yyyy, mm - 1, dd)).toISOString()
+    return null
+  }
+  const d = new Date(t)
+  return isNaN(d.getTime()) ? null : d.toISOString()
 }
 
 // Minimal CSV parser that handles quoted fields with commas.
@@ -48,6 +63,7 @@ export async function fetchLeads(): Promise<Lead[]> {
   const iEmail = header.findIndex(h => h === 'email')
   const iPhone = header.findIndex(h => h.includes('phone'))
   const iAff = header.findIndex(h => h.includes('affiliate'))
+  const iTime = header.findIndex(h => h === 'time' || h.includes('date'))
   const leads: Lead[] = []
   for (let r = 1; r < rows.length; r++) {
     const row = rows[r]
@@ -58,6 +74,7 @@ export async function fetchLeads(): Promise<Lead[]> {
       email: normEmail(row[iEmail]),
       phone: normPhone(row[iPhone]),
       handle,
+      date: iTime >= 0 ? parseSheetDate(row[iTime]) : null,
     })
   }
   return leads
