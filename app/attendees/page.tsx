@@ -125,6 +125,22 @@ export default function AttendeesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEventId])
 
+  // Live auto-refresh: while the page is open, poll the roster and the facilitator
+  // leaderboard so QR check-ins (made from someone else's phone) show up by
+  // themselves — Attended ticks and the 🔥 count update without a manual reload.
+  // Skips polling while the tab is hidden to avoid needless requests.
+  useEffect(() => {
+    if (!selectedEventId) return
+    const tick = () => {
+      if (typeof document !== 'undefined' && document.hidden) return
+      loadAttendees(selectedEventId)
+      refetchFacilStats()
+    }
+    const id = setInterval(tick, 10_000)
+    return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEventId])
+
   async function syncStripe() {
     setSyncing(true)
     setSyncMsg('')
