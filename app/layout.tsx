@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from 'next'
+import Script from 'next/script'
 import './globals.css'
 import { createSupabaseServerClient } from '@/lib/supabase-server'
 import { isAdminEmail } from '@/lib/auth/admin'
@@ -6,6 +7,10 @@ import AppChrome from './AppChrome'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
+
+// Meta (Facebook) Pixel — traffic tracking + future retargeting.
+// Same pixel as the public survey tool (claudemalaysia.com) so audiences unify.
+const FB_PIXEL_ID = '3618851711751697'
 
 export const metadata: Metadata = {
   title: 'EventOps',
@@ -54,6 +59,28 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         ) : (
           <main>{children}</main>
         )}
+        <Script id="fb-pixel" strategy="afterInteractive">
+          {`!function(f,b,e,v,n,t,s)
+{if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];
+s.parentNode.insertBefore(t,s)}(window, document,'script',
+'https://connect.facebook.net/en_US/fbevents.js');
+fbq('init', '${FB_PIXEL_ID}');
+fbq('track', 'PageView');`}
+        </Script>
+        <noscript>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            height="1"
+            width="1"
+            style={{ display: 'none' }}
+            src={`https://www.facebook.com/tr?id=${FB_PIXEL_ID}&ev=PageView&noscript=1`}
+            alt=""
+          />
+        </noscript>
       </body>
     </html>
   )
