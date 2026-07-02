@@ -52,7 +52,7 @@ async function challenge(briefs: HeadBrief[], cfg: CSuiteConfig, context: Record
   ].join('\n')
 
   try {
-    const text = await complete({ model: cfg.managerModel, system, user, maxTokens: cfg.maxManagerTokens, temperature: 0.3 })
+    const text = await complete({ model: cfg.managerModel, system, user, maxTokens: cfg.maxManagerTokens })
     const parsed = extractJson<{ challenges?: unknown[] }>(text)
     const raw = Array.isArray(parsed?.challenges) ? parsed!.challenges : []
     const byDept = new Map<Dept, Challenge>()
@@ -131,7 +131,6 @@ async function rule(
     const resp = await anthropic().messages.create({
       model: cfg.managerModel,
       max_tokens: cfg.maxManagerTokens,
-      temperature: 0.3,
       tools: [COMMIT_BOARD_TOOL],
       tool_choice: { type: 'tool', name: 'commit_board_ruling' },
       system,

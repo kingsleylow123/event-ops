@@ -26,12 +26,10 @@ export async function complete(opts: {
   system: string
   user: string
   maxTokens: number
-  temperature?: number
 }): Promise<string> {
   const resp = await anthropic().messages.create({
     model: opts.model,
     max_tokens: opts.maxTokens,
-    temperature: opts.temperature ?? 0.4,
     system: opts.system,
     messages: [{ role: 'user', content: opts.user }],
   })

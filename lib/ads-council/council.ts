@@ -44,7 +44,6 @@ async function advocate(
     const resp = await anthropic.messages.create({
       model: cfg.debaterModel,
       max_tokens: 400,
-      temperature: 0.3,
       system: `${system}\n${INJECTION_GUARD}\nRespond with ONLY a JSON object: {"position": "<one word>", "argument": "<=2 sentences", "veto": <true|false>, "metricsCited": ["..."]}.`,
       messages: [{ role: 'user', content: userBrief }],
     })
@@ -122,7 +121,6 @@ export async function deliberate(cand: CandidateAction, e: EntityInsights, cfg: 
     const judgeResp = await anthropic.messages.create({
       model: cfg.judgeModel,
       max_tokens: 700,
-      temperature: 0.2,
       tools: [JUDGE_TOOL],
       tool_choice: { type: 'tool', name: 'commit_decision' },
       system:
