@@ -18,6 +18,7 @@ import type { AgentContext } from '@/lib/jarvis/types'
 import { isDuplicateUpdate } from '@/lib/jarvis/observability'
 import { executeMarkPaid, executeUpdatePipeline } from '@/lib/jarvis/tools'
 import { handleAdsCallback } from '@/lib/ads-council'
+import { handleCSuiteCallback } from '@/lib/c-suite'
 import { answerCallbackQuery } from '@/lib/telegram'
 import { bukkuEnabled, findOrCreateContact, createBill, EXPENSE_ACCOUNT_BY_CATEGORY } from '@/lib/bukku'
 
@@ -2240,10 +2241,12 @@ export async function POST(req: NextRequest) {
     const cq = update.callback_query as unknown as Parameters<typeof handleAdsCallback>[0]
     after(async () => {
       try {
-        const handled = await handleAdsCallback(cq)
+        // Each handler no-ops fast unless the callback carries its prefix
+        // (csuite: ruling done/dismiss/snooze · ads: approval cards).
+        const handled = (await handleCSuiteCallback(cq)) || (await handleAdsCallback(cq))
         if (!handled) await answerCallbackQuery((cq as { id: string }).id)
       } catch (e) {
-        console.error('[telegram] ads callback', e)
+        console.error('[telegram] callback', e)
         try { await answerCallbackQuery((cq as { id: string }).id, 'Something went wrong.') } catch { /* ignore */ }
       }
     })
