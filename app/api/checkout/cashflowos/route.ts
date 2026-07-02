@@ -39,7 +39,12 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const session = await stripe.checkout.sessions.create({
+    // Embedded when the publishable key is configured (payment element renders
+    // inside OUR page, under a real ticking countdown — the GHL/ClickFunnels
+    // pattern); falls back to Stripe-hosted redirect when it isn't. The env var
+    // is readable server-side too, so both halves branch on the same switch.
+    const embedded = Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
+    const params: Parameters<typeof stripe.checkout.sessions.create>[0] = {
       mode: 'payment',
       customer_email: email,
       line_items: [{
@@ -50,9 +55,9 @@ export async function POST(req: NextRequest) {
           product_data: { name: 'CashFlowOS™ 2-Day Challenge' },
         },
       }],
-      // Urgency: the seat-hold line renders pinned above the Pay button (hosted
-      // Checkout allows no live countdown widget), backed by a REAL session
-      // expiry — 30 min is Stripe's minimum for expires_at.
+      // Real expiry backing the on-page countdown — 30 min is Stripe's minimum
+      // for expires_at. The visible 10-min timer is enforced client-side (the
+      // payment element unmounts at 0:00; restarting mints a fresh session).
       expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
       custom_text: {
         submit: { message: '⏳ Your seat is held for the next 10 minutes — complete payment now to lock it in.' },
@@ -68,9 +73,17 @@ export async function POST(req: NextRequest) {
         buyer_phone: phone,
       },
       phone_number_collection: { enabled: true },
-      success_url: `${BASE}/register/success?event=${CASHFLOWOS_EVENT_ID}`,
-      cancel_url: `${BASE}/cashflowos?cancelled=1`,
-    })
+    }
+    if (embedded) {
+      // success_url/cancel_url are REJECTED in embedded mode — return_url only.
+      // (This stripe API version names the mode 'embedded_page'.)
+      params.ui_mode = 'embedded_page'
+      params.return_url = `${BASE}/register/success?event=${CASHFLOWOS_EVENT_ID}`
+    } else {
+      params.success_url = `${BASE}/register/success?event=${CASHFLOWOS_EVENT_ID}`
+      params.cancel_url = `${BASE}/cashflowos?cancelled=1`
+    }
+    const session = await stripe.checkout.sessions.create(params)
 
     // Record the started lead so the abandon-cart recovery cron can email anyone
     // who fills this in but never pays. Upsert by email: a re-attempt refreshes
@@ -92,7 +105,11 @@ export async function POST(req: NextRequest) {
       console.error('[cashflowos] lead upsert failed', e)
     }
 
-    return NextResponse.json({ url: session.url })
+    // Embedded sessions carry a client_secret for the on-page payment element;
+    // hosted ones carry a redirect url. The client handles either shape.
+    return embedded
+      ? NextResponse.json({ clientSecret: session.client_secret })
+      : NextResponse.json({ url: session.url })
   } catch (e) {
     // Logged server-side only — never leak Stripe account/key details to a caller.
     console.error('[cashflowos] session create failed', e instanceof Error ? e.message : String(e))
