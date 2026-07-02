@@ -142,21 +142,42 @@ export default function CashflowForm() {
   if (step === 2) {
     return (
       <div>
-        {/* Sticky, honest seat-hold countdown */}
-        <div className={`sticky top-0 z-10 -mx-6 mb-4 px-6 py-3 text-center ${expired ? 'bg-red-950/95' : urgent ? 'bg-red-900/95' : 'bg-amber-500/95'}`}>
+        {/* Step indicator flips with the step (the static one on the page shell
+            only knows step 1). */}
+        <div className="mb-5 flex gap-1.5" aria-label="Step 2 of 2">
+          <div className="h-1.5 flex-1 rounded-full bg-amber-500" />
+          <div className="h-1.5 flex-1 rounded-full bg-amber-500" />
+        </div>
+        <p className="mb-3 text-xs uppercase tracking-wide text-amber-400">Step 2 of 2 · Secure payment</p>
+
+        {/* Sticky, honest seat-hold countdown — the timer IS the headline */}
+        <div className={`sticky top-0 z-10 -mx-6 mb-4 px-6 py-4 text-center ${expired ? 'bg-red-950/95' : urgent ? 'bg-red-900/95' : 'bg-amber-500/95'}`}>
           {expired ? (
-            <p className="text-sm font-semibold text-red-100">Your seat hold has ended.</p>
+            <p className="text-base font-bold text-red-100">Your seat hold has ended.</p>
           ) : (
-            <p className={`text-sm font-semibold ${urgent ? 'text-red-100' : 'text-black'}`}>
-              ⏳ Seat reserved for <span className="tabular-nums text-base font-extrabold">{fmt(msLeft)}</span> — released to the waitlist at 0:00
-            </p>
+            <>
+              <p className={`tabular-nums text-5xl font-black leading-none tracking-tight ${urgent ? 'text-red-100' : 'text-black'}`}>{fmt(msLeft)}</p>
+              <p className={`mt-1.5 text-sm font-semibold ${urgent ? 'text-red-200' : 'text-black/80'}`}>
+                Your seat is reserved — at 0:00 it's released to the waitlist
+              </p>
+            </>
           )}
         </div>
 
         {/* Offer restated at the money moment */}
-        <div className="mb-4 flex items-baseline justify-between">
+        <div className="mb-3 flex items-baseline justify-between">
           <p className="font-semibold text-white">CashFlowOS™ 2-Day Challenge</p>
           <p className="text-lg font-extrabold text-white">RM 2,499</p>
+        </div>
+
+        {/* Risk reversal — the Day-1 Lunch Guarantee, right above the money */}
+        <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+          <p className="text-sm font-bold text-amber-300">🛡️ Day-1 Lunch Guarantee</p>
+          <p className="mt-1 text-sm leading-relaxed text-zinc-300">
+            Sit through the full Day-1 morning. If you don't believe it'll make you back
+            10× your ticket, tell us at lunch — <span className="font-semibold text-white">100% refund, on the spot, no questions.</span>
+          </p>
+          <p className="mt-1.5 text-xs text-zinc-500">The only thing you can lose today is your seat.</p>
         </div>
 
         {expired ? (
@@ -181,14 +202,22 @@ export default function CashflowForm() {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-3">
-      <input className={field} placeholder="Full name" value={name} onChange={e => setName(e.target.value)} required autoComplete="name" />
-      <input className={field} type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required autoComplete="email" />
-      <input className={field} type="tel" placeholder="WhatsApp number (e.g. 0123456789)" value={phone} onChange={e => setPhone(e.target.value)} required autoComplete="tel" />
-      {error && <p className="text-sm text-red-400">{error}</p>}
-      <button type="submit" disabled={loading} className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-semibold rounded-xl py-3 transition">
-        {loading ? 'Reserving your seat…' : 'Continue to payment →'}
-      </button>
-    </form>
+    <div>
+      <div className="mb-5 flex gap-1.5" aria-label="Step 1 of 2">
+        <div className="h-1.5 flex-1 rounded-full bg-amber-500" />
+        <div className="h-1.5 flex-1 rounded-full bg-zinc-800" />
+      </div>
+      <p className="mb-4 text-xs uppercase tracking-wide text-amber-400">Step 1 of 2</p>
+      <form onSubmit={submit} className="space-y-3">
+        <input className={field} placeholder="Full name" value={name} onChange={e => setName(e.target.value)} required autoComplete="name" />
+        <input className={field} type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required autoComplete="email" />
+        <input className={field} type="tel" placeholder="WhatsApp number (e.g. 0123456789)" value={phone} onChange={e => setPhone(e.target.value)} required autoComplete="tel" />
+        {error && <p className="text-sm text-red-400">{error}</p>}
+        <button type="submit" disabled={loading} className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black font-semibold rounded-xl py-3 transition">
+          {loading ? 'Reserving your seat…' : 'Continue to payment →'}
+        </button>
+      </form>
+      <p className="mt-4 text-center text-xs text-zinc-500">Enter your details, then complete secure payment on the next step.</p>
+    </div>
   )
 }
