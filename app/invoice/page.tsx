@@ -985,7 +985,6 @@ function InvoiceContent() {
                   <thead>
                     <tr>
                       <th className="col-desc">Description</th>
-                      <th className="col-amount">Original Price</th>
                       <th className="col-amount">Refund</th>
                       <th className="col-x"></th>
                     </tr>
@@ -998,14 +997,6 @@ function InvoiceContent() {
                             className="inv-edit inv-desc-edit"
                             value={it.desc}
                             onChange={e => updateRefund(i, { desc: e.target.value })}
-                          />
-                        </td>
-                        <td className="col-amount">
-                          <input
-                            className="inv-edit"
-                            value={it.ori}
-                            onChange={e => updateRefund(i, { ori: e.target.value })}
-                            style={{ textAlign: 'right', width: 90 }}
                           />
                         </td>
                         <td className="col-amount">
@@ -1024,7 +1015,7 @@ function InvoiceContent() {
                       </tr>
                     ))}
                     <tr className="add-row">
-                      <td colSpan={4}>
+                      <td colSpan={3}>
                         <button onClick={addRefund} className="add-btn">+ Add line</button>
                       </td>
                     </tr>

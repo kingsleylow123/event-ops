@@ -97,7 +97,7 @@ export async function gatherHeadBrief(
 
   let text = ''
   try {
-    text = await complete({ model, system, user: parts.join('\n'), maxTokens: opts.cfg.maxHeadTokens, temperature: 0.4 })
+    text = await complete({ model, system, user: parts.join('\n'), maxTokens: opts.cfg.maxHeadTokens })
   } catch (e) {
     return degraded(dept, `head model call failed: ${e instanceof Error ? e.message : String(e)}`, data.status, !!opts.critique)
   }

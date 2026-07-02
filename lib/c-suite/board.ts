@@ -116,12 +116,12 @@ async function challenge(
   ].join('\n')
 
   // Retry once on transient failure; then fail CLOSED (flagged, not rubber-stamped).
+  // NOTE: no temperature param — claude-opus-4-8 400s on it (master hotfix 6d764c2).
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const resp = await anthropic().messages.create({
         model: cfg.managerModel,
         max_tokens: cfg.maxManagerTokens,
-        temperature: 0.3,
         tools: [CHALLENGE_TOOL],
         tool_choice: { type: 'tool', name: 'commit_challenges' },
         system,
@@ -226,7 +226,6 @@ async function rule(
     const resp = await anthropic().messages.create({
       model: cfg.managerModel,
       max_tokens: cfg.maxManagerTokens,
-      temperature: 0.3,
       tools: [COMMIT_BOARD_TOOL],
       tool_choice: { type: 'tool', name: 'commit_board_ruling' },
       system,
