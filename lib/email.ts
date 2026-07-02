@@ -138,6 +138,26 @@ You got this because you started signing up for the Cashflow OS 2-Day Challenge.
 </div></body></html>`
 }
 
+// Second (final) recovery touch — next-morning urgency nudge. Same warm
+// no-shell format as touch #1; one CTA, honest scarcity, no hype words.
+export function cashflowosRecoveryEmail2Html(p: { name?: string; checkoutUrl: string }): string {
+  const first = escHtml((p.name ?? '').trim().split(/\s+/)[0] || 'there')
+  const url = escHtml(p.checkoutUrl)
+  return `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f5f5f5;">
+<div style="max-width:520px;margin:24px auto;background:#ffffff;border-radius:10px;overflow:hidden;font-family:Helvetica,Arial,sans-serif;color:#1a1a1a;">
+<div style="padding:32px 28px;">
+<p style="font-size:16px;margin:0 0 16px;">Hey ${first},</p>
+<p style="font-size:15px;line-height:1.6;margin:0 0 16px;">Quick one — I'm still holding your seat for the <b>Cashflow OS 2-Day Challenge</b> (28&ndash;29 July), but I can't hold it much longer.</p>
+<p style="font-size:15px;line-height:1.6;margin:0 0 16px;">Seats are limited and I release unclaimed ones to the waitlist. If you want in, this is the moment.</p>
+<a href="${url}" style="display:inline-block;background:#1a1a1a;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:bold;">Claim my seat &rarr;</a>
+<p style="font-size:14px;line-height:1.6;margin:28px 0 0;color:#555555;">If now's not the time, no stress — just reply and tell me, and I'll take you off this list.<br><br>Kingsley</p>
+</div>
+<div style="padding:14px 28px;border-top:1px solid #eeeeee;font-size:12px;color:#999999;">
+You got this because you started signing up for the Cashflow OS 2-Day Challenge. If that wasn't you, just ignore it.
+</div>
+</div></body></html>`
+}
+
 export function receiptEmailHtml(p: { name: string; amount: number; eventName: string; paidAt: Date }): string {
   const date = p.paidAt.toLocaleDateString('en-MY', { day: 'numeric', month: 'long', year: 'numeric' })
   return shell(
