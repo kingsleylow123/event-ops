@@ -85,3 +85,57 @@ test('coerces a non-array evidence to []', () => {
   assert.ok(r)
   assert.deepEqual(r.briefs[0].evidence, [])
 })
+
+test('keeps only ONE brief per dept (first wins)', () => {
+  const raw = validRaw()
+  raw.briefs = [
+    { dept: 'sales', headline: 'first', topIssue: 't', recommendedMove: 'm', confidence: 1, evidence: [] },
+    { dept: 'sales', headline: 'second', topIssue: 't', recommendedMove: 'm', confidence: 1, evidence: [] },
+  ]
+  const r = normalizeBoardResult(raw)
+  assert.ok(r)
+  assert.equal(r.briefs.length, 1)
+  assert.equal(r.briefs[0].headline, 'first')
+})
+
+test('passes a valid prediction through and drops a malformed one', () => {
+  const raw = validRaw()
+  raw.briefs = [
+    { dept: 'sales', headline: 'h', topIssue: 't', recommendedMove: 'm', confidence: 1, evidence: [], prediction: { metric: 'calls_booked_upcoming', direction: 'up', baseline: 0, target: 3 } },
+    { dept: 'ops', headline: 'h', topIssue: 't', recommendedMove: 'm', confidence: 1, evidence: [], prediction: { metric: '', direction: 'sideways', baseline: 'x' } },
+  ]
+  const r = normalizeBoardResult(raw)
+  assert.ok(r)
+  assert.deepEqual(r.briefs[0].prediction, { metric: 'calls_booked_upcoming', direction: 'up', baseline: 0, target: 3 })
+  assert.equal(r.briefs[1].prediction, undefined)
+})
+
+test('drops a degenerate target (already met at baseline) but keeps the direction', () => {
+  const raw = validRaw()
+  raw.briefs = [
+    { dept: 'ops', headline: 'h', topIssue: 't', recommendedMove: 'm', confidence: 1, evidence: [], prediction: { metric: 'fill_pct', direction: 'up', baseline: 90, target: 85 } },
+  ]
+  const r = normalizeBoardResult(raw)
+  assert.ok(r)
+  assert.deepEqual(r.briefs[0].prediction, { metric: 'fill_pct', direction: 'up', baseline: 90 })
+})
+
+test('rejects predictions on derived trend keys', () => {
+  const raw = validRaw()
+  raw.briefs = [
+    { dept: 'ops', headline: 'h', topIssue: 't', recommendedMove: 'm', confidence: 1, evidence: [], prediction: { metric: 'trend_vs_prior_week.deltas.paid', direction: 'up', baseline: 2 } },
+  ]
+  const r = normalizeBoardResult(raw)
+  assert.ok(r)
+  assert.equal(r.briefs[0].prediction, undefined)
+})
+
+test('passes challengeDegraded + per-dept dataSummaries through, dropping junk', () => {
+  const raw = validRaw()
+  raw.challengeDegraded = true
+  raw.dataSummaries = { sales: { total_leads: 6 }, legal: { x: 1 }, ops: 'junk' }
+  const r = normalizeBoardResult(raw)
+  assert.ok(r)
+  assert.equal(r.challengeDegraded, true)
+  assert.deepEqual(r.dataSummaries, { sales: { total_leads: 6 } })
+})

@@ -7,6 +7,15 @@ export type BoardMode = 'nightly' | 'weekly' | 'ondemand'
 
 export const DEPTS: Dept[] = ['sales', 'ops', 'finance', 'marketing']
 
+// A head's falsifiable prediction: "if my move is taken, <metric> moves <direction>".
+// Graded deterministically by arithmetic at the NEXT sitting (the learning loop).
+export interface Prediction {
+  metric: string            // a numeric key in this dept's data summary, e.g. 'calls_booked_upcoming'
+  direction: 'up' | 'down'
+  baseline: number          // the value at prediction time
+  target?: number           // optional absolute target
+}
+
 // One head's brief for a run: its OWN read of the data + its recommendation.
 export interface HeadBrief {
   dept: Dept
@@ -17,6 +26,7 @@ export interface HeadBrief {
   evidence: string[]        // bullet metrics/facts cited (from real data)
   dataStatus: string        // 'ok' | 'partial: ...' — provenance / degrade note
   revised?: boolean         // true if rewritten after a manager REJECT
+  prediction?: Prediction   // optional falsifiable claim, graded next sitting
 }
 
 // The manager's challenge of one head (the LGTM/LBTM verdict + cross-flags).
@@ -37,6 +47,8 @@ export interface Ruling {
   confidence: number
 }
 
+export type DecisionStatus = 'pending' | 'done' | 'dismissed' | 'snoozed'
+
 // The full output of a board sitting.
 export interface BoardResult {
   mode: BoardMode
@@ -46,4 +58,8 @@ export interface BoardResult {
   rulings: Ruling[]
   boardBrief: string        // the manager's overall narrative (for Telegram)
   rounds: number
+  challengeDegraded?: boolean // true when the grilling failed and verdicts are unvetted
+  // Per-dept numeric data summaries, snapshotted so the NEXT sitting can diff
+  // "since last sitting" programmatically (save_state → load_state).
+  dataSummaries?: Partial<Record<Dept, Record<string, unknown>>>
 }

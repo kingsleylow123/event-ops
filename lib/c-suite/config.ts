@@ -62,3 +62,9 @@ export function getCSuiteConfig(): CSuiteConfig {
 export function cSuiteEnabled(): boolean {
   return authMode() !== 'none' && !!process.env.SUPABASE_SERVICE_ROLE_KEY
 }
+
+// Ingest auth: prefer a dedicated token so the harness credential can be rotated
+// without touching every cron; falls back to CRON_SECRET (the original wiring).
+export function ingestToken(): string {
+  return str('C_SUITE_INGEST_TOKEN') || str('CRON_SECRET')
+}

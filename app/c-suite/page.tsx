@@ -11,6 +11,8 @@ interface RunRow {
   rounds: number | null
   dry_run: boolean
   board_brief: string | null
+  note: string | null
+  source: string | null
 }
 interface Opinion {
   dept: string
@@ -23,18 +25,22 @@ interface Opinion {
   revised: boolean
 }
 interface Decision {
+  id: string
   title: string | null
   decision: string | null
   rationale: string | null
   overruled: string[] | null
   priority: string | null
   confidence: number | null
+  status: string | null
+  decided_by: string | null
 }
 interface Detail { run: RunRow | null; opinions: Opinion[]; decisions: Decision[] }
 
 const HEAD_LABEL: Record<string, string> = { sales: '📈 Head of Sales', ops: '⚙️ Head of Ops', finance: '💰 Head of Finance', marketing: '📣 Head of Marketing' }
 const PRIORITY: Record<string, string> = { high: 'text-red-400 border-red-500/30 bg-red-500/10', medium: 'text-amber-300 border-amber-500/30 bg-amber-500/10', low: 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10' }
 const MODE_LABEL: Record<string, string> = { nightly: 'Morning Brief', weekly: 'Board Meeting', ondemand: 'On-demand' }
+const STATUS_CHIP: Record<string, string> = { done: '✅ done', dismissed: '🙅 dismissed', snoozed: '⏰ snoozed' }
 
 export default function CSuitePage() {
   const [runs, setRuns] = useState<RunRow[]>([])
@@ -59,6 +65,21 @@ export default function CSuitePage() {
       .finally(() => setLoading(false))
   }
   useEffect(() => { load() }, [])
+
+  const [busy, setBusy] = useState<string | null>(null)
+  async function decide(id: string, status: 'done' | 'dismissed' | 'snoozed') {
+    setBusy(id)
+    try {
+      const res = await fetch('/api/c-suite/decision', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status }),
+      })
+      if (res.ok) load(selected || undefined)
+    } finally {
+      setBusy(null)
+    }
+  }
 
   if (loading && !detail) return <div className="text-zinc-500 mt-20 text-center">Convening…</div>
   if (error && !detail) return <div className="mt-20 text-center text-sm text-red-400/80">{error}</div>
@@ -107,7 +128,13 @@ export default function CSuitePage() {
             <div className="bg-gradient-to-br from-amber-500/10 to-transparent border border-amber-500/20 rounded-xl p-5">
               <h2 className="font-semibold text-sm mb-2 text-amber-300">Manager&apos;s brief</h2>
               <p className="text-sm text-zinc-200 whitespace-pre-wrap leading-relaxed">{run.board_brief}</p>
-              {run.rounds != null && <p className="text-xs text-zinc-500 mt-3">{run.rounds} debate round{run.rounds !== 1 ? 's' : ''} · status {run.status}</p>}
+              <p className="text-xs text-zinc-500 mt-3">
+                {run.rounds != null && <>{run.rounds} debate round{run.rounds !== 1 ? 's' : ''} · </>}
+                status {run.status}{run.source ? ` · via ${run.source}` : ''}{run.note ? ` · ${run.note}` : ''}
+              </p>
+              {run.note?.includes('grilling degraded') && (
+                <p className="text-xs text-orange-400/90 mt-1">⚠ The challenge round failed this sitting — verdicts were unvetted.</p>
+              )}
             </div>
           )}
 
@@ -115,8 +142,8 @@ export default function CSuitePage() {
           {decisions.length > 0 && (
             <div className="space-y-3">
               <h2 className="font-semibold text-sm">Rulings</h2>
-              {decisions.map((d, i) => (
-                <div key={i} className={`border rounded-xl p-4 ${PRIORITY[d.priority ?? 'medium'] ?? PRIORITY.medium}`}>
+              {decisions.map((d) => (
+                <div key={d.id} className={`border rounded-xl p-4 ${PRIORITY[d.priority ?? 'medium'] ?? PRIORITY.medium} ${d.status && d.status !== 'pending' ? 'opacity-60' : ''}`}>
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <h3 className="font-semibold text-sm text-white">{d.title}</h3>
                     <span className="text-[11px] uppercase tracking-wide opacity-80">{d.priority} · {d.confidence ?? 0}%</span>
@@ -126,6 +153,23 @@ export default function CSuitePage() {
                   {d.overruled && d.overruled.length > 0 && (
                     <p className="text-xs text-zinc-500 mt-2">Overruled: {d.overruled.join('; ')}</p>
                   )}
+                  <div className="flex items-center gap-2 mt-3 flex-wrap">
+                    {d.status && d.status !== 'pending' && (
+                      <span className="text-xs text-zinc-300">{STATUS_CHIP[d.status] ?? d.status}{d.decided_by ? ` · by ${d.decided_by}` : ''}</span>
+                    )}
+                    {/* Pending: all three actions. Snoozed: still open — offer done/dismiss. */}
+                    {(!d.status || d.status === 'pending' || d.status === 'snoozed') && (
+                      (d.status === 'snoozed' ? (['done', 'dismissed'] as const) : (['done', 'dismissed', 'snoozed'] as const)).map(s => (
+                        <button
+                          key={s}
+                          onClick={() => decide(d.id, s)}
+                          disabled={busy === d.id}
+                          className="text-xs px-2.5 py-1 rounded-lg border border-zinc-700 text-zinc-300 hover:text-white hover:border-zinc-500 disabled:opacity-50">
+                          {STATUS_CHIP[s]}
+                        </button>
+                      ))
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

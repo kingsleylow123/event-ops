@@ -10,6 +10,6 @@ export async function recallHeadMemory(dept: Dept): Promise<string> {
   return items.length ? items.map(m => `- ${m}`).join('\n') : '(no prior memory yet)'
 }
 
-export async function rememberHeadLearning(dept: Dept, learning: string, runId: string | null): Promise<void> {
-  await saveHeadMemory(dept, learning, runId)
+export async function rememberHeadLearning(dept: Dept, learning: string, runId: string | null, source = 'app'): Promise<void> {
+  await saveHeadMemory(dept, learning, runId, source)
 }
