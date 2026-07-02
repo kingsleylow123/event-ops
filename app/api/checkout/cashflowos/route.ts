@@ -47,9 +47,16 @@ export async function POST(req: NextRequest) {
         price_data: {
           currency: 'myr',
           unit_amount: Math.round(CASHFLOWOS_PRICE_RM * 100),
-          product_data: { name: 'Cashflow OS — 2-Day Challenge (28–29 July)' },
+          product_data: { name: 'CashFlowOS™ 2-Day Challenge' },
         },
       }],
+      // Urgency: the seat-hold line renders pinned above the Pay button (hosted
+      // Checkout allows no live countdown widget), backed by a REAL session
+      // expiry — 30 min is Stripe's minimum for expires_at.
+      expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
+      custom_text: {
+        submit: { message: '⏳ Your seat is held for the next 10 minutes — complete payment now to lock it in.' },
+      },
       // Read back by app/api/webhooks/stripe: event_id attaches the attendee to the
       // exact event; product + ghl_contact_id let the webhook tag 'cashflowos-paid'
       // so the GHL recovery workflow stops chasing.
