@@ -1,13 +1,22 @@
-// Shared email sender (Resend) — used by Jarvis invoice emails and attendee
-// receipts. Every send BCCs the finance mailbox so the accountant's archive
-// (finance@cmoaiconsulting.com, Kelvin's team) stays complete automatically.
+// Shared email sender (Resend). Two sender identities on the verified
+// cmoaiconsulting.com domain:
+//   • SUPPORT_FROM — "Kingsley @ Claude Malaysia Community" <support@…> — the
+//     DEFAULT for all client-facing comms (receipts, recovery nudges, community).
+//     Replies route via Cloudflare Email Routing → claudemalaysiaofficial@gmail.com
+//     + an Email Worker mirrors them into EventOps (/api/inbound/support).
+//   • FINANCE_FROM — CMOAI Consulting Finance <finance@…> — finance docs only
+//     (invoices). Financial sends BCC finance@ so the accountant's archive
+//     (Kelvin's team) stays complete — callers pass that BCC explicitly.
 // All functions are resilient: on any error they log and return ok:false so
 // callers (Telegram handlers) keep working even if email is misconfigured.
 
 import { Resend } from 'resend'
 
-const FINANCE_EMAIL = process.env.FINANCE_EMAIL || 'finance@cmoaiconsulting.com'
-const EMAIL_FROM = process.env.EMAIL_FROM || `CMOAI Consulting Finance <${FINANCE_EMAIL}>`
+export const FINANCE_EMAIL = process.env.FINANCE_EMAIL || 'finance@cmoaiconsulting.com'
+export const FINANCE_FROM = process.env.EMAIL_FROM || `CMOAI Consulting Finance <${FINANCE_EMAIL}>`
+export const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'support@cmoaiconsulting.com'
+// Display name contains "@" → must be quoted per RFC 5322.
+export const SUPPORT_FROM = process.env.EMAIL_FROM_SUPPORT || `"Kingsley @ Claude Malaysia Community" <${SUPPORT_EMAIL}>`
 
 // Lazy client — constructing without a key at import time would break
 // `next build` page-data collection where the env isn't set.
@@ -36,23 +45,21 @@ export interface SendEmailInput {
   // failure, overlapping confirmations) never double-delivers to the client.
   idempotencyKey?: string
   // Override the sender display/address (must be on a Resend-verified domain).
-  // Defaults to the CMOAI finance sender used by invoices/receipts.
+  // Defaults to SUPPORT_FROM (client-facing); pass FINANCE_FROM for finance docs.
   from?: string
-  // Override the BCC. Financial docs default to BCC'ing finance@ for the
-  // accountant's archive; pass `null` for marketing/recovery sends that
-  // shouldn't spam that mailbox.
+  // BCC is opt-in: financial docs (invoices, receipts) pass FINANCE_EMAIL so the
+  // accountant's archive stays complete; marketing/community sends omit it.
   bcc?: string | null
 }
 
 export async function sendEmail(input: SendEmailInput): Promise<{ ok: boolean; error?: string }> {
   if (!emailEnabled()) return { ok: false, error: 'RESEND_API_KEY is not set' }
   try {
-    const bcc = input.bcc === undefined ? FINANCE_EMAIL : (input.bcc ?? undefined)
     const { error } = await resendClient().emails.send(
       {
-        from: input.from || EMAIL_FROM,
+        from: input.from || SUPPORT_FROM,
         to: input.to,
-        bcc,
+        bcc: input.bcc ?? undefined,
         subject: input.subject,
         html: input.html,
         attachments: input.attachments?.map(a => ({ filename: a.filename, content: a.content })),
@@ -77,15 +84,19 @@ const escHtml = (v: unknown) =>
 
 const rm = (n: number) => 'RM ' + n.toLocaleString('en-MY', { minimumFractionDigits: 2 })
 
-function shell(body: string): string {
+// Shared shell. Defaults to the client-facing Claude Malaysia identity (matches
+// SUPPORT_FROM); finance docs (invoices) pass the CMOAI/finance framing.
+function shell(body: string, opts?: { brand?: string; footer?: string }): string {
+  const brand = opts?.brand ?? 'CLAUDE MALAYSIA'
+  const footer = opts?.footer ?? 'Questions? Just reply to this email — it reaches us directly.'
   return `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f5f5f5;">
 <div style="max-width:560px;margin:24px auto;background:#ffffff;border-radius:8px;overflow:hidden;font-family:Helvetica,Arial,sans-serif;color:#1a1a1a;">
 <div style="background:#1a1a1a;padding:20px 28px;">
-<span style="color:#ffffff;font-size:16px;font-weight:bold;letter-spacing:0.5px;">CMOAI CONSULTING</span>
+<span style="color:#ffffff;font-size:16px;font-weight:bold;letter-spacing:0.5px;">${escHtml(brand)}</span>
 </div>
 <div style="padding:28px;">${body}</div>
 <div style="padding:16px 28px;border-top:1px solid #eeeeee;font-size:12px;color:#888888;">
-Questions? Just reply to this email — it reaches our finance team at ${escHtml(FINANCE_EMAIL)}.
+${footer}
 </div>
 </div></body></html>`
 }
@@ -99,6 +110,10 @@ export function invoiceEmailHtml(p: { clientName: string; amount: number; descri
 <td style="padding:10px 0;border-bottom:1px solid #eeeeee;text-align:right;font-weight:bold;">${rm(p.amount)}</td></tr>
 </table>
 <p style="font-size:15px;">Thank you for your business.</p>`,
+    {
+      brand: 'CMOAI CONSULTING',
+      footer: `Questions? Just reply to this email — it reaches our finance team at ${escHtml(FINANCE_EMAIL)}.`,
+    },
   )
 }
 
