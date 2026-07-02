@@ -35,16 +35,24 @@ export interface SendEmailInput {
   // retried invoice/receipt (admin re-run, reconcile re-run, stamp-write
   // failure, overlapping confirmations) never double-delivers to the client.
   idempotencyKey?: string
+  // Override the sender display/address (must be on a Resend-verified domain).
+  // Defaults to the CMOAI finance sender used by invoices/receipts.
+  from?: string
+  // Override the BCC. Financial docs default to BCC'ing finance@ for the
+  // accountant's archive; pass `null` for marketing/recovery sends that
+  // shouldn't spam that mailbox.
+  bcc?: string | null
 }
 
 export async function sendEmail(input: SendEmailInput): Promise<{ ok: boolean; error?: string }> {
   if (!emailEnabled()) return { ok: false, error: 'RESEND_API_KEY is not set' }
   try {
+    const bcc = input.bcc === undefined ? FINANCE_EMAIL : (input.bcc ?? undefined)
     const { error } = await resendClient().emails.send(
       {
-        from: EMAIL_FROM,
+        from: input.from || EMAIL_FROM,
         to: input.to,
-        bcc: FINANCE_EMAIL,
+        bcc,
         subject: input.subject,
         html: input.html,
         attachments: input.attachments?.map(a => ({ filename: a.filename, content: a.content })),
@@ -92,6 +100,27 @@ export function invoiceEmailHtml(p: { clientName: string; amount: number; descri
 </table>
 <p style="font-size:15px;">Thank you for your business.</p>`,
   )
+}
+
+// CashflowOS abandon-cart recovery. Deliberately NOT wrapped in the CMOAI
+// finance shell — it's a warm, single-CTA nudge from Kingsley, not a receipt.
+export function cashflowosRecoveryEmailHtml(p: { name?: string; checkoutUrl: string }): string {
+  const first = escHtml((p.name ?? '').trim().split(/\s+/)[0] || 'there')
+  const url = escHtml(p.checkoutUrl)
+  return `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f5f5f5;">
+<div style="max-width:520px;margin:24px auto;background:#ffffff;border-radius:10px;overflow:hidden;font-family:Helvetica,Arial,sans-serif;color:#1a1a1a;">
+<div style="padding:32px 28px;">
+<p style="font-size:16px;margin:0 0 16px;">Hey ${first},</p>
+<p style="font-size:15px;line-height:1.6;margin:0 0 16px;">You started registering for the <b>Cashflow OS 2-Day Challenge</b> (28&ndash;29 July) &mdash; but didn't finish checkout.</p>
+<p style="font-size:15px;line-height:1.6;margin:0 0 16px;">Good news: your spot's still open. I'm holding it for you right now.</p>
+<p style="font-size:15px;line-height:1.6;margin:0 0 24px;">Come spend 2 days building your cashflow system live, with me walking you through it step by step.</p>
+<a href="${url}" style="display:inline-block;background:#1a1a1a;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:15px;font-weight:bold;">Finish my registration &rarr;</a>
+<p style="font-size:14px;line-height:1.6;margin:28px 0 0;color:#555555;">See you inside,<br>Kingsley</p>
+</div>
+<div style="padding:14px 28px;border-top:1px solid #eeeeee;font-size:12px;color:#999999;">
+You got this because you started signing up for the Cashflow OS 2-Day Challenge. If that wasn't you, just ignore it.
+</div>
+</div></body></html>`
 }
 
 export function receiptEmailHtml(p: { name: string; amount: number; eventName: string; paidAt: Date }): string {

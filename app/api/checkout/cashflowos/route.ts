@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { stripe } from '@/lib/stripe'
 import { isValidPhone } from '@/lib/validate'
 import { findOrCreateContact, addContactTags } from '@/lib/ghl'
+import { supabaseAdmin } from '@/lib/supabase-admin'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 15
@@ -63,6 +64,27 @@ export async function POST(req: NextRequest) {
       success_url: `${BASE}/register/success?event=${CASHFLOWOS_EVENT_ID}`,
       cancel_url: `${BASE}/cashflowos?cancelled=1`,
     })
+
+    // Record the started lead so the abandon-cart recovery cron can email anyone
+    // who fills this in but never pays. Upsert by email: a re-attempt refreshes
+    // the timing + session but never re-arms an already-sent recovery. paid_at is
+    // stamped by the Stripe webhook. Best-effort — a DB hiccup must never block
+    // the customer from paying, so this runs after the session exists.
+    try {
+      await supabaseAdmin
+        .from('cashflowos_leads')
+        .upsert({
+          email,
+          phone,
+          name: name || null,
+          ghl_contact_id: ghlContactId,
+          stripe_session_id: session.id,
+          started_at: new Date().toISOString(),
+        }, { onConflict: 'email' })
+    } catch (e) {
+      console.error('[cashflowos] lead upsert failed', e)
+    }
+
     return NextResponse.json({ url: session.url })
   } catch (e) {
     // Logged server-side only — never leak Stripe account/key details to a caller.
