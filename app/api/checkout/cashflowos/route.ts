@@ -59,8 +59,10 @@ export async function POST(req: NextRequest) {
       // for expires_at. The visible 10-min timer is enforced client-side (the
       // payment element unmounts at 0:00; restarting mints a fresh session).
       expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
+      // Risk reversal AT the pay button (the on-page countdown already carries
+      // the urgency; this line carries the guarantee).
       custom_text: {
-        submit: { message: '⏳ Your seat is held for the next 10 minutes — complete payment now to lock it in.' },
+        submit: { message: '🛡️ Day-1 Lunch Guarantee: sit through the Day-1 morning — not convinced it\'s worth 10× your ticket? 100% refund at lunch, on the spot, no questions.' },
       },
       // Read back by app/api/webhooks/stripe: event_id attaches the attendee to the
       // exact event; product + ghl_contact_id let the webhook tag 'cashflowos-paid'

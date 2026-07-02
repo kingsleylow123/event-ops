@@ -18,16 +18,9 @@ function Shell({ children }: { children: React.ReactNode }) {
 export default function CashflowOsPage() {
   return (
     <Shell>
-      <div className="mb-5 flex gap-1.5" aria-label="Step 1 of 2">
-        <div className="h-1.5 flex-1 rounded-full bg-amber-500" />
-        <div className="h-1.5 flex-1 rounded-full bg-zinc-800" />
-      </div>
-      <div className="mb-5">
-        <p className="text-xs uppercase tracking-wide text-amber-400">Step 1 of 2</p>
-        <h1 className="mt-1 text-2xl font-bold text-white">CashFlowOS™ 2-Day Challenge</h1>
-      </div>
+      {/* Step indicator + hints live inside the form so they flip with the step. */}
+      <h1 className="mb-4 text-2xl font-bold text-white">CashFlowOS™ 2-Day Challenge</h1>
       <CashflowForm />
-      <p className="mt-4 text-center text-xs text-zinc-500">Enter your details, then complete secure payment on the next step.</p>
     </Shell>
   )
 }
