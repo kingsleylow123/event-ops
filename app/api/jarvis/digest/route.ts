@@ -4,7 +4,7 @@ import { notifyAdmins, esc, b } from '@/lib/telegram'
 import { pickActiveEvent } from '@/lib/event'
 import { rm, fmtDate, normPhone } from '@/lib/format'
 import { computeDeltas, projectFill, rankDigestActions } from '@/lib/jarvis-trends'
-import { buildFunnel } from '@/lib/funnel'
+import { buildFunnel, isGlccEvent } from '@/lib/funnel'
 import { computeStandingInsight } from '@/lib/funnel-advisor'
 import type { Event } from '@/lib/supabase'
 
@@ -224,7 +224,9 @@ export async function GET(req: NextRequest) {
   const [ySnapRes, wSnapRes, priorEvRes] = await Promise.all([
     supabase.from('jarvis_daily_snapshots').select('*').eq('event_id', eventId).eq('snapshot_date', yDate).maybeSingle(),
     supabase.from('jarvis_daily_snapshots').select('paid_count').eq('event_id', eventId).eq('snapshot_date', wDate).maybeSingle(),
-    supabase.from('events').select('id, name, date').lt('date', eventDate).order('date', { ascending: false }).limit(1).maybeSingle(),
+    // A handful of prior events, not just the literal last one — GLCC / webinars /
+    // zero-sale rows aren't a pace baseline for a workshop (the "vs GLCC +244%" bug).
+    supabase.from('events').select('id, name, date, format').lt('date', eventDate).order('date', { ascending: false }).limit(6),
   ])
 
   const trendLines: string[] = []
@@ -256,19 +258,26 @@ export async function GET(req: NextRequest) {
     if (bits.length) trendLines.push(`📈 Since yesterday: ${bits.join(' · ')}`)
   }
 
-  // 📊 Pace vs the last event at the same T-minus (directional — "vs last event")
-  if (priorEvRes.data && daysUntil >= 3 && daysUntil <= 21) {
-    const pe = priorEvRes.data
-    const peTs = new Date(pe.date as string).setHours(0, 0, 0, 0)
-    const peCutoff = new Date(peTs - daysUntil * msPerDay).toISOString()
-    const { count: priorPaid } = await supabase
-      .from('attendees').select('id', { count: 'exact', head: true })
-      .eq('event_id', pe.id as string).eq('payment_status', 'paid').lte('created_at', peCutoff)
-      .not('is_facilitator', 'is', true)
-    if (priorPaid != null && priorPaid > 0) {
-      const diffPct = Math.round(((paid.length - priorPaid) / priorPaid) * 100)
-      if (diffPct < 0) paceBehindPct = -diffPct
-      trendLines.push(`📊 Pace: ${paid.length} paid at T-${daysUntil} vs ${priorPaid} same point last event (${diffPct >= 0 ? '+' : ''}${diffPct}%)`)
+  // 📊 Pace vs the last comparable event at the same T-minus. Walk recent prior
+  // events newest-first, skip GLCC + webinars, and take the first with paid sales
+  // at the cutoff (skips zero-sale rows like internal/affiliate events).
+  if (daysUntil >= 3 && daysUntil <= 21) {
+    const candidates = (priorEvRes.data ?? []).filter(
+      pe => !isGlccEvent(pe.name as string) && (pe.format || 'workshop') !== 'webinar'
+    )
+    for (const pe of candidates) {
+      const peTs = new Date(pe.date as string).setHours(0, 0, 0, 0)
+      const peCutoff = new Date(peTs - daysUntil * msPerDay).toISOString()
+      const { count: priorPaid } = await supabase
+        .from('attendees').select('id', { count: 'exact', head: true })
+        .eq('event_id', pe.id as string).eq('payment_status', 'paid').lte('created_at', peCutoff)
+        .not('is_facilitator', 'is', true)
+      if (priorPaid != null && priorPaid > 0) {
+        const diffPct = Math.round(((paid.length - priorPaid) / priorPaid) * 100)
+        if (diffPct < 0) paceBehindPct = -diffPct
+        trendLines.push(`📊 Pace: ${paid.length} paid at T-${daysUntil} vs ${priorPaid} same point last event (${diffPct >= 0 ? '+' : ''}${diffPct}%)`)
+        break
+      }
     }
   }
 
