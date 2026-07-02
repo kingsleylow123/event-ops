@@ -1,0 +1,18 @@
+# CashflowOS abandon-cart recovery — 30-min cadence.
+# Vercel Hobby caps crons at daily, so GitHub Actions drives the real cadence;
+# the daily 4am Vercel cron stays as backstop (the route is idempotent, so
+# overlapping schedulers can never double-send). Minutes offset from :00/:30
+# because GitHub delays/drops top-of-hour schedules under load.
+name: cashflowos-recovery
+on:
+  schedule:
+    - cron: '7,37 * * * *'
+  workflow_dispatch: {}
+jobs:
+  nudge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger recovery endpoint
+        run: |
+          curl -fsS -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://event-ops-six.vercel.app/api/checkout/cashflowos-recovery
