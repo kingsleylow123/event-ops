@@ -3,7 +3,7 @@
 // knowledge in this file only. Mirrors lib/ads-council/store.ts.
 
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin'
-import type { BoardMode, BoardResult, DecisionStatus, Dept, HeadBrief, Prediction, Ruling } from './types'
+import type { BoardMode, BoardResult, Challenge, DecisionStatus, Dept, HeadBrief, Prediction, Ruling } from './types'
 
 // c_suite_* are RLS-on with NO policies, so the anon-key fallback in the shared
 // admin client would silently no-op. Use this to fail LOUD instead.
@@ -61,10 +61,10 @@ export async function finishRun(
   await supabase.from('c_suite_runs').update({ ...patch, finished_at: new Date().toISOString() }).eq('id', runId)
 }
 
-// ── Opinions (each head's brief) ──────────────────────────────────────────────
+// ── Opinions (each head's brief + the manager's grilling of it) ───────────────
 // Returns false on failure so persist() can count losses into the run note
 // instead of stamping "done" over a partial audit trail.
-export async function insertOpinion(runId: string | null, brief: HeadBrief): Promise<boolean> {
+export async function insertOpinion(runId: string | null, brief: HeadBrief, challenge?: Challenge): Promise<boolean> {
   const { error } = await supabase.from('c_suite_opinions').insert({
     run_id: runId,
     dept: brief.dept,
@@ -75,6 +75,9 @@ export async function insertOpinion(runId: string | null, brief: HeadBrief): Pro
     evidence: brief.evidence,
     data_status: brief.dataStatus,
     revised: brief.revised ?? false,
+    manager_verdict: challenge?.verdict ?? null,
+    manager_critique: challenge?.critique || null,
+    cross_flags: challenge?.crossFlags ?? [],
   })
   if (error) console.error('[c-suite] insertOpinion', error.message)
   return !error
@@ -297,15 +300,18 @@ export async function getRunDetail(runId: string): Promise<{
   run: RunRow | null
   opinions: unknown[]
   decisions: unknown[]
+  outcomes: unknown[]
 }> {
-  const [run, opinions, decisions] = await Promise.all([
+  const [run, opinions, decisions, outcomes] = await Promise.all([
     supabase.from('c_suite_runs').select(RUN_COLS).eq('id', runId).maybeSingle(),
     supabase.from('c_suite_opinions').select('*').eq('run_id', runId).order('dept'),
     supabase.from('c_suite_decisions').select('*').eq('run_id', runId).order('created_at'),
+    supabase.from('c_suite_outcomes').select('dept, predicted, verdict, actual').eq('run_id', runId),
   ])
   return {
     run: (run.data as RunRow) ?? null,
     opinions: opinions.data ?? [],
     decisions: decisions.data ?? [],
+    outcomes: outcomes.data ?? [],
   }
 }
