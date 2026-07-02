@@ -90,7 +90,8 @@ async function persist(runId: string, result: BoardResult, notify: boolean, sour
   const cfg = getCSuiteConfig()
   let failures = 0
 
-  const opinionOks = await Promise.all(result.briefs.map(b => insertOpinion(runId, b)))
+  const opinionOks = await Promise.all(result.briefs.map(b =>
+    insertOpinion(runId, b, result.challenges.find(c => c.dept === b.dept))))
   failures += opinionOks.filter(ok => !ok).length
 
   const rulingIds = await Promise.all(result.rulings.map(r => insertDecision(runId, r)))
