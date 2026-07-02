@@ -134,8 +134,10 @@ export async function POST(req: NextRequest) {
     )
   } catch { /* ping failure must not 500 the webhook (Stripe would retry forever) */ }
 
-  // CashflowOS abandon-cart: tag the GHL contact 'cashflowos-paid' so the GHL
-  // recovery workflow stops chasing them. Best-effort — never blocks the webhook
+  // CashflowOS abandon-cart, on payment: (1) tag GHL 'cashflowos-paid' so the
+  // WhatsApp workflow stops, (2) stamp the lead's paid_at so the email cron
+  // stops, (3) flip the closer pipeline card (deal_leads) to won — the Journey
+  // rule's "Purchased" transition. All best-effort — never blocks the webhook
   // (a GHL auth failure already pings admins from inside lib/ghl).
   if (session.metadata?.product === 'cashflowos-challenge') {
     try {
@@ -145,20 +147,45 @@ export async function POST(req: NextRequest) {
     } catch (e) {
       console.error('[stripe-webhook] cashflowos GHL tag failed', e)
     }
-    // Stamp the recovery lead as paid so the abandon-cart cron stops chasing.
-    // Match on the Stripe session first (exact); fall back to email. Best-effort.
     try {
-      const buyerEmail = (session.metadata?.buyer_email || email || '').toLowerCase()
-      const { data: bySession } = await supabase
-        .from('cashflowos_leads').update({ paid_at: new Date().toISOString() })
-        .eq('stripe_session_id', session.id).select('id')
-      if ((!bySession || bySession.length === 0) && buyerEmail) {
-        await supabase
-          .from('cashflowos_leads').update({ paid_at: new Date().toISOString() })
-          .eq('email', buyerEmail)
+      const buyerEmail = normEmail(session.metadata?.buyer_email || email || '')
+      // Find the lead row (session id is exact; email is the fallback).
+      interface CfLead { id: string; deal_lead_id: string | null; recovery_email_sent_at: string | null }
+      let { data: lead } = await supabase
+        .from('cashflowos_leads').select('id, deal_lead_id, recovery_email_sent_at')
+        .eq('stripe_session_id', session.id).maybeSingle<CfLead>()
+      if (!lead && buyerEmail) {
+        ;({ data: lead } = await supabase
+          .from('cashflowos_leads').select('id, deal_lead_id, recovery_email_sent_at')
+          .eq('email', buyerEmail).maybeSingle<CfLead>())
+      }
+      if (lead) {
+        await supabase.from('cashflowos_leads')
+          .update({ paid_at: new Date().toISOString() }).eq('id', lead.id)
+        // Closer card → won. Direct buyers (never chased) have no card and get
+        // none — the pipeline stays a pure recovery board. Fallback find covers
+        // a card whose id-write failed.
+        let cardId = lead.deal_lead_id
+        if (!cardId && lead.recovery_email_sent_at && buyerEmail) {
+          const { data: card } = await supabase
+            .from('deal_leads').select('id')
+            .eq('client_email', buyerEmail).eq('source', 'abandoned_checkout')
+            .maybeSingle()
+          cardId = (card?.id as string | undefined) ?? null
+        }
+        if (cardId) {
+          const myt = new Date().toLocaleString('en-MY', { timeZone: 'Asia/Kuala_Lumpur', dateStyle: 'medium', timeStyle: 'short' })
+          const { data: card } = await supabase
+            .from('deal_leads').select('founder_notes').eq('id', cardId).maybeSingle()
+          await supabase.from('deal_leads').update({
+            status: 'won',
+            updated_at: new Date().toISOString(),
+            founder_notes: `✅ PAID RM${amountRm.toLocaleString('en-MY')} ${myt} (MYT). ${(card?.founder_notes as string | null) ?? ''}`.trim(),
+          }).eq('id', cardId)
+        }
       }
     } catch (e) {
-      console.error('[stripe-webhook] cashflowos lead paid stamp failed', e)
+      console.error('[stripe-webhook] cashflowos paid stamp / card flip failed', e)
     }
   }
 
