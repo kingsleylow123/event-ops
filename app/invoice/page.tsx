@@ -72,7 +72,7 @@ function InvoiceContent() {
   const dateParts = useMemo(() => formatDateParts(date), [date])
   const [companyName, setCompanyName] = useState('CMO Consulting Sdn. Bhd.')
   const [companyReg, setCompanyReg] = useState('202601024007 (1686104-X)')
-  const [companyEmail, setCompanyEmail] = useState('claudemalaysiaofficial@gmail.com')
+  const [companyEmail, setCompanyEmail] = useState('finance@cmoaiconsulting.com')
   const [companyPhone, setCompanyPhone] = useState('012-285 0125')
   const [bankName, setBankName] = useState('Maybank SME Biz')
   const [bankAccount, setBankAccount] = useState('5142 8090 1848')
