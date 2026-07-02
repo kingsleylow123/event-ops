@@ -13,7 +13,9 @@ async function notifyAdmin(userEmail: string) {
         Authorization: `Bearer ${resendKey}`,
       },
       body: JSON.stringify({
-        from: 'EventOps <onboarding@resend.dev>',
+        // Verified-domain sender (onboarding@resend.dev only delivers to the
+        // Resend account owner, so these were unreliable before).
+        from: 'EventOps <support@cmoaiconsulting.com>',
         to: 'wowo.vs.wawa@gmail.com',
         subject: 'New user signup — approval needed',
         html: `

@@ -48,9 +48,11 @@ export async function POST(req: NextRequest) {
   const clientName = (client_name || 'there').trim() || 'there'
   const file = filename || 'Invoice.pdf'
   // Sender: set INVOICE_FROM_EMAIL (e.g. "Oppa-Media <invoices@oppa-media.com>")
-  // once your domain is verified in Resend. Until then this falls back to the
-  // Resend test address, which ONLY delivers to your own verified Resend email.
-  const from = process.env.INVOICE_FROM_EMAIL || `${companyName} <onboarding@resend.dev>`
+  // if a per-company domain gets verified in Resend. Fallback uses the verified
+  // cmoaiconsulting.com finance address (deliverable everywhere) with the
+  // company name as display name. (Old fallback was onboarding@resend.dev — the
+  // Resend TEST sender, which only delivers to the account owner.)
+  const from = process.env.INVOICE_FROM_EMAIL || `${companyName} <finance@cmoaiconsulting.com>`
 
   const contactLine = [company_email, company_phone]
     .filter((v): v is string => Boolean(v))

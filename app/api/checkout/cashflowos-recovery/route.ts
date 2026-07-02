@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
-import { sendEmail, cashflowosRecoveryEmailHtml, emailEnabled } from '@/lib/email'
+import { sendEmail, cashflowosRecoveryEmailHtml, emailEnabled, SUPPORT_FROM } from '@/lib/email'
 import { addContactTags } from '@/lib/ghl'
 import { notifyAdmins, b, esc } from '@/lib/telegram'
 
@@ -12,9 +12,9 @@ const NO_STORE = { 'Cache-Control': 'no-store' } as const
 
 const BASE = process.env.NEXT_PUBLIC_APP_URL || 'https://event-ops-six.vercel.app'
 const CHECKOUT_URL = `${BASE}/cashflowos`
-// Verified Resend sender (cmoaiconsulting.com). Overridable once a friendlier
-// domain is verified. Not the CMOAI finance display — this is a warm nudge.
-const RECOVERY_FROM = process.env.EMAIL_FROM_RECOVERY || 'Kingsley Low <finance@cmoaiconsulting.com>'
+// Client-facing sender: the Claude Malaysia support identity (replies route to
+// claudemalaysiaofficial@gmail.com + mirror into EventOps). Env-overridable.
+const RECOVERY_FROM = process.env.EMAIL_FROM_RECOVERY || SUPPORT_FROM
 // Wait this long after a lead starts before nudging — gives genuine finishers
 // time to pay so we don't email someone mid-checkout.
 const DELAY_MIN = Number(process.env.CASHFLOWOS_RECOVERY_DELAY_MIN || 45)
@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
     const res = await sendEmail({
       to: lead.email,
       from: RECOVERY_FROM,
-      bcc: null, // marketing nudge — don't spam the finance archive
+      // no bcc — marketing nudge, not a finance doc
       subject,
       html: cashflowosRecoveryEmailHtml({ name: lead.name ?? undefined, checkoutUrl: CHECKOUT_URL }),
       idempotencyKey: `cashflowos-recovery-${lead.id}`,

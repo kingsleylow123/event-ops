@@ -11,7 +11,7 @@ import { normPhone, normEmail } from '@/lib/format'
 import { PREP_STEP_SHORT, zeroStepCounts } from '@/lib/prep-steps'
 import { loadMemory, appendTurn, setPending, clearPending, recentTurnsForPrompt } from '@/lib/jarvis-memory'
 import { matchTransactions, type ReconcileMatch, type PendingAttendee, type StatementTxn } from '@/lib/reconcile'
-import { sendEmail, emailEnabled, invoiceEmailHtml, receiptEmailHtml } from '@/lib/email'
+import { sendEmail, emailEnabled, invoiceEmailHtml, receiptEmailHtml, FINANCE_FROM, FINANCE_EMAIL } from '@/lib/email'
 import type { Event } from '@/lib/supabase'
 import { runAgent } from '@/lib/jarvis/agent'
 import type { AgentContext } from '@/lib/jarvis/types'
@@ -944,9 +944,10 @@ async function executeInvoiceTool(
     return `⚠️ Built the invoice for ${a.name} (RM ${amount}) but the upload to Telegram failed — nothing was delivered. Try again, or grab it from the /invoice page.`
   }
 
-  // Email the same PDF by default. BCC finance@ (inside sendEmail) keeps the
-  // accountant's archive complete automatically. The admin can suppress this by
-  // explicitly passing email_to_client=false ("don't email", "chat only").
+  // Email the same PDF by default. Invoices are finance docs: sent from the
+  // CMOAI finance identity and BCC'd to finance@ so the accountant's archive
+  // stays complete. The admin can suppress this by explicitly passing
+  // email_to_client=false ("don't email", "chat only").
   if (input.email_to_client !== false) {
     const toEmail = (input.client_email || a.email || '').trim()
     if (!toEmail) {
@@ -957,6 +958,8 @@ async function executeInvoiceTool(
     }
     const res = await sendEmail({
       to: toEmail,
+      from: FINANCE_FROM,
+      bcc: FINANCE_EMAIL,
       subject: `Invoice — ${a.name} (RM ${amount.toLocaleString('en-MY')})`,
       html: invoiceEmailHtml({ clientName: a.name, amount: amount as number, description: desc }),
       attachments: [{ filename: `Invoice-${safeName}.pdf`, content: pdfBuffer }],
@@ -1602,8 +1605,9 @@ async function executeReconcile(matches: ReconcileMatch[], chatId: number): Prom
   if (updated.length < matches.length) msg += `\n(${matches.length - updated.length} were already paid — skipped.)`
 
   // Email a payment receipt to each newly-paid attendee with an address on
-  // file. receipt_sent_at keeps re-runs from double-sending; BCC finance@
-  // (inside sendEmail) fills the accountant's archive automatically.
+  // file. Client-facing → sent from the Claude Malaysia support identity
+  // (sendEmail default), but still a financial doc → BCC finance@ for the
+  // accountant's archive. receipt_sent_at keeps re-runs from double-sending.
   if (emailEnabled()) {
     const toReceipt = updated.filter(r => (r.email as string | null)?.trim() && !r.receipt_sent_at)
     if (toReceipt.length) {
@@ -1615,6 +1619,7 @@ async function executeReconcile(matches: ReconcileMatch[], chatId: number): Prom
         const eventName = evName.get(r.event_id as string) || 'Claude Malaysia Workshop'
         const res = await sendEmail({
           to: (r.email as string).trim(),
+          bcc: FINANCE_EMAIL,
           subject: `Payment received — ${eventName}`,
           html: receiptEmailHtml({
             name: (r.name as string) || 'there',
