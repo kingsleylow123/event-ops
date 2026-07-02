@@ -9,7 +9,7 @@
     { "path": "/api/jarvis/pipeline-nudge",      "schedule": "0 6 * * 1,3,5" },
     { "path": "/api/ads-council/run",            "schedule": "0 1 * * *"  },
     { "path": "/api/ghl/health",                 "schedule": "0 3 * * *"  },
-    { "path": "/api/checkout/cashflowos-recovery", "schedule": "*/30 * * * *" },
+    { "path": "/api/checkout/cashflowos-recovery", "schedule": "0 4 * * *" },
     { "path": "/api/c-suite/run",                "schedule": "0 23 * * *" },
     { "path": "/api/c-suite/weekly",             "schedule": "30 23 * * 0" }
   ]
