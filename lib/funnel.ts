@@ -158,6 +158,15 @@ export async function buildFunnel(opts: { from?: string; to?: string; eventId?: 
 
   const workshopPaid = paidOf(workshopAtt)
   const glccPaid = paidOf(glccAtt)
+  // Upgrade-conversion denominator: only workshops that have already happened.
+  // A buyer of a future workshop can't have upgraded to the 2-day class yet, so
+  // counting them deflates the conversion and inflates the weak-link upside.
+  // Display counts/revenue and the readiness calendar still include future events.
+  const todayStr = new Date(now).toISOString().slice(0, 10)
+  const pastWorkshopIds = new Set(
+    inWindow.filter(e => workshopIds.has(e.id) && e.date && e.date.slice(0, 10) <= todayStr).map(e => e.id),
+  )
+  const workshopPaidPast = workshopPaid.filter(a => pastWorkshopIds.has(a.event_id))
   const workshopRevenue = sumRev(workshopPaid)
   const glccRevenue = sumRev(glccPaid)
   const grossRevenue = sumRev(paidOf(attendees))
@@ -207,7 +216,7 @@ export async function buildFunnel(opts: { from?: string; to?: string; eventId?: 
 
   // ── Conversions (honest) ────────────────────────────────────────────────────
   const leadToSeatPct = leadsTotal > 0 ? round1((convertedFromLeads / leadsTotal) * 100) : null
-  const workshopToGlccPct = workshopPaid.length > 0 ? round1((glccPaid.length / workshopPaid.length) * 100) : null
+  const workshopToGlccPct = workshopPaidPast.length > 0 ? round1((glccPaid.length / workshopPaidPast.length) * 100) : null
   const glccToDealPct = glccPaid.length > 0 ? round1((dealsWon / glccPaid.length) * 100) : null
 
   const stages: FunnelStage[] = [
@@ -231,7 +240,7 @@ export async function buildFunnel(opts: { from?: string; to?: string; eventId?: 
     {
       key: 'glcc', label: '2-Day GLCC Class', price: 'RM2,299',
       count: glccPaid.length, revenue: glccRevenue,
-      convFromPct: workshopToGlccPct, convNote: 'of 1-day buyers upgrade to the 2-day class',
+      convFromPct: workshopToGlccPct, convNote: 'of 1-day buyers (past workshops) upgrade to the 2-day class',
       sub: [
         { label: 'Registered', value: String(glccAtt.length) },
       ],
@@ -247,7 +256,7 @@ export async function buildFunnel(opts: { from?: string; to?: string; eventId?: 
   // ── Theory of constraints: rank transitions by RM unlocked if fixed ──────────
   const transitions: Array<{ fromKey: StageKey; toKey: StageKey; label: string; actual: number | null; volumeIn: number }> = [
     { fromKey: 'leads', toKey: 'workshop', label: 'Lead → 1-day seat', actual: leadToSeatPct, volumeIn: leadsTotal },
-    { fromKey: 'workshop', toKey: 'glcc', label: '1-day seat → 2-day class', actual: workshopToGlccPct, volumeIn: workshopPaid.length },
+    { fromKey: 'workshop', toKey: 'glcc', label: '1-day seat → 2-day class', actual: workshopToGlccPct, volumeIn: workshopPaidPast.length },
     { fromKey: 'glcc', toKey: 'deals', label: '2-day → B2B deal', actual: glccToDealPct, volumeIn: glccPaid.length },
   ]
   const scored = transitions
