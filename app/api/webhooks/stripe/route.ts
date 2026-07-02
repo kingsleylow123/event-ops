@@ -145,6 +145,21 @@ export async function POST(req: NextRequest) {
     } catch (e) {
       console.error('[stripe-webhook] cashflowos GHL tag failed', e)
     }
+    // Stamp the recovery lead as paid so the abandon-cart cron stops chasing.
+    // Match on the Stripe session first (exact); fall back to email. Best-effort.
+    try {
+      const buyerEmail = (session.metadata?.buyer_email || email || '').toLowerCase()
+      const { data: bySession } = await supabase
+        .from('cashflowos_leads').update({ paid_at: new Date().toISOString() })
+        .eq('stripe_session_id', session.id).select('id')
+      if ((!bySession || bySession.length === 0) && buyerEmail) {
+        await supabase
+          .from('cashflowos_leads').update({ paid_at: new Date().toISOString() })
+          .eq('email', buyerEmail)
+      }
+    } catch (e) {
+      console.error('[stripe-webhook] cashflowos lead paid stamp failed', e)
+    }
   }
 
   return NextResponse.json({ ok: true, attendee: existing ? 'updated' : 'created', event: target.name })
